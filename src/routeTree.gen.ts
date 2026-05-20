@@ -9,8 +9,44 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IngestionRouteImport } from './routes/ingestion'
+import { Route as ForecastRouteImport } from './routes/forecast'
+import { Route as DiffReviewRouteImport } from './routes/diff-review'
+import { Route as DiagnosisRouteImport } from './routes/diagnosis'
+import { Route as AuditRouteImport } from './routes/audit'
+import { Route as AssumptionsRouteImport } from './routes/assumptions'
 import { Route as IndexRouteImport } from './routes/index'
 
+const IngestionRoute = IngestionRouteImport.update({
+  id: '/ingestion',
+  path: '/ingestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForecastRoute = ForecastRouteImport.update({
+  id: '/forecast',
+  path: '/forecast',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiffReviewRoute = DiffReviewRouteImport.update({
+  id: '/diff-review',
+  path: '/diff-review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosisRoute = DiagnosisRouteImport.update({
+  id: '/diagnosis',
+  path: '/diagnosis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AssumptionsRoute = AssumptionsRouteImport.update({
+  id: '/assumptions',
+  path: '/assumptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +55,116 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/assumptions': typeof AssumptionsRoute
+  '/audit': typeof AuditRoute
+  '/diagnosis': typeof DiagnosisRoute
+  '/diff-review': typeof DiffReviewRoute
+  '/forecast': typeof ForecastRoute
+  '/ingestion': typeof IngestionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/assumptions': typeof AssumptionsRoute
+  '/audit': typeof AuditRoute
+  '/diagnosis': typeof DiagnosisRoute
+  '/diff-review': typeof DiffReviewRoute
+  '/forecast': typeof ForecastRoute
+  '/ingestion': typeof IngestionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/assumptions': typeof AssumptionsRoute
+  '/audit': typeof AuditRoute
+  '/diagnosis': typeof DiagnosisRoute
+  '/diff-review': typeof DiffReviewRoute
+  '/forecast': typeof ForecastRoute
+  '/ingestion': typeof IngestionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/assumptions'
+    | '/audit'
+    | '/diagnosis'
+    | '/diff-review'
+    | '/forecast'
+    | '/ingestion'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/assumptions'
+    | '/audit'
+    | '/diagnosis'
+    | '/diff-review'
+    | '/forecast'
+    | '/ingestion'
+  id:
+    | '__root__'
+    | '/'
+    | '/assumptions'
+    | '/audit'
+    | '/diagnosis'
+    | '/diff-review'
+    | '/forecast'
+    | '/ingestion'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AssumptionsRoute: typeof AssumptionsRoute
+  AuditRoute: typeof AuditRoute
+  DiagnosisRoute: typeof DiagnosisRoute
+  DiffReviewRoute: typeof DiffReviewRoute
+  ForecastRoute: typeof ForecastRoute
+  IngestionRoute: typeof IngestionRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/ingestion': {
+      id: '/ingestion'
+      path: '/ingestion'
+      fullPath: '/ingestion'
+      preLoaderRoute: typeof IngestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forecast': {
+      id: '/forecast'
+      path: '/forecast'
+      fullPath: '/forecast'
+      preLoaderRoute: typeof ForecastRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diff-review': {
+      id: '/diff-review'
+      path: '/diff-review'
+      fullPath: '/diff-review'
+      preLoaderRoute: typeof DiffReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnosis': {
+      id: '/diagnosis'
+      path: '/diagnosis'
+      fullPath: '/diagnosis'
+      preLoaderRoute: typeof DiagnosisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assumptions': {
+      id: '/assumptions'
+      path: '/assumptions'
+      fullPath: '/assumptions'
+      preLoaderRoute: typeof AssumptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +177,12 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AssumptionsRoute: AssumptionsRoute,
+  AuditRoute: AuditRoute,
+  DiagnosisRoute: DiagnosisRoute,
+  DiffReviewRoute: DiffReviewRoute,
+  ForecastRoute: ForecastRoute,
+  IngestionRoute: IngestionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
