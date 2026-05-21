@@ -531,7 +531,7 @@ function Sparkline({ direction }: { direction: "up" | "down" | "flat" }) {
     : direction === "down"
       ? [6, 8, 10, 9, 12, 14, 13, 16, 18]
       : [12, 11, 13, 12, 12, 13, 11, 12, 12];
-  const color = direction === "down" ? RED : GREEN_MID;
+  const color = direction === "down" ? RED : direction === "flat" ? MUTED_2 : SUCCESS;
   const path = points.map((y, i) => `${i === 0 ? "M" : "L"} ${i * 12} ${y}`).join(" ");
   return (
     <svg width="100%" height="32" viewBox="0 0 96 22" preserveAspectRatio="none">
