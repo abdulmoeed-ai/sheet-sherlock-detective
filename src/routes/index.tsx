@@ -481,25 +481,33 @@ function KpiCard({
         ? { bg: "#FFF0F2", fg: "#B42330" }
         : { bg: "#F4F3FA", fg: "#4B5563" };
   return (
-    <div className="rounded-[10px] border bg-white px-5 py-4" style={{ borderColor: BORDER }}>
+    <div
+      className="group rounded-xl border bg-white px-5 py-4 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(123,104,238,0.25)] hover:border-[var(--color-brand-light)]"
+      style={{ borderColor: BORDER }}
+    >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span style={{ color: MUTED_2 }}>{icon}</span>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md"
+            style={{ background: BRAND_SOFT, color: BRAND }}
+          >
+            {icon}
+          </span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>
             {label}
           </span>
         </div>
         <span
-          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold tnum"
           style={{ background: badgeStyle.bg, color: badgeStyle.fg }}
         >
           {badge.text}
         </span>
       </div>
-      <div className="mt-2 text-[26px] font-bold leading-none tnum" style={{ color: TEXT }}>
+      <div className="mt-3 text-[26px] font-bold leading-none tnum" style={{ color: TEXT }}>
         {value}
       </div>
-      <div className="mt-2 text-[12px]" style={{ color: MUTED }}>
+      <div className="mt-1.5 text-[12px]" style={{ color: MUTED }}>
         {comparison}
       </div>
       {spark && (
@@ -508,13 +516,14 @@ function KpiCard({
         </div>
       )}
       {gauge !== undefined && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: BORDER }}>
-          <div className="h-full rounded-full" style={{ width: `${gauge * 100}%`, background: GREEN_MID }} />
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: BRAND_SOFT }}>
+          <div className="h-full rounded-full" style={{ width: `${gauge * 100}%`, background: BRAND }} />
         </div>
       )}
     </div>
   );
 }
+
 
 function Sparkline({ direction }: { direction: "up" | "down" | "flat" }) {
   const points = direction === "up"
