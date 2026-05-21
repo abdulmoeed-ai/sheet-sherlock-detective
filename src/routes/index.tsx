@@ -41,20 +41,36 @@ const CATALOG: Record<string, string[]> = {
   "Food & FMCG": ["Nestle Pakistan", "Unilever", "National Foods", "Engro Foods"],
 };
 const SECTORS = Object.keys(CATALOG);
-const QUICK_SECTORS = ["Cement", "Banking", "Energy"]; // pills
 
-// ────────── Color tokens (per spec) ──────────
-const GREEN = "#1B4332";
-const GREEN_MID = "#52B788";
-const GREEN_SOFT = "#D1FAE5";
-const RED = "#EF4444";
-const AMBER = "#F59E0B";
-const AMBER_SOFT = "#FEF3C7";
-const BORDER = "#E5E7EB";
-const SUBTLE = "#F9FAFB";
-const TEXT = "#111827";
-const MUTED = "#6B7280";
-const MUTED_2 = "#9CA3AF";
+// ────────── Color tokens — ClickUp light theme ──────────
+const BRAND = "#7B68EE";        // primary purple
+const BRAND_HOVER = "#6951E0";
+const BRAND_SOFT = "#F1EEFE";   // tinted lavender surface
+const BRAND_DEEP = "#4A3AB8";   // deep purple text on lavender
+const ACCENT = "#49CCF9";       // ClickUp cyan
+const SUCCESS = "#22C55E";
+const SUCCESS_BG = "#ECFDF3";
+const SUCCESS_FG = "#15803D";
+const RED = "#FF5765";          // ClickUp coral/red
+const RED_BG = "#FFF0F2";
+const RED_FG = "#B42330";
+const AMBER = "#FFB02E";
+const AMBER_SOFT = "#FFF8EC";
+const AMBER_FG = "#92560B";
+const INFO_BG = "#ECF8FE";
+const INFO_FG = "#0E7FB0";
+const BORDER = "#ECECF1";
+const BORDER_STRONG = "#DCDCE5";
+const SUBTLE = "#FAFAFD";
+const TEXT = "#1A1A2E";
+const MUTED = "#5A5C7B";
+const MUTED_2 = "#A4A7BD";
+
+// Legacy aliases kept so existing references compile after retheme
+const GREEN = BRAND;
+const GREEN_MID = ACCENT;
+const GREEN_SOFT = BRAND_SOFT;
+
 
 function Dashboard() {
   const [sector, setSector] = useState("Cement");
@@ -79,46 +95,32 @@ function Dashboard() {
     <PageShell title={`${company} · ${period}`} subtitle="Financial intelligence overview · live model">
       {/* ───── Section 0 — Context bar ───── */}
       <div
-        className="sticky top-14 z-10 -mx-8 mb-4 flex h-12 items-center justify-between border-b px-8"
-        style={{ background: SUBTLE, borderColor: BORDER }}
+        className="sticky top-14 z-10 -mx-8 mb-5 flex h-14 items-center justify-between border-b px-8 backdrop-blur"
+        style={{ background: "rgba(250,250,253,0.85)", borderColor: BORDER }}
       >
         <div className="flex items-center gap-2">
-          {QUICK_SECTORS.map((s) => {
-            const active = sector === s || (s === "Energy" && sector === "Power & Energy");
-            return (
-              <button
-                key={s}
-                onClick={() => onSectorChange(s === "Energy" ? "Power & Energy" : s)}
-                className="h-7 rounded-full px-3 text-[12px] font-semibold transition-colors"
-                style={
-                  active
-                    ? { background: GREEN, color: "#fff", border: `1px solid ${GREEN}` }
-                    : { background: "#fff", color: "#374151", border: "1px solid #D1D5DB" }
-                }
-              >
-                {s}
-              </button>
-            );
-          })}
-          <SelectBar value={sector} onChange={onSectorChange} options={SECTORS} width={170} />
-          <SelectBar value={company} onChange={setCompany} options={companies} width={190} />
-          <span className="mx-1 text-[#D1D5DB]">|</span>
-          <SelectBar value={period} onChange={setPeriod} options={["FY2025", "FY2024", "Q3 FY2025", "H1 FY2025"]} width={120} />
+          <SelectBar value={sector} onChange={onSectorChange} options={SECTORS} width={180} />
+          <SelectBar value={company} onChange={setCompany} options={companies} width={200} />
+          <span className="mx-1 text-[#DCDCE5]">|</span>
+          <SelectBar value={period} onChange={setPeriod} options={["FY2025", "FY2024", "Q3 FY2025", "H1 FY2025"]} width={130} />
         </div>
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: "#22C55E" }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: SUCCESS, boxShadow: `0 0 0 3px ${SUCCESS_BG}` }} />
             Data as of May 20, 2026 · 14 sources live
           </div>
           <button
-            className="inline-flex h-[34px] items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white"
-            style={{ background: GREEN }}
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white shadow-sm transition-colors"
+            style={{ background: BRAND }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = BRAND_HOVER)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
           >
             <Sparkles className="h-3.5 w-3.5" /> New ingestion cycle
           </button>
         </div>
       </div>
+
 
       {/* ───── Section 1 — Alert banner ───── */}
       {showAlert && (
@@ -126,14 +128,14 @@ function Dashboard() {
           className="-mx-8 mb-5 flex h-11 items-center justify-between px-8"
           style={{ background: AMBER_SOFT, borderLeft: `4px solid ${AMBER}` }}
         >
-          <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "#92400E" }}>
-            <AlertTriangle className="h-4 w-4" style={{ color: "#B45309" }} />
+          <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "#92560B" }}>
+            <AlertTriangle className="h-4 w-4" style={{ color: "#92560B" }} />
             <span>
               <span className="font-semibold">{pendingHardBlocked + pendingDiagnosis} items require your attention</span> before this cycle can proceed —{" "}
               {pendingHardBlocked} hard-blocked diff in Sheet BS!F18, {pendingDiagnosis} pending BS diagnosis.
             </span>
           </div>
-          <Link to="/diff-review" className="text-[13px] font-semibold" style={{ color: "#B45309" }}>
+          <Link to="/diff-review" className="text-[13px] font-semibold" style={{ color: "#92560B" }}>
             Review now →
           </Link>
         </div>
@@ -177,7 +179,7 @@ function Dashboard() {
               </div>
             </div>
             <RevenueChart />
-            <div className="mt-3 flex items-center gap-8 border-t pt-3" style={{ borderColor: "#F3F4F6" }}>
+            <div className="mt-3 flex items-center gap-8 border-t pt-3" style={{ borderColor: "#F4F3FA" }}>
               <SummaryStat label="Actual" value="PKR 54.8B" />
               <SummaryStat label="Budget" value="PKR 52.0B" />
               <SummaryStat label="Variance" value="+PKR 2.8B (+5.4%)" valueColor="#15803D" />
@@ -241,7 +243,7 @@ function Dashboard() {
               <span
                 key={k}
                 className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{ background: "#F0FDF4", color: "#15803D" }}
+                style={{ background: "#ECFDF3", color: "#15803D" }}
               >
                 {k}: {v}
               </span>
@@ -251,7 +253,7 @@ function Dashboard() {
             See full assumptions →
           </Link>
 
-          <div className="my-4 h-px" style={{ background: "#F3F4F6" }} />
+          <div className="my-4 h-px" style={{ background: "#F4F3FA" }} />
 
           <div className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>
             Key model risks
@@ -271,7 +273,7 @@ function Dashboard() {
 
       {/* ───── Section 4 — Approval status row ───── */}
       <div className="mt-5 rounded-xl border bg-white px-6 py-4" style={{ borderColor: BORDER }}>
-        <div className="grid grid-cols-4 divide-x" style={{ borderColor: "#F3F4F6" }}>
+        <div className="grid grid-cols-4 divide-x" style={{ borderColor: "#F4F3FA" }}>
           <div className="pr-6">
             <Eyebrow>Active cycle</Eyebrow>
             <div className="mt-1.5 text-[15px] font-semibold" style={{ color: TEXT }}>
@@ -349,8 +351,8 @@ function Dashboard() {
                 className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
                 style={
                   t.tone === "good"
-                    ? { background: GREEN_SOFT, color: "#15803D" }
-                    : { background: "#F3F4F6", color: "#4B5563" }
+                    ? { background: "#ECFDF3", color: "#15803D" }
+                    : { background: "#F4F3FA", color: "#4B5563" }
                 }
               >
                 {t.delta}
@@ -391,7 +393,7 @@ function Dashboard() {
           ].map((r) => (
             <tr
               key={r.m}
-              className="cursor-pointer border-b transition-colors hover:bg-[#FAFAFA]"
+              className="cursor-pointer border-b transition-colors hover:bg-[#FAFAFD]"
               style={{ borderColor: BORDER }}
             >
               <td
@@ -440,8 +442,8 @@ function SelectBar({ value, onChange, options, width = 160 }: { value: string; o
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-[34px] w-full appearance-none rounded-lg border bg-white pl-3 pr-8 text-[13px] font-medium"
-        style={{ borderColor: "#D1D5DB", color: "#111827" }}
+        className="h-9 w-full appearance-none rounded-lg border bg-white pl-3 pr-8 text-[13px] font-medium shadow-sm transition-colors hover:border-[var(--color-border-strong)] focus:border-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/15"
+        style={{ borderColor: BORDER, color: TEXT }}
       >
         {options.map((o) => (
           <option key={o} value={o}>
@@ -453,6 +455,7 @@ function SelectBar({ value, onChange, options, width = 160 }: { value: string; o
     </div>
   );
 }
+
 
 function KpiCard({
   icon,
@@ -473,30 +476,38 @@ function KpiCard({
 }) {
   const badgeStyle =
     badge.tone === "good"
-      ? { bg: GREEN_SOFT, fg: "#15803D" }
+      ? { bg: "#ECFDF3", fg: "#15803D" }
       : badge.tone === "bad"
-        ? { bg: "#FEE2E2", fg: "#B91C1C" }
-        : { bg: "#F3F4F6", fg: "#4B5563" };
+        ? { bg: "#FFF0F2", fg: "#B42330" }
+        : { bg: "#F4F3FA", fg: "#4B5563" };
   return (
-    <div className="rounded-[10px] border bg-white px-5 py-4" style={{ borderColor: BORDER }}>
+    <div
+      className="group rounded-xl border bg-white px-5 py-4 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(123,104,238,0.25)] hover:border-[var(--color-brand-light)]"
+      style={{ borderColor: BORDER }}
+    >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span style={{ color: MUTED_2 }}>{icon}</span>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md"
+            style={{ background: BRAND_SOFT, color: BRAND }}
+          >
+            {icon}
+          </span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>
             {label}
           </span>
         </div>
         <span
-          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold tnum"
           style={{ background: badgeStyle.bg, color: badgeStyle.fg }}
         >
           {badge.text}
         </span>
       </div>
-      <div className="mt-2 text-[26px] font-bold leading-none tnum" style={{ color: TEXT }}>
+      <div className="mt-3 text-[26px] font-bold leading-none tnum" style={{ color: TEXT }}>
         {value}
       </div>
-      <div className="mt-2 text-[12px]" style={{ color: MUTED }}>
+      <div className="mt-1.5 text-[12px]" style={{ color: MUTED }}>
         {comparison}
       </div>
       {spark && (
@@ -505,13 +516,14 @@ function KpiCard({
         </div>
       )}
       {gauge !== undefined && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: BORDER }}>
-          <div className="h-full rounded-full" style={{ width: `${gauge * 100}%`, background: GREEN_MID }} />
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full" style={{ background: BRAND_SOFT }}>
+          <div className="h-full rounded-full" style={{ width: `${gauge * 100}%`, background: BRAND }} />
         </div>
       )}
     </div>
   );
 }
+
 
 function Sparkline({ direction }: { direction: "up" | "down" | "flat" }) {
   const points = direction === "up"
@@ -519,7 +531,7 @@ function Sparkline({ direction }: { direction: "up" | "down" | "flat" }) {
     : direction === "down"
       ? [6, 8, 10, 9, 12, 14, 13, 16, 18]
       : [12, 11, 13, 12, 12, 13, 11, 12, 12];
-  const color = direction === "down" ? RED : GREEN_MID;
+  const color = direction === "down" ? RED : direction === "flat" ? MUTED_2 : SUCCESS;
   const path = points.map((y, i) => `${i === 0 ? "M" : "L"} ${i * 12} ${y}`).join(" ");
   return (
     <svg width="100%" height="32" viewBox="0 0 96 22" preserveAspectRatio="none">
@@ -545,7 +557,7 @@ function RevenueChart() {
     <div className="relative" style={{ height: h + 24 }}>
       {/* reference lines */}
       {[0.33, 0.66, 1].map((r) => (
-        <div key={r} className="absolute left-0 right-0" style={{ bottom: 24 + r * h * 0.9, borderTop: `1px dashed #F3F4F6` }} />
+        <div key={r} className="absolute left-0 right-0" style={{ bottom: 24 + r * h * 0.9, borderTop: `1px dashed #F4F3FA` }} />
       ))}
       <div className="absolute inset-x-0 bottom-0 flex h-full items-end justify-around px-1">
         {data.map((d) => (
@@ -701,7 +713,7 @@ function ForecastChart({ scenario }: { scenario: "Base" | "Bull" | "Bear" }) {
   const lastVal = series[active][5];
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none">
-      <path d={bandPath} fill="#F0FDF4" opacity={0.7} />
+      <path d={bandPath} fill="#F1EEFE" opacity={0.7} />
       {lineFor("Bear")}
       {lineFor("Bull")}
       {lineFor("Base")}
@@ -765,7 +777,7 @@ function Ring({ pct }: { pct: number }) {
 }
 
 function QueueRow({ to, label, status, tone }: { to: string; label: string; status: string; tone: "amber" | "green" }) {
-  const colors = tone === "amber" ? { bg: "#FEF3C7", fg: "#B45309" } : { bg: GREEN_SOFT, fg: "#15803D" };
+  const colors = tone === "amber" ? { bg: "#FFF8EC", fg: "#92560B" } : { bg: "#ECFDF3", fg: "#15803D" };
   return (
     <Link to={to} className="flex items-center justify-between text-[12px]">
       <span style={{ color: TEXT }}>{label}</span>
@@ -778,10 +790,10 @@ function QueueRow({ to, label, status, tone }: { to: string; label: string; stat
 
 function StatusBadge({ tone, children }: { tone: "amber" | "green" | "red" | "blue"; children: React.ReactNode }) {
   const map = {
-    amber: { bg: "#FEF3C7", fg: "#B45309" },
-    green: { bg: GREEN_SOFT, fg: "#15803D" },
-    red: { bg: "#FEE2E2", fg: "#B91C1C" },
-    blue: { bg: "#DBEAFE", fg: "#1D4ED8" },
+    amber: { bg: "#FFF8EC", fg: "#92560B" },
+    green: { bg: "#ECFDF3", fg: "#15803D" },
+    red: { bg: "#FFF0F2", fg: "#B42330" },
+    blue: { bg: "#ECF8FE", fg: "#0E7FB0" },
   } as const;
   const c = map[tone];
   return (
