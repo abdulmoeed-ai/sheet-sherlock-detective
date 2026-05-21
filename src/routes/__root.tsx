@@ -7,8 +7,12 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Toaster, toast } from "sonner";
+import { AskAiTrigger } from "@/components/AskAiTrigger";
 
 import appCss from "../styles.css?url";
+
 
 function NotFoundComponent() {
   return (
@@ -113,9 +117,30 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      toast.success(detail);
+    };
+    window.addEventListener("sherlock-toast", handler);
+    return () => window.removeEventListener("sherlock-toast", handler);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
+      <AskAiTrigger />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "#E8F5E9",
+            border: "1px solid #A7D7A9",
+            color: "#2E7D32",
+          },
+        }}
+      />
     </QueryClientProvider>
   );
 }
+
