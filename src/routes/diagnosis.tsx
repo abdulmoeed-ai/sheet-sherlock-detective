@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { AskAiPanel } from "@/components/AskAiPanel";
+import { ExcelAddIn } from "@/components/ExcelAddIn";
 import { Button } from "@/components/Button";
 import { AlertTriangle, ArrowRight, Check, X } from "lucide-react";
 
