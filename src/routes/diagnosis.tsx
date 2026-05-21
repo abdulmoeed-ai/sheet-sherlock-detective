@@ -11,7 +11,7 @@ export const Route = createFileRoute("/diagnosis")({
       { name: "description", content: "AI-driven 3-statement reconciliation with cell-level imbalance diagnosis." },
     ],
   }),
-  component: Diagnosis;
+  component: Diagnosis,
 });
 
 const OVERRIDE_REASONS = [
