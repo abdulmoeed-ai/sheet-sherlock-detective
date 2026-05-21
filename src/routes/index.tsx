@@ -442,8 +442,8 @@ function SelectBar({ value, onChange, options, width = 160 }: { value: string; o
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-[34px] w-full appearance-none rounded-lg border bg-white pl-3 pr-8 text-[13px] font-medium"
-        style={{ borderColor: "#D1D5DB", color: "#111827" }}
+        className="h-9 w-full appearance-none rounded-lg border bg-white pl-3 pr-8 text-[13px] font-medium shadow-sm transition-colors hover:border-[var(--color-border-strong)] focus:border-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/15"
+        style={{ borderColor: BORDER, color: TEXT }}
       >
         {options.map((o) => (
           <option key={o} value={o}>
@@ -455,6 +455,7 @@ function SelectBar({ value, onChange, options, width = 160 }: { value: string; o
     </div>
   );
 }
+
 
 function KpiCard({
   icon,
