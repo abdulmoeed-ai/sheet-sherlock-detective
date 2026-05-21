@@ -191,9 +191,10 @@ function Dashboard() {
             <div className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>
               What drove the FY2025 variance?
             </div>
-            <div className="mt-3">
+            <div className="mt-6 pt-4">
               <Waterfall />
             </div>
+
             <p className="mt-3 text-[12px] italic" style={{ color: MUTED }}>
               Volume and price together offset a PKR 1.8B cost overrun. Cost of goods sold was the primary driver — cement input costs up 14% YoY.
             </p>
