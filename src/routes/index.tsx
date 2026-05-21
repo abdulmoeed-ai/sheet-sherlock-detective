@@ -95,46 +95,32 @@ function Dashboard() {
     <PageShell title={`${company} · ${period}`} subtitle="Financial intelligence overview · live model">
       {/* ───── Section 0 — Context bar ───── */}
       <div
-        className="sticky top-14 z-10 -mx-8 mb-4 flex h-12 items-center justify-between border-b px-8"
-        style={{ background: SUBTLE, borderColor: BORDER }}
+        className="sticky top-14 z-10 -mx-8 mb-5 flex h-14 items-center justify-between border-b px-8 backdrop-blur"
+        style={{ background: "rgba(250,250,253,0.85)", borderColor: BORDER }}
       >
         <div className="flex items-center gap-2">
-          {QUICK_SECTORS.map((s) => {
-            const active = sector === s || (s === "Energy" && sector === "Power & Energy");
-            return (
-              <button
-                key={s}
-                onClick={() => onSectorChange(s === "Energy" ? "Power & Energy" : s)}
-                className="h-7 rounded-full px-3 text-[12px] font-semibold transition-colors"
-                style={
-                  active
-                    ? { background: GREEN, color: "#fff", border: `1px solid ${GREEN}` }
-                    : { background: "#fff", color: "#374151", border: "1px solid #D1D5DB" }
-                }
-              >
-                {s}
-              </button>
-            );
-          })}
-          <SelectBar value={sector} onChange={onSectorChange} options={SECTORS} width={170} />
-          <SelectBar value={company} onChange={setCompany} options={companies} width={190} />
-          <span className="mx-1 text-[#D1D5DB]">|</span>
-          <SelectBar value={period} onChange={setPeriod} options={["FY2025", "FY2024", "Q3 FY2025", "H1 FY2025"]} width={120} />
+          <SelectBar value={sector} onChange={onSectorChange} options={SECTORS} width={180} />
+          <SelectBar value={company} onChange={setCompany} options={companies} width={200} />
+          <span className="mx-1 text-[#DCDCE5]">|</span>
+          <SelectBar value={period} onChange={setPeriod} options={["FY2025", "FY2024", "Q3 FY2025", "H1 FY2025"]} width={130} />
         </div>
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: "#22C55E" }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: SUCCESS, boxShadow: `0 0 0 3px ${SUCCESS_BG}` }} />
             Data as of May 20, 2026 · 14 sources live
           </div>
           <button
-            className="inline-flex h-[34px] items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white"
-            style={{ background: GREEN }}
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white shadow-sm transition-colors"
+            style={{ background: BRAND }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = BRAND_HOVER)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = BRAND)}
           >
             <Sparkles className="h-3.5 w-3.5" /> New ingestion cycle
           </button>
         </div>
       </div>
+
 
       {/* ───── Section 1 — Alert banner ───── */}
       {showAlert && (
