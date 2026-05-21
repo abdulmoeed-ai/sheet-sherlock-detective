@@ -41,20 +41,36 @@ const CATALOG: Record<string, string[]> = {
   "Food & FMCG": ["Nestle Pakistan", "Unilever", "National Foods", "Engro Foods"],
 };
 const SECTORS = Object.keys(CATALOG);
-const QUICK_SECTORS = ["Cement", "Banking", "Energy"]; // pills
 
-// ────────── Color tokens (per spec) ──────────
-const GREEN = "#1B4332";
-const GREEN_MID = "#52B788";
-const GREEN_SOFT = "#D1FAE5";
-const RED = "#EF4444";
-const AMBER = "#F59E0B";
-const AMBER_SOFT = "#FEF3C7";
-const BORDER = "#E5E7EB";
-const SUBTLE = "#F9FAFB";
-const TEXT = "#111827";
-const MUTED = "#6B7280";
-const MUTED_2 = "#9CA3AF";
+// ────────── Color tokens — ClickUp light theme ──────────
+const BRAND = "#7B68EE";        // primary purple
+const BRAND_HOVER = "#6951E0";
+const BRAND_SOFT = "#F1EEFE";   // tinted lavender surface
+const BRAND_DEEP = "#4A3AB8";   // deep purple text on lavender
+const ACCENT = "#49CCF9";       // ClickUp cyan
+const SUCCESS = "#22C55E";
+const SUCCESS_BG = "#ECFDF3";
+const SUCCESS_FG = "#15803D";
+const RED = "#FF5765";          // ClickUp coral/red
+const RED_BG = "#FFF0F2";
+const RED_FG = "#B42330";
+const AMBER = "#FFB02E";
+const AMBER_SOFT = "#FFF8EC";
+const AMBER_FG = "#92560B";
+const INFO_BG = "#ECF8FE";
+const INFO_FG = "#0E7FB0";
+const BORDER = "#ECECF1";
+const BORDER_STRONG = "#DCDCE5";
+const SUBTLE = "#FAFAFD";
+const TEXT = "#1A1A2E";
+const MUTED = "#5A5C7B";
+const MUTED_2 = "#A4A7BD";
+
+// Legacy aliases kept so existing references compile after retheme
+const GREEN = BRAND;
+const GREEN_MID = ACCENT;
+const GREEN_SOFT = BRAND_SOFT;
+
 
 function Dashboard() {
   const [sector, setSector] = useState("Cement");
