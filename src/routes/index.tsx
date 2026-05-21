@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
+import { cycleStore } from "@/lib/cycle-store";
+
 
 import {
   AlertTriangle,
@@ -73,11 +75,13 @@ const GREEN_SOFT = BRAND_SOFT;
 
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [sector, setSector] = useState("Cement");
   const [company, setCompany] = useState("Lucky Cement");
   const [period, setPeriod] = useState("FY2025");
   const [chartTab, setChartTab] = useState<"Monthly" | "Quarterly" | "Annual">("Quarterly");
   const [scenario, setScenario] = useState<"Base" | "Bull" | "Bear">("Base");
+
 
   const companies = CATALOG[sector] ?? [];
 
@@ -111,6 +115,10 @@ function Dashboard() {
             Data as of May 20, 2026 · 14 sources live
           </div>
           <button
+            onClick={() => {
+              cycleStore.startCycle({ sector, company, period });
+              navigate({ to: "/ingestion" });
+            }}
             className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white shadow-sm transition-colors"
             style={{ background: BRAND }}
             onMouseEnter={(e) => (e.currentTarget.style.background = BRAND_HOVER)}
@@ -118,6 +126,7 @@ function Dashboard() {
           >
             <Sparkles className="h-3.5 w-3.5" /> New ingestion cycle
           </button>
+
         </div>
       </div>
 
