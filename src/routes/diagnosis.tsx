@@ -40,6 +40,9 @@ function Diagnosis() {
         </>
       }
     >
+      <div className="mb-5">
+        <ExcelAddIn />
+      </div>
       <div className="grid grid-cols-[1fr_380px] gap-5">
         <div className="space-y-5">
           <Card>
