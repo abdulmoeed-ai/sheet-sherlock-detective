@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
-import { Button } from "@/components/Button";
+
 import {
   AlertTriangle,
   TrendingUp,
