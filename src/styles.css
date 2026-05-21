@@ -124,7 +124,7 @@
   50% { opacity: 0.5; }
 }
 .skeleton-bar {
-  background: #D1FAE5;
+  background: var(--color-brand-light);
   border-radius: 4px;
   height: 10px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
