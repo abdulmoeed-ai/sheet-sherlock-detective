@@ -32,63 +32,77 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Brand — ClickUp-inspired light theme (subtle) */
-  --color-sidebar-bg: #FBFBFD;
-  --color-sidebar-active: #F1EEFE;
-  --color-sidebar-border: #ECECF1;
-  --color-sidebar-icon: #7B68EE;
-  --color-sidebar-text: #5A5C7B;
-  --color-sidebar-text-active: #4A3AB8;
+  /* ───── Sidebar — ClickUp dark navy purple ───── */
+  --color-sidebar-bg: #191F2E;
+  --color-sidebar-active: #2A3153;
+  --color-sidebar-border: #232A3D;
+  --color-sidebar-icon: #9E95F5;
+  --color-sidebar-text: #8892A4;
+  --color-sidebar-text-active: #FFFFFF;
 
+  /* ───── Brand / accents ───── */
   --color-brand: #7B68EE;
-  --color-brand-hover: #6951E0;
-  --color-brand-light: #F1EEFE;
-  --color-accent-green: #49CCF9;
-  --color-accent-mid: #FF5765;
-  --color-accent-sparkle: #7B68EE;
+  --color-brand-hover: #6455D6;
+  --color-brand-light: #EDE9FE;
+  --color-accent-mid: #9E95F5;
+  --color-accent-sparkle: #5E4BF1;
+  --color-accent-green: #7B68EE; /* legacy alias mapped to brand */
 
-  --color-page: #F7F7FB;
-  --color-table-header: #F4F3FA;
-  --color-table-row-alt: #FAFAFD;
-  --color-tag-bg: #F1EEFE;
+  /* ───── Surfaces ───── */
+  --color-page: #F7F8FA;
+  --color-card: #FFFFFF;
+  --color-table-header: #F7F8FA;
+  --color-table-row-alt: #FAFBFC;
+  --color-tag-bg: #F3F0FF;
 
+  /* ───── Borders ───── */
+  --color-border-default: #E3E6EA;
+  --color-border-strong: #D0D5DD;
+
+  /* ───── Status — keep green for finance ───── */
   --color-success: #22C55E;
-  --color-success-bg: #ECFDF3;
-  --color-danger: #FF5765;
-  --color-danger-bg: #FFF0F2;
-  --color-warning: #FFB02E;
-  --color-warning-bg: #FFF8EC;
-  --color-info: #49CCF9;
-  --color-info-bg: #ECF8FE;
+  --color-success-bg: #E8F5E9;
+  --color-success-fg: #2E7D32;
+  --color-success-border: #A7D7A9;
 
-  --color-text-primary: #1A1A2E;
-  --color-text-secondary: #5A5C7B;
-  --color-text-muted: #A4A7BD;
+  --color-danger: #F44336;
+  --color-danger-bg: #FFEBEE;
+  --color-danger-fg: #C62828;
 
-  --color-border-default: #ECECF1;
-  --color-border-strong: #DCDCE5;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FFF8E1;
+  --color-warning-fg: #B45309;
+
+  --color-info: #4EA7FF;
+  --color-info-bg: #E8F4FF;
+
+  /* ───── Text ───── */
+  --color-text-primary: #292D34;
+  --color-text-secondary: #4F546B;
+  --color-text-muted: #818EA0;
+  --color-text-placeholder: #A0A8B8;
 }
 
 :root {
   --radius: 0.5rem;
-  --background: #F7F7FB;
-  --foreground: #1A1A2E;
+  --background: #F7F8FA;
+  --foreground: #292D34;
   --card: #FFFFFF;
-  --card-foreground: #1A1A2E;
+  --card-foreground: #292D34;
   --popover: #FFFFFF;
-  --popover-foreground: #1A1A2E;
+  --popover-foreground: #292D34;
   --primary: #7B68EE;
   --primary-foreground: #FFFFFF;
-  --secondary: #F1EEFE;
+  --secondary: #F3F0FF;
   --secondary-foreground: #4A3AB8;
-  --muted: #F4F3FA;
-  --muted-foreground: #5A5C7B;
-  --accent: #F1EEFE;
+  --muted: #F7F8FA;
+  --muted-foreground: #4F546B;
+  --accent: #F3F0FF;
   --accent-foreground: #4A3AB8;
-  --destructive: #FF5765;
+  --destructive: #F44336;
   --destructive-foreground: #FFFFFF;
-  --border: #ECECF1;
-  --input: #DCDCE5;
+  --border: #E3E6EA;
+  --input: #D0D5DD;
   --ring: #7B68EE;
 }
 
@@ -128,4 +142,20 @@
   border-radius: 4px;
   height: 10px;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes flash-success {
+  0%   { background-color: #D1FAE5; }
+  100% { background-color: #FFFFFF; }
+}
+.flash-success {
+  animation: flash-success 1s ease-out;
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.slide-in-right {
+  animation: slide-in-right 0.25s ease;
 }
