@@ -128,14 +128,14 @@ function Dashboard() {
           className="-mx-8 mb-5 flex h-11 items-center justify-between px-8"
           style={{ background: AMBER_SOFT, borderLeft: `4px solid ${AMBER}` }}
         >
-          <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "#92400E" }}>
-            <AlertTriangle className="h-4 w-4" style={{ color: "#B45309" }} />
+          <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "#92560B" }}>
+            <AlertTriangle className="h-4 w-4" style={{ color: "#92560B" }} />
             <span>
               <span className="font-semibold">{pendingHardBlocked + pendingDiagnosis} items require your attention</span> before this cycle can proceed —{" "}
               {pendingHardBlocked} hard-blocked diff in Sheet BS!F18, {pendingDiagnosis} pending BS diagnosis.
             </span>
           </div>
-          <Link to="/diff-review" className="text-[13px] font-semibold" style={{ color: "#B45309" }}>
+          <Link to="/diff-review" className="text-[13px] font-semibold" style={{ color: "#92560B" }}>
             Review now →
           </Link>
         </div>
@@ -179,7 +179,7 @@ function Dashboard() {
               </div>
             </div>
             <RevenueChart />
-            <div className="mt-3 flex items-center gap-8 border-t pt-3" style={{ borderColor: "#F3F4F6" }}>
+            <div className="mt-3 flex items-center gap-8 border-t pt-3" style={{ borderColor: "#F4F3FA" }}>
               <SummaryStat label="Actual" value="PKR 54.8B" />
               <SummaryStat label="Budget" value="PKR 52.0B" />
               <SummaryStat label="Variance" value="+PKR 2.8B (+5.4%)" valueColor="#15803D" />
@@ -243,7 +243,7 @@ function Dashboard() {
               <span
                 key={k}
                 className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={{ background: "#F0FDF4", color: "#15803D" }}
+                style={{ background: "#ECFDF3", color: "#15803D" }}
               >
                 {k}: {v}
               </span>
@@ -253,7 +253,7 @@ function Dashboard() {
             See full assumptions →
           </Link>
 
-          <div className="my-4 h-px" style={{ background: "#F3F4F6" }} />
+          <div className="my-4 h-px" style={{ background: "#F4F3FA" }} />
 
           <div className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>
             Key model risks
@@ -273,7 +273,7 @@ function Dashboard() {
 
       {/* ───── Section 4 — Approval status row ───── */}
       <div className="mt-5 rounded-xl border bg-white px-6 py-4" style={{ borderColor: BORDER }}>
-        <div className="grid grid-cols-4 divide-x" style={{ borderColor: "#F3F4F6" }}>
+        <div className="grid grid-cols-4 divide-x" style={{ borderColor: "#F4F3FA" }}>
           <div className="pr-6">
             <Eyebrow>Active cycle</Eyebrow>
             <div className="mt-1.5 text-[15px] font-semibold" style={{ color: TEXT }}>
@@ -351,8 +351,8 @@ function Dashboard() {
                 className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
                 style={
                   t.tone === "good"
-                    ? { background: GREEN_SOFT, color: "#15803D" }
-                    : { background: "#F3F4F6", color: "#4B5563" }
+                    ? { background: "#ECFDF3", color: "#15803D" }
+                    : { background: "#F4F3FA", color: "#4B5563" }
                 }
               >
                 {t.delta}
@@ -393,7 +393,7 @@ function Dashboard() {
           ].map((r) => (
             <tr
               key={r.m}
-              className="cursor-pointer border-b transition-colors hover:bg-[#FAFAFA]"
+              className="cursor-pointer border-b transition-colors hover:bg-[#FAFAFD]"
               style={{ borderColor: BORDER }}
             >
               <td
@@ -475,10 +475,10 @@ function KpiCard({
 }) {
   const badgeStyle =
     badge.tone === "good"
-      ? { bg: GREEN_SOFT, fg: "#15803D" }
+      ? { bg: "#ECFDF3", fg: "#15803D" }
       : badge.tone === "bad"
-        ? { bg: "#FEE2E2", fg: "#B91C1C" }
-        : { bg: "#F3F4F6", fg: "#4B5563" };
+        ? { bg: "#FFF0F2", fg: "#B42330" }
+        : { bg: "#F4F3FA", fg: "#4B5563" };
   return (
     <div className="rounded-[10px] border bg-white px-5 py-4" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between">
@@ -547,7 +547,7 @@ function RevenueChart() {
     <div className="relative" style={{ height: h + 24 }}>
       {/* reference lines */}
       {[0.33, 0.66, 1].map((r) => (
-        <div key={r} className="absolute left-0 right-0" style={{ bottom: 24 + r * h * 0.9, borderTop: `1px dashed #F3F4F6` }} />
+        <div key={r} className="absolute left-0 right-0" style={{ bottom: 24 + r * h * 0.9, borderTop: `1px dashed #F4F3FA` }} />
       ))}
       <div className="absolute inset-x-0 bottom-0 flex h-full items-end justify-around px-1">
         {data.map((d) => (
@@ -703,7 +703,7 @@ function ForecastChart({ scenario }: { scenario: "Base" | "Bull" | "Bear" }) {
   const lastVal = series[active][5];
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none">
-      <path d={bandPath} fill="#F0FDF4" opacity={0.7} />
+      <path d={bandPath} fill="#F1EEFE" opacity={0.7} />
       {lineFor("Bear")}
       {lineFor("Bull")}
       {lineFor("Base")}
@@ -767,7 +767,7 @@ function Ring({ pct }: { pct: number }) {
 }
 
 function QueueRow({ to, label, status, tone }: { to: string; label: string; status: string; tone: "amber" | "green" }) {
-  const colors = tone === "amber" ? { bg: "#FEF3C7", fg: "#B45309" } : { bg: GREEN_SOFT, fg: "#15803D" };
+  const colors = tone === "amber" ? { bg: "#FFF8EC", fg: "#92560B" } : { bg: "#ECFDF3", fg: "#15803D" };
   return (
     <Link to={to} className="flex items-center justify-between text-[12px]">
       <span style={{ color: TEXT }}>{label}</span>
@@ -780,10 +780,10 @@ function QueueRow({ to, label, status, tone }: { to: string; label: string; stat
 
 function StatusBadge({ tone, children }: { tone: "amber" | "green" | "red" | "blue"; children: React.ReactNode }) {
   const map = {
-    amber: { bg: "#FEF3C7", fg: "#B45309" },
-    green: { bg: GREEN_SOFT, fg: "#15803D" },
-    red: { bg: "#FEE2E2", fg: "#B91C1C" },
-    blue: { bg: "#DBEAFE", fg: "#1D4ED8" },
+    amber: { bg: "#FFF8EC", fg: "#92560B" },
+    green: { bg: "#ECFDF3", fg: "#15803D" },
+    red: { bg: "#FFF0F2", fg: "#B42330" },
+    blue: { bg: "#ECF8FE", fg: "#0E7FB0" },
   } as const;
   const c = map[tone];
   return (
