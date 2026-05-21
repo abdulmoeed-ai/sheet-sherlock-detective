@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
+import { CycleProgress } from "./CycleProgress";
 
 interface Props {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  hideProgress?: boolean;
 }
 
-export function PageShell({ title, subtitle, actions, children }: Props) {
+export function PageShell({ title, subtitle, actions, children, hideProgress }: Props) {
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-page)]">
       <Sidebar />
@@ -27,7 +29,7 @@ export function PageShell({ title, subtitle, actions, children }: Props) {
           </div>
           <div className="flex items-center gap-2">{actions}</div>
         </header>
-        <div className="px-8 py-7">
+        <div className="px-8 py-7 pr-20">
           <div className="mb-6">
             <h1 className="text-[22px] font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>
               {title}
@@ -38,6 +40,7 @@ export function PageShell({ title, subtitle, actions, children }: Props) {
               </p>
             ) : null}
           </div>
+          {!hideProgress && <CycleProgress />}
           {children}
         </div>
       </main>
@@ -65,10 +68,10 @@ export function Badge({
 }) {
   const tones: Record<string, { bg: string; fg: string }> = {
     neutral: { bg: "#F3F4F6", fg: "#4B5563" },
-    success: { bg: "var(--color-success-bg)", fg: "#15803D" },
-    danger: { bg: "var(--color-danger-bg)", fg: "#B91C1C" },
-    warning: { bg: "var(--color-warning-bg)", fg: "#B45309" },
-    info: { bg: "var(--color-info-bg)", fg: "#1D4ED8" },
+    success: { bg: "var(--color-success-bg)", fg: "var(--color-success-fg)" },
+    danger: { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" },
+    warning: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" },
+    info: { bg: "var(--color-info-bg)", fg: "#0E7FB0" },
     ai: { bg: "var(--color-tag-bg)", fg: "var(--color-accent-sparkle)" },
   };
   const t = tones[tone];

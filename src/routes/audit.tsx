@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
-import { Download, Sparkles, User, FileCheck, GitCompare, Stethoscope } from "lucide-react";
+import { Download, Sparkles, User, FileCheck, GitCompare, Stethoscope, CheckCircle2, Clock } from "lucide-react";
+import { useCycle } from "@/lib/cycle-store";
+
 
 export const Route = createFileRoute("/audit")({
   head: () => ({
@@ -25,19 +27,58 @@ const log = [
 ];
 
 function Audit() {
+  const cycle = useCycle();
+  const inReview = cycle.status === "review";
+  const approved = cycle.status === "approved";
+
+  const exportPdf = () => {
+    const blob = new Blob(
+      [`Sheet Sherlock — Signed Audit Trail\n${cycle.period} · ${cycle.company}\nGenerated ${new Date().toISOString()}\n`],
+      { type: "application/pdf" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-${cycle.period}-${cycle.company}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <PageShell
       title="Audit Trail · Cycle 2026-Q1"
-      subtitle="Immutable log · every system and human action is recorded with source, timestamp, and signatory"
+      subtitle="Immutable log · every system and human action is recorded"
       actions={
         <>
           <Button variant="secondary">Export JSON</Button>
-          <Button>
-            <Download className="h-4 w-4" /> Signed PDF
+          <Button onClick={exportPdf}>
+            <Download className="h-4 w-4" /> Export signed PDF
           </Button>
         </>
       }
     >
+      {(inReview || approved) && (
+        <div
+          className="mb-5 flex items-center gap-3 rounded-[10px] border px-5 py-3.5"
+          style={
+            approved
+              ? { background: "var(--color-success-bg)", borderColor: "var(--color-success-border)" }
+              : { background: "var(--color-warning-bg)", borderColor: "#FCD34D" }
+          }
+        >
+          {approved ? (
+            <CheckCircle2 className="h-5 w-5" style={{ color: "var(--color-success-fg)" }} />
+          ) : (
+            <Clock className="h-5 w-5" style={{ color: "var(--color-warning-fg)" }} />
+          )}
+          <div className="text-[13px] font-semibold" style={{ color: approved ? "var(--color-success-fg)" : "var(--color-warning-fg)" }}>
+            {approved
+              ? `${cycle.period} · ${cycle.company} approved by Ayesha S. (CFO) on May 21, 2026. Version locked.`
+              : `${cycle.period} · ${cycle.company} — Awaiting Manager approval.`}
+          </div>
+        </div>
+      )}
+
       <div className="mb-5 grid grid-cols-4 gap-4">
         {[
           ["Total events", "47"],
@@ -51,6 +92,7 @@ function Audit() {
           </Card>
         ))}
       </div>
+
 
       <Card>
         <h3 className="text-[15px] font-semibold">Event log</h3>
