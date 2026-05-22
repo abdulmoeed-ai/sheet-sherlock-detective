@@ -278,14 +278,15 @@ function Diagnosis() {
             </div>
             <div className="mx-3 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <div
-              className="rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
+              className="flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
               style={{
-                background: allClear ? "#D1FAE5" : "#FEF3C7",
-                border: `1px solid ${allClear ? "#A7F3D0" : "#FDE68A"}`,
-                color: allClear ? "#15803D" : "#B45309",
+                background: locked ? "#D1FAE5" : allClear ? "#D1FAE5" : "#FEF3C7",
+                border: `1px solid ${locked ? "#86EFAC" : allClear ? "#A7F3D0" : "#FDE68A"}`,
+                color: locked ? "#15803D" : allClear ? "#15803D" : "#B45309",
               }}
             >
-              {allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
+              {locked && <Lock className="h-3 w-3" />}
+              {locked ? "Locked — Ready for CEO review" : allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
             </div>
           </div>
 
