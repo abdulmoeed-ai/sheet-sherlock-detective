@@ -174,6 +174,9 @@ function Diagnosis() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null);
   const [historyPopover, setHistoryPopover] = useState<{ x: number; y: number; addr: string } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [readyModal, setReadyModal] = useState(false);
+  const cycle = useCycle();
+  const locked = cycle.status === "review" || cycle.status === "approved";
   const gridRef = useRef<HTMLDivElement>(null);
 
   const cellAddress = (r: number, c: number) => {
