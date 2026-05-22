@@ -45,9 +45,52 @@ function Forecast() {
     return out as Record<"Base" | "Bull" | "Bear", number[]>;
   }, [adj]);
 
+  const diagnosisReady = cycle.status === "review" || cycle.status === "approved" || cycle.status === "forecast" || cycle.status === "assumptions";
+
   return (
     <PageShell title={`5-Year Forecast — ${cycle.sector} · ${cycle.company}`} subtitle="Scenario-based revenue projection driven by PSX historicals + ADB macro">
       <div className="pb-24">
+        {/* Diagnosis lock status banner */}
+        <div
+          className="mb-4 flex items-center justify-between rounded-lg border px-4 py-3"
+          style={{
+            background: diagnosisReady ? "#F0FDF4" : "#FFFBEB",
+            borderColor: diagnosisReady ? "#A7F3D0" : "#FDE68A",
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: diagnosisReady ? "#D1FAE5" : "#FEF3C7" }}
+            >
+              <span style={{ color: diagnosisReady ? "#15803D" : "#B45309", fontSize: 14 }}>
+                {diagnosisReady ? "🔒" : "⚠"}
+              </span>
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold" style={{ color: diagnosisReady ? "#15803D" : "#B45309" }}>
+                {diagnosisReady
+                  ? "Diagnosis locked — forecast is using finalized figures"
+                  : "Diagnosis not yet marked ready for CEO review"}
+              </div>
+              <div className="text-[12px]" style={{ color: diagnosisReady ? "#15803D" : "#92400E", opacity: 0.85 }}>
+                {diagnosisReady
+                  ? "Balance Sheet, P&L and Cash Flow values are frozen as the baseline for projections."
+                  : "Underlying figures may still change. Lock the diagnosis to freeze the forecast baseline."}
+              </div>
+            </div>
+          </div>
+          {!diagnosisReady && (
+            <button
+              onClick={() => navigate({ to: "/diagnosis" })}
+              className="h-8 rounded-md px-3 text-[12px] font-semibold text-white"
+              style={{ background: "#7B68EE" }}
+            >
+              Open diagnosis →
+            </button>
+          )}
+        </div>
+
         {/* Top — scenario + chart */}
         <div className="rounded-xl border bg-white p-6" style={{ borderColor: "var(--color-border-default)" }}>
           <div className="flex items-center justify-between">

@@ -17,6 +17,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
+import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { toast } from "sonner";
+import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/diagnosis")({
   head: () => ({
@@ -171,6 +174,9 @@ function Diagnosis() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null);
   const [historyPopover, setHistoryPopover] = useState<{ x: number; y: number; addr: string } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [readyModal, setReadyModal] = useState(false);
+  const cycle = useCycle();
+  const locked = cycle.status === "review" || cycle.status === "approved";
   const gridRef = useRef<HTMLDivElement>(null);
 
   const cellAddress = (r: number, c: number) => {
@@ -272,14 +278,15 @@ function Diagnosis() {
             </div>
             <div className="mx-3 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <div
-              className="rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
+              className="flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
               style={{
-                background: allClear ? "#D1FAE5" : "#FEF3C7",
-                border: `1px solid ${allClear ? "#A7F3D0" : "#FDE68A"}`,
-                color: allClear ? "#15803D" : "#B45309",
+                background: locked ? "#D1FAE5" : allClear ? "#D1FAE5" : "#FEF3C7",
+                border: `1px solid ${locked ? "#86EFAC" : allClear ? "#A7F3D0" : "#FDE68A"}`,
+                color: locked ? "#15803D" : allClear ? "#15803D" : "#B45309",
               }}
             >
-              {allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
+              {locked && <Lock className="h-3 w-3" />}
+              {locked ? "Locked — Ready for CEO review" : allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
             </div>
           </div>
 
@@ -316,12 +323,17 @@ function Diagnosis() {
               Save draft
             </button>
             <button
-              disabled={!allClear}
-              onClick={() => navigate({ to: "/forecast" })}
+              disabled={!allClear || locked}
+              onClick={() => setReadyModal(true)}
               className="h-[30px] rounded-md px-4 text-[12px] font-semibold text-white transition-opacity"
-              style={{ background: "#7B68EE", opacity: allClear ? 1 : 0.45, cursor: allClear ? "pointer" : "not-allowed" }}
+              style={{
+                background: locked ? "#15803D" : "#7B68EE",
+                opacity: (allClear && !locked) || locked ? 1 : 0.45,
+                cursor: allClear && !locked ? "pointer" : locked ? "default" : "not-allowed",
+              }}
+              title={locked ? "Diagnosis locked & sent for CEO review" : "Lock diagnosis and mark ready for CEO review"}
             >
-              Submit for review →
+              {locked ? "✓ Ready for CEO review" : "Mark ready for CEO review →"}
             </button>
           </div>
         </div>
@@ -957,6 +969,73 @@ function Diagnosis() {
               <button onClick={() => setHistoryPopover(null)} className="text-[12px]" style={{ color: "#818EA0" }}>
                 Close
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mark Ready confirmation modal */}
+        {readyModal && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center"
+            style={{ background: "rgba(15,20,30,0.55)" }}
+            onClick={() => setReadyModal(false)}
+          >
+            <div
+              className="w-[460px] rounded-xl bg-white p-6"
+              style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "#EDE9FE" }}>
+                  <Lock className="h-4 w-4" style={{ color: "#7B68EE" }} />
+                </div>
+                <div className="text-[15px] font-bold" style={{ color: "#292D34" }}>
+                  Mark diagnosis ready for CEO review
+                </div>
+              </div>
+              <p className="mt-3 text-[13px] leading-[1.55]" style={{ color: "#4F546B" }}>
+                This locks the Balance Sheet, P&amp;L and Cash Flow cells you've reviewed. The Forecast tab will use these finalized
+                figures as its baseline. You can re-open this cycle by clicking <strong>Unlock</strong> on the Audit Trail.
+              </p>
+              <div className="mt-4 rounded-lg border p-3 text-[12px]" style={{ borderColor: "#E3E6EA", background: "#F7F8FA" }}>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Cells corrected</span>
+                  <span className="font-semibold" style={{ color: "#292D34" }}>
+                    {Object.keys(corrected).length}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Open issues</span>
+                  <span className="font-semibold" style={{ color: openIssueCount === 0 ? "#15803D" : "#B45309" }}>
+                    {openIssueCount}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Statements reconciled</span>
+                  <span className="font-semibold" style={{ color: "#15803D" }}>3 / 3</span>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  onClick={() => setReadyModal(false)}
+                  className="h-9 rounded-md border px-4 text-[12px] font-semibold"
+                  style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    cycleStore.setStatus("review");
+                    setReadyModal(false);
+                    toast.success("Diagnosis locked — sent for CEO review. Forecast is now using these figures.");
+                    setTimeout(() => navigate({ to: "/forecast" }), 600);
+                  }}
+                  className="h-9 rounded-md px-4 text-[12px] font-semibold text-white"
+                  style={{ background: "#7B68EE" }}
+                >
+                  Confirm &amp; lock →
+                </button>
+              </div>
             </div>
           </div>
         )}
