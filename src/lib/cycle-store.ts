@@ -19,8 +19,8 @@ export interface CycleState {
 }
 
 const initial: CycleState = {
-  sector: "Cement",
-  company: "Lucky Cement",
+  sector: "Engineering & Industrials",
+  company: "Millat Tractors Limited",
   period: "FY2025",
   status: "idle",
   startedAt: null,

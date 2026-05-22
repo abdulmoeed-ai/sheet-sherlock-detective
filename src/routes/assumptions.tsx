@@ -24,7 +24,7 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { name: "Cement dispatches CAGR", value: "4.2%/yr",   source: "APCMA",      date: "Apr 2025", conf: 99, sens: "High" },
+  { name: "Tractor unit sales CAGR", value: "5.6%/yr",   source: "PAMA",      date: "Apr 2025", conf: 99, sens: "High" },
   { name: "KIBOR (base case)",      value: "18.5%",     source: "SBP",        date: "May 2025", conf: 97, sens: "High" },
   { name: "CPI YoY",                value: "11.2%",     source: "PBS",        date: "Apr 2025", conf: 94, sens: "High" },
   { name: "PKR/USD (avg)",          value: "287.4",     source: "SBP",        date: "May 2025", conf: 96, sens: "Med" },

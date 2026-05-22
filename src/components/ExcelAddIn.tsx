@@ -14,7 +14,7 @@ interface Row {
 }
 
 const INITIAL_ROWS: Row[] = [
-  { label: "Balance Sheet — LUCK · FY2025 (PKR M)", values: ["", "FY23", "FY24", "FY25", "Δ YoY", "Source"], bold: true, group: "header" },
+  { label: "Balance Sheet — MTL · FY2025 (PKR M)", values: ["", "FY23", "FY24", "FY25", "Δ YoY", "Source"], bold: true, group: "header" },
   { label: "Total Assets", values: ["", 152340, 168920, 184210, "+9.1%", "PSX AR p.72"], bold: true, group: "total" },
   { label: "Current Assets", values: ["", 38120, 40210, 41820, "+4.0%", "p.73"], group: "sub" },
   { label: "  Cash & equivalents", values: ["", 12400, 14100, 15240, "+8.1%", "p.73"] },
@@ -68,7 +68,7 @@ export function ExcelAddIn() {
               Sherlock Excel Add-in
             </span>
             <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-              LUCK_FY25_Model.xlsx · Synced 2s ago
+              MTL_FY25_Model.xlsx · Synced 2s ago
             </span>
           </div>
         </div>
