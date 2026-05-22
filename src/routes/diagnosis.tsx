@@ -972,6 +972,73 @@ function Diagnosis() {
             </div>
           </div>
         )}
+
+        {/* Mark Ready confirmation modal */}
+        {readyModal && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center"
+            style={{ background: "rgba(15,20,30,0.55)" }}
+            onClick={() => setReadyModal(false)}
+          >
+            <div
+              className="w-[460px] rounded-xl bg-white p-6"
+              style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.25)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "#EDE9FE" }}>
+                  <Lock className="h-4 w-4" style={{ color: "#7B68EE" }} />
+                </div>
+                <div className="text-[15px] font-bold" style={{ color: "#292D34" }}>
+                  Mark diagnosis ready for CEO review
+                </div>
+              </div>
+              <p className="mt-3 text-[13px] leading-[1.55]" style={{ color: "#4F546B" }}>
+                This locks the Balance Sheet, P&amp;L and Cash Flow cells you've reviewed. The Forecast tab will use these finalized
+                figures as its baseline. You can re-open this cycle by clicking <strong>Unlock</strong> on the Audit Trail.
+              </p>
+              <div className="mt-4 rounded-lg border p-3 text-[12px]" style={{ borderColor: "#E3E6EA", background: "#F7F8FA" }}>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Cells corrected</span>
+                  <span className="font-semibold" style={{ color: "#292D34" }}>
+                    {Object.keys(corrected).length}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Open issues</span>
+                  <span className="font-semibold" style={{ color: openIssueCount === 0 ? "#15803D" : "#B45309" }}>
+                    {openIssueCount}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span style={{ color: "#818EA0" }}>Statements reconciled</span>
+                  <span className="font-semibold" style={{ color: "#15803D" }}>3 / 3</span>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  onClick={() => setReadyModal(false)}
+                  className="h-9 rounded-md border px-4 text-[12px] font-semibold"
+                  style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    cycleStore.setStatus("review");
+                    setReadyModal(false);
+                    toast.success("Diagnosis locked — sent for CEO review. Forecast is now using these figures.");
+                    setTimeout(() => navigate({ to: "/forecast" }), 600);
+                  }}
+                  className="h-9 rounded-md px-4 text-[12px] font-semibold text-white"
+                  style={{ background: "#7B68EE" }}
+                >
+                  Confirm &amp; lock →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
