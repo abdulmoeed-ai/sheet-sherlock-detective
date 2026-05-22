@@ -907,10 +907,12 @@ function Diagnosis() {
         {!panelOpen && (
           <button
             onClick={() => setPanelOpen(true)}
-            className="fixed right-0 top-1/2 z-20 -translate-y-1/2 rounded-l-md px-2 py-3 text-[11px] font-semibold text-white"
-            style={{ background: "#7B68EE", writingMode: "vertical-rl" }}
+            className="fixed right-4 top-[72px] z-30 flex h-9 items-center gap-1.5 rounded-md border bg-white px-3 text-[12px] font-semibold shadow-md hover:bg-[#F7F8FA]"
+            style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+            title="Show Diagnosis / Comments panel"
           >
-            ◀ Panel
+            <PanelRightOpen className="h-4 w-4" style={{ color: "#7B68EE" }} />
+            Diagnosis &amp; Comments
           </button>
         )}
 
