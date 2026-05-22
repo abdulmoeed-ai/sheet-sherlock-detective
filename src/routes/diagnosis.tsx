@@ -19,7 +19,7 @@ import {
 import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
-import { Lock } from "lucide-react";
+import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 export const Route = createFileRoute("/diagnosis")({
   head: () => ({
