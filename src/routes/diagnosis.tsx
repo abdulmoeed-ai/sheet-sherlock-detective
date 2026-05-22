@@ -163,7 +163,7 @@ function Diagnosis() {
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [corrected, setCorrected] = useState<Record<string, boolean>>({});
   const [panelTab, setPanelTab] = useState<"diagnosis" | "comments">("diagnosis");
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [commentScope, setCommentScope] = useState<"cell" | "sheet">("cell");
   const [commentText, setCommentText] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
