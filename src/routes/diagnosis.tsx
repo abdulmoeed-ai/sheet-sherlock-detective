@@ -349,7 +349,7 @@ function Diagnosis() {
 
         {/* ROW 2 — SHEET TABS */}
         <div
-          className="flex items-end overflow-x-auto px-4"
+          className="col-span-2 flex items-end overflow-x-auto px-4"
           style={{ background: "#FFFFFF", borderBottom: "1px solid #E3E6EA", scrollbarWidth: "none" }}
         >
           {SHEET_TABS.map((t) => {
@@ -407,7 +407,7 @@ function Diagnosis() {
         </div>
 
         {/* LEFT — GRID */}
-        <div className="flex min-w-0 flex-col overflow-hidden" style={{ background: "#FFFFFF", borderRight: "1px solid #E3E6EA" }}>
+        <div className="flex min-w-0 min-h-0 flex-col overflow-hidden" style={{ background: "#FFFFFF", borderRight: "1px solid #E3E6EA", gridRow: 3, gridColumn: 1 }}>
           <div ref={gridRef} className="flex-1 overflow-auto">
             <table className="min-w-full border-collapse text-[12px]" style={{ tableLayout: "fixed" }}>
               <colgroup>
@@ -638,7 +638,7 @@ function Diagnosis() {
 
         {/* RIGHT — PANEL */}
         {panelOpen && (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden" style={{ background: "#FFFFFF" }}>
+          <div className="flex h-full min-h-0 flex-col overflow-hidden" style={{ background: "#FFFFFF", gridRow: 3, gridColumn: 2 }}>
             <div
               className="flex h-12 items-center justify-between px-4"
               style={{ borderBottom: "1px solid #E3E6EA" }}
