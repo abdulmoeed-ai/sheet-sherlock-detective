@@ -322,12 +322,17 @@ function Diagnosis() {
               Save draft
             </button>
             <button
-              disabled={!allClear}
-              onClick={() => navigate({ to: "/forecast" })}
+              disabled={!allClear || locked}
+              onClick={() => setReadyModal(true)}
               className="h-[30px] rounded-md px-4 text-[12px] font-semibold text-white transition-opacity"
-              style={{ background: "#7B68EE", opacity: allClear ? 1 : 0.45, cursor: allClear ? "pointer" : "not-allowed" }}
+              style={{
+                background: locked ? "#15803D" : "#7B68EE",
+                opacity: (allClear && !locked) || locked ? 1 : 0.45,
+                cursor: allClear && !locked ? "pointer" : locked ? "default" : "not-allowed",
+              }}
+              title={locked ? "Diagnosis locked & sent for CEO review" : "Lock diagnosis and mark ready for CEO review"}
             >
-              Submit for review →
+              {locked ? "✓ Ready for CEO review" : "Mark ready for CEO review →"}
             </button>
           </div>
         </div>
