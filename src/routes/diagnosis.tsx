@@ -272,7 +272,7 @@ function Diagnosis() {
             <div className="flex items-center gap-1 text-[12px]">
               <span style={{ color: "#818EA0" }}>FY2025</span>
               <span style={{ color: "#818EA0" }}>/</span>
-              <span style={{ color: "#818EA0" }}>Lucky Cement</span>
+              <span style={{ color: "#818EA0" }}>Millat Tractors</span>
               <span style={{ color: "#818EA0" }}>/</span>
               <span className="font-semibold" style={{ color: "#292D34" }}>Diagnosis</span>
             </div>

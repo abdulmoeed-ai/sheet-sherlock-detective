@@ -19,7 +19,7 @@ type Msg =
   | { id: string; role: "ai"; kind: "prediction" };
 
 const SUGGESTIONS = [
-  "📈 Analyse Lucky Cement's financial strength for the next 5 years",
+  "📈 Analyse Millat Tractors' financial strength for the next 5 years",
   "⚖️  Why doesn't my balance sheet balance?",
   "📊 What are the key assumptions driving the FY2025 forecast?",
 ];
@@ -61,7 +61,7 @@ export function AskAiTrigger() {
           text:
             /balance/i.test(text)
               ? "The most common cause of imbalance is a missing credit entry. Sherlock traced your current cycle's imbalance to BS!D42 (Inventory). Open the Diagnosis tab to review the proposed correction."
-              : "Here's a summary of the key assumptions: KIBOR 18.5% (SBP), CPI 11.2% YoY (PBS), Cement dispatches CAGR +4.2% (APCMA). All cited and editable in the Assumptions sheet.",
+              : "Here's a summary of the key assumptions: KIBOR 18.5% (SBP), CPI 11.2% YoY (PBS), Tractor unit sales CAGR +5.6% (PAMA). All cited and editable in the Assumptions sheet.",
         },
       ]);
     }, 800);
@@ -195,7 +195,7 @@ export function AskAiTrigger() {
                       I'll run a 5-year financial strength analysis. Please confirm the details:
                     </div>
                     {[
-                      ["Company", `${cycle.company} (KSE: LUCK)`],
+                      ["Company", `${cycle.company} (PSX: MTL)`],
                       ["Forecast horizon", "5 years (FY2026–FY2030)"],
                       ["Scenarios", "Base · Bull · Bear"],
                     ].map(([k, v], idx, arr) => (
@@ -232,12 +232,12 @@ export function AskAiTrigger() {
                   <AiBubble key={m.id}>
                     <p className="text-[13px] leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
                       {cycle.company} is projected to grow revenue at <b>11.2% CAGR</b> under the base case
-                      (PKR 54.8B → PKR 78.4B by FY2030), driven by sustained cement dispatch growth and
-                      improving EBITDA margins.
+                      (PKR 54.8B → PKR 78.4B by FY2030), driven by sustained tractor unit growth and
+                      improving plant utilisation.
                     </p>
                     <MiniChart />
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {["KIBOR 18.5%", "CPI 11.2%", "Dispatches +4.2% CAGR"].map((p) => (
+                      {["KIBOR 18.5%", "CPI 11.2%", "Tractor units +5.6% CAGR"].map((p) => (
                         <span
                           key={p}
                           className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
@@ -252,7 +252,7 @@ export function AskAiTrigger() {
                       ))}
                     </div>
                     {[
-                      "±1MT cement dispatch = ±PKR 0.8B revenue impact",
+                      "±1K tractor units = ±PKR 0.9B revenue impact",
                       "KIBOR at 22%+ compresses margin ~180bps",
                     ].map((r) => (
                       <div

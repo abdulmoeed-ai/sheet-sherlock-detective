@@ -17,13 +17,13 @@ export const Route = createFileRoute("/audit")({
 
 const log = [
   { t: "2026-05-20 10:54:02", actor: "Sherlock AI · Assumptions", action: "Auto-generated assumptions sheet (47 rows)", icon: <Sparkles className="h-4 w-4" />, tone: "ai" as const },
-  { t: "2026-05-20 10:38:11", actor: "Sherlock AI · Prediction", action: "Generated 5-yr cement forecast (Base/Bull/Bear)", icon: <Sparkles className="h-4 w-4" />, tone: "ai" as const },
+  { t: "2026-05-20 10:38:11", actor: "Sherlock AI · Prediction", action: "Generated 5-yr tractor sector forecast (Base/Bull/Bear)", icon: <Sparkles className="h-4 w-4" />, tone: "ai" as const },
   { t: "2026-05-20 10:14:47", actor: "Ayesha S. (Analyst)", action: "Accepted correction at BS!D42: 6,040M → 1,840M", icon: <User className="h-4 w-4" />, tone: "info" as const, reason: "OCR digit transposition (p.74)" },
   { t: "2026-05-20 10:12:33", actor: "Sherlock AI · Diagnosis", action: "Identified BS!D42 as causal cell (imbalance 4.2B)", icon: <Stethoscope className="h-4 w-4" />, tone: "ai" as const },
   { t: "2026-05-20 09:58:01", actor: "Ayesha S. (Analyst)", action: "Approved 14 auto-verified cells; confirmed 3 flagged", icon: <User className="h-4 w-4" />, tone: "info" as const },
   { t: "2026-05-20 09:51:18", actor: "Verification Agent", action: "Generated diff (18 changes; 3 flagged; 1 hard-blocked)", icon: <GitCompare className="h-4 w-4" />, tone: "ai" as const },
-  { t: "2026-05-20 09:42:00", actor: "OCR Ingestion Agent", action: "Extracted 312 cells from PSX_AnnualReport_LUCK_2025.pdf", icon: <Sparkles className="h-4 w-4" />, tone: "ai" as const },
-  { t: "2026-05-20 09:30:00", actor: "Ayesha S. (Analyst)", action: "Initiated ingestion cycle (sector: Cement)", icon: <FileCheck className="h-4 w-4" />, tone: "info" as const },
+  { t: "2026-05-20 09:42:00", actor: "OCR Ingestion Agent", action: "Extracted 312 cells from PSX_AnnualReport_MTL_2025.pdf", icon: <Sparkles className="h-4 w-4" />, tone: "ai" as const },
+  { t: "2026-05-20 09:30:00", actor: "Ayesha S. (Analyst)", action: "Initiated ingestion cycle (sector: Engineering & Industrials)", icon: <FileCheck className="h-4 w-4" />, tone: "info" as const },
 ];
 
 function Audit() {

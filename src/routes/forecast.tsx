@@ -165,7 +165,7 @@ function Forecast() {
             </div>
             <div className="mt-3 space-y-2">
               {[
-                ["PSX", "Cement dispatches CAGR", "+4.2%/yr"],
+                ["PAMA", "Tractor unit sales CAGR", "+5.6%/yr"],
                 ["SBP", "KIBOR", `${kibor.toFixed(1)}%`],
                 ["ADB", "CPI (Pakistan)", `${cpi.toFixed(1)}%`],
               ].map(([src, k, v]) => (
@@ -189,7 +189,7 @@ function Forecast() {
 
             <div className="mt-4 space-y-2">
               {[
-                "±1MT cement dispatch = ±PKR 0.8B revenue impact",
+                "±1K tractor units = ±PKR 0.9B revenue impact",
                 "KIBOR at 22%+ compresses margin ~180bps",
               ].map((r) => (
                 <div
