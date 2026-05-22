@@ -407,7 +407,7 @@ function Diagnosis() {
         </div>
 
         {/* LEFT — GRID */}
-        <div className="flex min-w-0 flex-col overflow-hidden" style={{ background: "#FFFFFF", borderRight: "1px solid #E3E6EA" }}>
+        <div className="flex min-w-0 min-h-0 flex-col overflow-hidden" style={{ background: "#FFFFFF", borderRight: "1px solid #E3E6EA", gridRow: 3, gridColumn: 1 }}>
           <div ref={gridRef} className="flex-1 overflow-auto">
             <table className="min-w-full border-collapse text-[12px]" style={{ tableLayout: "fixed" }}>
               <colgroup>
