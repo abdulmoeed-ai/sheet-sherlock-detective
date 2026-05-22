@@ -38,7 +38,7 @@ export const Route = createFileRoute("/")({
 // ────────── Sector catalogue ──────────
 type SectorMeta = {
   name: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   companies: { name: string; ticker: string }[];
   total: number;
 };
