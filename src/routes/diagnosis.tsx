@@ -349,7 +349,7 @@ function Diagnosis() {
 
         {/* ROW 2 — SHEET TABS */}
         <div
-          className="flex items-end overflow-x-auto px-4"
+          className="col-span-2 flex items-end overflow-x-auto px-4"
           style={{ background: "#FFFFFF", borderBottom: "1px solid #E3E6EA", scrollbarWidth: "none" }}
         >
           {SHEET_TABS.map((t) => {
