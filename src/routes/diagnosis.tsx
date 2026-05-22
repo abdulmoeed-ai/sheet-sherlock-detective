@@ -309,6 +309,15 @@ function Diagnosis() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPanelOpen((o) => !o)}
+              className="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-[#F7F8FA]"
+              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+              title={panelOpen ? "Hide Diagnosis / Comments panel" : "Show Diagnosis / Comments panel"}
+            >
+              {panelOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+              {panelOpen ? "Hide panel" : "Show panel"}
+            </button>
             <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Version history">
               <History className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
