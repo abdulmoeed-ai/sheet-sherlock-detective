@@ -17,6 +17,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
+import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { toast } from "sonner";
+import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/diagnosis")({
   head: () => ({
