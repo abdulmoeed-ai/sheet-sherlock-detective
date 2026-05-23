@@ -360,8 +360,14 @@ function Diagnosis() {
             <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Version history">
               <History className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
-            <button onClick={handleExport} className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Export to Excel (.xlsx)">
-              <Download className="h-4 w-4" style={{ color: "#818EA0" }} />
+            <button
+              onClick={handleExport}
+              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold hover:bg-[#F7F8FA]"
+              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+              title="Export current model to .xlsx"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export to Excel
             </button>
             <div className="mx-1 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <button
