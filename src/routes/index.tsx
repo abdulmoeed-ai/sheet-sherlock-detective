@@ -397,7 +397,7 @@ function shortCompany(name: string): string {
 function Chip({ label, onClear, onClick }: { label: string; onClear?: () => void; onClick?: () => void }) {
   return (
     <span
-      className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition-colors"
+      className="inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[12px] font-medium transition-colors"
       style={{ background: "#FFFFFF", borderColor: BORDER, color: TEXT }}
       onClick={onClick}
       onMouseEnter={(e) => {
@@ -584,7 +584,7 @@ function SelectionPanel({
 function GhostDashboard() {
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonBox key={i} className="h-[124px] rounded-xl" />
         ))}
@@ -668,7 +668,7 @@ function DashboardBody({
       )}
 
       {/* KPI row */}
-      <div className="grid grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Revenue (FY2025)" value="PKR 54.8B" badge={{ text: "↑ 12.4%", tone: "good" }} comparison="vs PKR 48.7B FY2024" spark="up" />
         <KpiCard icon={<PieChart className="h-4 w-4" />} label="Tractors sold (units)" value="42,180" badge={{ text: "↑ 9.8%", tone: "good" }} comparison="vs 38,420 FY2024" spark="up" />
         <KpiCard icon={<DollarSign className="h-4 w-4" />} label="Plant utilisation rate" value="86.4%" badge={{ text: "↑ 4.2 pts", tone: "good" }} comparison="vs 82.2% FY2024" spark="up" />
