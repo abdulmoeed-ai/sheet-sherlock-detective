@@ -20,6 +20,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
 import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
+import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/diagnosis")({
   head: () => ({
