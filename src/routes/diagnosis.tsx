@@ -20,6 +20,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
 import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
+import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/diagnosis")({
   head: () => ({
@@ -195,6 +196,44 @@ function Diagnosis() {
   const isFormula = currentRow?.formula?.[sel.c] === true;
   const formulaDisplay = isFormula ? `=SUM(${DATA_COLS[sel.c]}${sel.r - 4}:${DATA_COLS[sel.c]}${sel.r})` : (currentValue ?? "").toString();
 
+  const handleExport = () => {
+    try {
+      const header = ["Particulars", "Note", ...DATA_COLS.map((c) => COL_LABEL[c])];
+      const aoa: (string | number | null)[][] = [header];
+      ROWS.forEach((row, ri) => {
+        if (row.kind === "section") {
+          aoa.push([row.label, "", "", "", "", ""]);
+          return;
+        }
+        const indent = "  ".repeat(row.indent ?? 0);
+        const values = DATA_COLS.map((_, ci) => {
+          const addr = `BS!${DATA_COLS[ci]}${ri + 2}`;
+          const v = overrides[addr] ?? row.values[ci];
+          return v ?? "";
+        });
+        aoa.push([indent + row.label, row.note ?? "", ...values]);
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 42 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 }];
+      XLSX.utils.book_append_sheet(wb, ws, activeSheet.slice(0, 28));
+
+      // Comments / corrections audit sheet
+      const audit: (string | number)[][] = [["Cell", "Override Value", "Corrected"]];
+      Object.entries(overrides).forEach(([addr, val]) => audit.push([addr, val, corrected[addr] ? "Yes" : "No"]));
+      const auditWs = XLSX.utils.aoa_to_sheet(audit);
+      XLSX.utils.book_append_sheet(wb, auditWs, "Corrections");
+
+      const fname = `${cycle.company.replace(/\s+/g, "_")}_${cycle.period}_Diagnosis.xlsx`;
+      XLSX.writeFile(wb, fname);
+      toast.success(`Exported ${fname}`);
+    } catch (e) {
+      toast.error("Export failed");
+      console.error(e);
+    }
+  };
+
   /* keyboard nav */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -321,7 +360,7 @@ function Diagnosis() {
             <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Version history">
               <History className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
-            <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Export model">
+            <button onClick={handleExport} className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Export to Excel (.xlsx)">
               <Download className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
             <div className="mx-1 h-5 w-px" style={{ background: "#E3E6EA" }} />
