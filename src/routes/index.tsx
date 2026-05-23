@@ -397,7 +397,7 @@ function shortCompany(name: string): string {
 function Chip({ label, onClear, onClick }: { label: string; onClear?: () => void; onClick?: () => void }) {
   return (
     <span
-      className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition-colors"
+      className="inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[12px] font-medium transition-colors"
       style={{ background: "#FFFFFF", borderColor: BORDER, color: TEXT }}
       onClick={onClick}
       onMouseEnter={(e) => {
