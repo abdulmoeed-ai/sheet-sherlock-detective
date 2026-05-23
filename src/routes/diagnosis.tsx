@@ -296,10 +296,10 @@ function Diagnosis() {
       >
         {/* ROW 1 — TOOLBAR */}
         <div
-          className="col-span-2 flex items-center px-4"
-          style={{ background: "#FFFFFF", borderBottom: "1px solid #E3E6EA" }}
+          className="col-span-2 flex items-center gap-3 overflow-x-auto px-4"
+          style={{ background: "#FFFFFF", borderBottom: "1px solid #E3E6EA", scrollbarWidth: "thin" }}
         >
-          <div className="flex items-center gap-1">
+          <div className="flex flex-shrink-0 items-center gap-1">
             <button
               onClick={() => navigate({ to: "/diff-review" })}
               className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
@@ -308,7 +308,7 @@ function Diagnosis() {
               <ArrowLeft className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
             <div className="mx-2 h-5 w-px" style={{ background: "#E3E6EA" }} />
-            <div className="flex items-center gap-1 text-[12px]">
+            <div className="flex items-center gap-1 whitespace-nowrap text-[12px]">
               <span style={{ color: "#818EA0" }}>FY2025</span>
               <span style={{ color: "#818EA0" }}>/</span>
               <span style={{ color: "#818EA0" }}>Millat Tractors</span>
@@ -317,7 +317,7 @@ function Diagnosis() {
             </div>
             <div className="mx-3 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <div
-              className="flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
               style={{
                 background: locked ? "#D1FAE5" : allClear ? "#D1FAE5" : "#FEF3C7",
                 border: `1px solid ${locked ? "#86EFAC" : allClear ? "#A7F3D0" : "#FDE68A"}`,
@@ -329,40 +329,40 @@ function Diagnosis() {
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center justify-center">
             <div
-              className="flex h-7 w-[420px] items-center gap-2 rounded-md px-2.5"
+              className="flex h-7 w-full min-w-[200px] max-w-[420px] items-center gap-2 rounded-md px-2.5"
               style={{ background: "#F7F8FA", border: "1px solid #E3E6EA" }}
             >
               <div
-                className="min-w-[52px] rounded px-2 py-0.5 text-center text-[12px] font-semibold"
+                className="min-w-[52px] whitespace-nowrap rounded px-2 py-0.5 text-center text-[12px] font-semibold"
                 style={{ background: "#FFFFFF", border: "1px solid #E3E6EA", color: "#292D34" }}
               >
                 {currentAddr}
               </div>
               <div className="h-4 w-px" style={{ background: "#E3E6EA" }} />
-              <div className="flex-1 truncate font-mono text-[12px] tnum" style={{ color: "#292D34" }}>
+              <div className="tnum flex-1 truncate font-mono text-[12px]" style={{ color: "#292D34" }}>
                 {formulaBarValue}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-2">
             <button
               onClick={() => setPanelOpen((o) => !o)}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold hover:bg-[#F7F8FA]"
+              className="flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold hover:bg-[#F7F8FA]"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
               title={panelOpen ? "Hide Diagnosis / Comments panel" : "Show Diagnosis / Comments panel"}
             >
               {panelOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
               {panelOpen ? "Hide panel" : "Show panel"}
             </button>
-            <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Version history">
+            <button className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded hover:bg-[#F7F8FA]" title="Version history">
               <History className="h-4 w-4" style={{ color: "#818EA0" }} />
             </button>
             <button
               onClick={handleExport}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold hover:bg-[#F7F8FA]"
+              className="flex h-7 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-[12px] font-semibold hover:bg-[#F7F8FA]"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
               title="Export current model to .xlsx"
             >
@@ -371,7 +371,7 @@ function Diagnosis() {
             </button>
             <div className="mx-1 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <button
-              className="h-[30px] rounded-md border px-3.5 text-[12px] font-semibold"
+              className="h-[30px] flex-shrink-0 whitespace-nowrap rounded-md border px-3.5 text-[12px] font-semibold"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
             >
               Save draft
@@ -379,7 +379,7 @@ function Diagnosis() {
             <button
               disabled={!allClear || locked}
               onClick={() => setReadyModal(true)}
-              className="h-[30px] rounded-md px-4 text-[12px] font-semibold text-white transition-opacity"
+              className="h-[30px] flex-shrink-0 whitespace-nowrap rounded-md px-4 text-[12px] font-semibold text-white transition-opacity"
               style={{
                 background: locked ? "#15803D" : "#7B68EE",
                 opacity: (allClear && !locked) || locked ? 1 : 0.45,
@@ -391,6 +391,7 @@ function Diagnosis() {
             </button>
           </div>
         </div>
+
 
         {/* ROW 2 — SHEET TABS */}
         <div
