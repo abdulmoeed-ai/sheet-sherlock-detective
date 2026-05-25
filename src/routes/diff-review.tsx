@@ -45,12 +45,14 @@ function DiffReview() {
   const navigate = useNavigate();
   const cycle = useCycle();
   const [resolved, setResolved] = useState<Record<number, boolean>>({
-    0: true, // auto-approved start resolved
+    0: true,
     1: true,
   });
   const [justifying, setJustifying] = useState<number | null>(null);
   const [reason, setReason] = useState("");
+  const [reasonCode, setReasonCode] = useState<string>(REASON_CODES[0]);
   const [flashCell, setFlashCell] = useState<string | null>(null);
+  const [previewRef, setPreviewRef] = useState<SourceRef | null>(null);
 
   const total = DIFFS.length;
   const doneCount = Object.values(resolved).filter(Boolean).length;
