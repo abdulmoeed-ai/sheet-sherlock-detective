@@ -1,86 +1,65 @@
-## Sheet Sherlock — Guided Cycle Flow Build
+# Sheet Sherlock — Feature Enhancement Plan
 
-Implement the full guided cycle (Dashboard → Ingestion → Diff Review → Diagnosis → Forecast → Assumptions → Audit) with the ClickUp color system, a progress spine, and a persistent Ask AI panel.
+Five connected enhancements spanning sector configuration, ingestion transparency, source verification, version diffing, and AI citations. All UI-only with mock data (no backend yet) — matches the existing prototype pattern in the codebase.
 
-### 1. Color system overhaul (`src/styles.css`)
-Replace existing tokens with the full ClickUp palette spec:
-- Sidebar: `#191F2E` bg, `#2A3153` active, `#9E95F5` accent, `#8892A4` muted text
-- Primary `#7B68EE`, hover `#6455D6`, light `#EDE9FE`, accent `#9E95F5`, sparkle `#5E4BF1`
-- Page bg `#F7F8FA`, card `#FFFFFF`, tag `#F3F0FF`
-- Borders `#E3E6EA` / `#D0D5DD`, focus ring `#7B68EE`
-- Text `#292D34` / `#4F546B` / `#818EA0` / `#A0A8B8`
-- Success / Danger / Warning / Info families as specified
-- Update `--color-brand`, `--color-accent-green`, `--color-accent-sparkle`, etc. so existing components inherit the new theme
+---
 
-Update `Sidebar.tsx` to use the new navy-purple bg, lavender active item, and purple icon accent.
+## Step 1 — Sector-Based Mapping System
 
-### 2. Cycle state store (`src/lib/cycle-store.ts`)
-Zustand-style lightweight store with:
-- `cycle: { sector, company, period, status, startedAt }`
-- `startCycle()`, `setStatus(step)`, `reset()`
-- Step statuses: `idle | ingestion | diff-review | diagnosis | forecast | assumptions | review`
+**Files**: new `src/lib/sector-packs.ts`, edit `src/lib/cycle-store.ts`, edit `src/routes/index.tsx` (dashboard sector picker), edit `src/routes/ingestion.tsx`
 
-### 3. Progress spine (`src/components/CycleProgress.tsx`)
-Horizontal stepper rendered above page content when `cycle.status !== 'idle'`. Shows 6 steps (Ingestion → Diff → Diagnosis → Forecast → Assumptions → Review) with completed/current/upcoming states using `#7B68EE` for active, `#22C55E` for done, muted otherwise. Mounted in `PageShell`.
+- Define 8 sector packs as typed objects: `Engineering & Industrials`, `Banking`, `Oil & Gas`, `Fertilizers`, `IT & Software`, `Pharmaceuticals`, `Food & FMCG`, `Textiles`. Each pack has: rule count, template name, year-end, macro variables, regulatory tags, sector-override rule list.
+- Extend `cycleStore` with `activeSectorPack` derived from selected sector.
+- On ingestion page, add an "Active rule pack" chip showing pack name + rule count + template + year-end. Click opens a modal listing the 40 rules with "Sector override" badges on pack-specific rules.
 
-### 4. Dashboard wiring (`src/routes/index.tsx`)
-"New ingestion cycle" button calls `startCycle()` with current sector/company/period selections and navigates to `/ingestion`. Keep existing dashboard intact otherwise.
+## Step 2 — Per-Source Ingestion Manifest
 
-### 5. `/ingestion` rewrite
-- PDF dropzone (turns into file chip on upload) + OCR confidence threshold slider
-- Live source registry grid (8 sources with health dots: PSX/ADB/Bloomberg/SBP/PBS/WSJ/APCMA/NEPRA)
-- Warning row for stale/unreachable sources
-- Sticky footer: "Start ingestion →" (disabled until PDF uploaded)
-- On click → swap source grid for live progress feed (sequential spinner→check rows with timings), then append "OCR Quality Review" table (4 rows, confirm/edit actions)
-- Footer becomes progress bar + "Review diffs →" (enabled once OCR flags resolved) → navigates to `/diff-review`
+**Files**: edit `src/routes/ingestion.tsx`
 
-### 6. `/diff-review` rewrite
-- 55/45 split
-- Left: diff queue card with header counter + progress bar, table of 6 rows (auto-approved dimmed, confirm with approve/reject, blocked with justify expansion), sticky "Apply to model →" CTA (disabled until resolved)
-- Right: live model preview mini-grid (CSS grid, 7 cols × 12 rows, dummy financial values). Approved cells flash `#D1FAE5` for 1s; blocked cells show locked state
-- On apply → `/diagnosis`
+- Extend each of the 13 (currently 8) source cards with an expand chevron.
+- Add mock `manifest` data per source: array of `{field, value, sheet, cell, confidence, timestamp}`.
+- Inline expand reveals a table styled per spec (12px text, monospace cells, confidence pill, amber left border on low-confidence rows).
+- Add summary strip above the source grid: total fields · live sources · low-confidence sources · empty sources.
+- Add "View in diff queue →" link per row deep-linking to `/diff-review#row-{id}`.
+- Persist expand state in `sessionStorage`.
 
-### 7. `/diagnosis` rewrite
-- 1.5s "Running 3-statement check..." spinner state
-- Default → State B (imbalance): red banner + Sherlock AI diagnosis card with findings list, proposed correction block (Dr/Cr), confidence label, override dropdown + Apply correction
-- On apply → 1s re-check → State A (clean): green banner + 3 ratio KPI cards + "Continue to forecast →"
+## Step 3 — Source PDF Preview
 
-### 8. `/forecast` rewrite
-- Top card: scenario pill group (Base/Bull/Bear), Recharts LineChart (240px) with 3 lines + confidence band, FY2030 endpoint callout
-- What-if sliders: KIBOR / CPI / PKR-USD (mock recalc that adjusts series multipliers in state)
-- Bottom row: Scenario summary table + Key assumptions card (pills + amber risk rows)
-- Sticky footer → `/assumptions`
+**Files**: new `src/components/SourcePreviewPanel.tsx`, edit `src/routes/ingestion.tsx` (OCR queue), edit `src/routes/diff-review.tsx`
 
-### 9. `/assumptions` rewrite
-- Subtitle + Export CSV
-- Table with 8 rows including confidence badges + sensitivity badges + inline edit
-- Sticky footer: Save draft + "Submit for Manager review →"
-- Submit opens confirmation modal → on confirm shows success toast + navigates to `/` and sets cycle status to `review`
+- Mock PDF preview using a generated image placeholder (page background + bounding box overlay). Use a single mock PNG asset rendered via SVG overlay for the bounding box and label.
+- In Diff Reviewer: every row gets a source chip "MTL Annual Report 2025 · p. 107". Click/hover-1s opens a right-side 40%-width panel synced to the active row.
+- In OCR confidence queue (ingestion page): low-confidence rows show inline value + snippet side-by-side.
+- Bounding box color = confidence tier (green/amber/red).
 
-### 10. `/audit` enrichment
-- Cycle status banner at top (green if approved, amber if in review) using cycle store
-- Keep existing trail
-- Add "Export signed PDF" primary button top-right (triggers placeholder download)
+## Step 4 — Diff Checker (Version Comparison)
 
-### 11. Persistent Ask AI panel (`src/components/AskAiTrigger.tsx`)
-- Fixed right-edge trigger button (36×96, brand purple, sparkle + vertical "AI" text)
-- Slide-in 380px panel with header, context pill, suggested prompts, chat input
-- Prediction flow: clarification card → 4-step status stream (staggered 0.8s) → final response bubble with mini chart + assumption pills + risk rows + two CTAs
-- Mounted in `__root.tsx` so visible on every page
-- Adapt existing `AskAiPanel` rather than rebuild from scratch
+**Files**: heavy edit `src/routes/diff-review.tsx` (or extend existing if present)
 
-### Technical details
-- Add `recharts` (already used) and ensure `framer-motion` is available for panel slide
-- Keep all colors via CSS variables; no hardcoded hex in components except in chart strokes where needed
-- Use TanStack Router's `useNavigate` for all flow transitions
-- No backend; all state in zustand store + local component state
-- Toast via existing `sonner`
+- Two-column Old | New table with materiality tiers: <2% auto-approved, 2–10% confirm, >10% blocked.
+- Blocked rows: amber left border + reason-code dropdown (sign error / wrong period / source mismatch / other) + free-text justification; approve button disabled until filled.
+- Right panel shows live Excel preview (reuse `ExcelAddIn` component) updating as diffs approve.
+- Top summary strip + progress bar + disabled "Apply to model" CTA until all cleared.
+- Audit log entries appended to a mock store on each approval.
 
-### Files to create
-- `src/lib/cycle-store.ts`
-- `src/components/CycleProgress.tsx`
-- `src/components/AskAiTrigger.tsx`
-- `src/components/ModelPreviewGrid.tsx` (mini spreadsheet)
+## Step 5 — Ask AI Citations
 
-### Files to edit
-- `src/styles.css`, `src/components/Sidebar.tsx`, `src/components/PageShell.tsx`, `src/routes/__root.tsx`, `src/routes/index.tsx`, `src/routes/ingestion.tsx`, `src/routes/diff-review.tsx`, `src/routes/diagnosis.tsx`, `src/routes/forecast.tsx`, `src/routes/assumptions.tsx`, `src/routes/audit.tsx`
+**Files**: edit `src/components/AskAiPanel.tsx`
+
+- Below every assistant response, render a collapsible "Sources used" section with horizontal-scroll cards (52px height).
+- Card types: web (Tavily-style with favicon, date, 2-line excerpt, external link), model-internal (purple border, cell ref + sheet + value), ingestion-log (source doc + timestamp).
+- Inline `[1] [2]` citation markers in response text linking to cards.
+- Collapsed by default for short responses; auto-expanded for Prediction Agent outputs.
+- Mock 3–5 citations per canned response.
+
+---
+
+## Technical notes
+
+- All five steps use mock/seeded data — no new API routes, no backend, no DB.
+- Reuse existing design tokens from `src/styles.css` (`--color-brand`, `--color-text-primary`, etc.). No new color literals in components.
+- Each step is independently shippable. Recommend implementing in order 1 → 2 → 4 → 3 → 5 (rule pack first since others reference it; PDF preview after diff structure exists).
+
+## Scope confirmation needed
+
+This is ~6–8 hours of focused UI work across 8+ files. Before I start: **should I build all 5 steps in this single response, or implement them one step at a time so you can review each?** One-at-a-time gives you tighter control and faster iteration; all-at-once ships faster but is harder to course-correct.
