@@ -137,8 +137,15 @@ function DiffReview() {
                       <td className="px-2 py-2.5 text-right tnum font-semibold" style={{ color: blocked && !isResolved ? "var(--color-warning-fg)" : "var(--color-brand)" }}>
                         {d.next}
                       </td>
-                      <td className="px-2 py-2.5 text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                        {d.source}
+                      <td className="px-2 py-2.5 text-[10px]">
+                        <button
+                          onClick={() => setPreviewRef(d.ref)}
+                          className="rounded border px-1.5 py-0.5 font-medium hover:bg-[var(--color-tag-bg)]"
+                          style={{ borderColor: "var(--color-border-default)", color: "var(--color-brand)" }}
+                          title="Preview source page"
+                        >
+                          {d.ref.doc.split(" ")[0]} · p.{d.ref.page}
+                        </button>
                       </td>
                       <td
                         className="px-2 py-2.5 text-right tnum font-semibold"
