@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { SourcePreview, type SourceRef } from "@/components/SourcePreviewPanel";
 import { Lock, Check, X } from "lucide-react";
 
 export const Route = createFileRoute("/diff-review")({
@@ -26,27 +27,32 @@ interface Diff {
   tier: Tier;
   /** sheet cell coords (row, col) in model preview for flash highlight */
   preview: [number, number];
+  ref: SourceRef;
 }
 
+const REASON_CODES = ["Sign error", "Wrong period", "Source mismatch", "Other"] as const;
+
 const DIFFS: Diff[] = [
-  { cell: "C12", sheet: "IS",    field: "Revenue FY2025", old: "PKR 48.7B",  next: "PKR 54.8B",  source: "PSX", conf: 97, tier: "auto",    preview: [1, 2] },
-  { cell: "C18", sheet: "IS",    field: "EBITDA",         old: "PKR 10.4B",  next: "PKR 12.9B",  source: "PSX", conf: 94, tier: "auto",    preview: [2, 2] },
-  { cell: "D14", sheet: "BS",    field: "Total Assets",   old: "PKR 98.2B",  next: "PKR 112.4B", source: "OCR", conf: 76, tier: "confirm", preview: [4, 3] },
-  { cell: "D22", sheet: "BS",    field: "Net Debt",       old: "PKR 18.4B",  next: "PKR 22.1B",  source: "SBP", conf: 91, tier: "confirm", preview: [6, 3] },
-  { cell: "F18", sheet: "BS",    field: "Cash & equiv",   old: "PKR 4.2B",   next: "PKR 3.1B",   source: "OCR", conf: 68, tier: "block",   preview: [5, 5] },
-  { cell: "D42", sheet: "BS",    field: "Inventory",      old: "PKR 12.1B",  next: "PKR 19.8B",  source: "OCR", conf: 71, tier: "block",   preview: [7, 3] },
+  { cell: "C12", sheet: "IS", field: "Revenue FY2025", old: "PKR 48.7B",  next: "PKR 54.8B",  source: "PSX", conf: 97, tier: "auto",    preview: [1, 2], ref: { doc: "MTL Annual Report 2025", page: 42, field: "Revenue FY2025", value: "PKR 54.8B", conf: 97, bbox: [22, 40, 56, 5] } },
+  { cell: "C18", sheet: "IS", field: "EBITDA",         old: "PKR 10.4B",  next: "PKR 12.9B",  source: "PSX", conf: 94, tier: "auto",    preview: [2, 2], ref: { doc: "MTL Annual Report 2025", page: 44, field: "EBITDA", value: "PKR 12.9B", conf: 94, bbox: [24, 55, 52, 5] } },
+  { cell: "D14", sheet: "BS", field: "Total Assets",   old: "PKR 98.2B",  next: "PKR 112.4B", source: "OCR", conf: 76, tier: "confirm", preview: [4, 3], ref: { doc: "MTL Annual Report 2025", page: 71, field: "Total Assets", value: "PKR 112.4B", conf: 76, bbox: [22, 48, 52, 5] } },
+  { cell: "D22", sheet: "BS", field: "Net Debt",       old: "PKR 18.4B",  next: "PKR 22.1B",  source: "SBP", conf: 91, tier: "confirm", preview: [6, 3], ref: { doc: "SBP Monetary Statement Q2", page: 12, field: "Net Debt", value: "PKR 22.1B", conf: 91, bbox: [18, 36, 60, 5] } },
+  { cell: "F18", sheet: "BS", field: "Cash & equiv",   old: "PKR 4.2B",   next: "PKR 3.1B",   source: "OCR", conf: 68, tier: "block",   preview: [5, 5], ref: { doc: "MTL Annual Report 2025", page: 89, field: "Cash & equiv", value: "PKR 3.1B", conf: 68, bbox: [26, 50, 48, 5] } },
+  { cell: "D42", sheet: "BS", field: "Inventory",      old: "PKR 12.1B",  next: "PKR 19.8B",  source: "OCR", conf: 71, tier: "block",   preview: [7, 3], ref: { doc: "MTL Annual Report 2025", page: 107, field: "Inventory", value: "PKR 19.8B", conf: 71, bbox: [22, 62, 54, 5] } },
 ];
 
 function DiffReview() {
   const navigate = useNavigate();
   const cycle = useCycle();
   const [resolved, setResolved] = useState<Record<number, boolean>>({
-    0: true, // auto-approved start resolved
+    0: true,
     1: true,
   });
   const [justifying, setJustifying] = useState<number | null>(null);
   const [reason, setReason] = useState("");
+  const [reasonCode, setReasonCode] = useState<string>(REASON_CODES[0]);
   const [flashCell, setFlashCell] = useState<string | null>(null);
+  const [previewRef, setPreviewRef] = useState<SourceRef | null>(null);
 
   const total = DIFFS.length;
   const doneCount = Object.values(resolved).filter(Boolean).length;
@@ -131,8 +137,15 @@ function DiffReview() {
                       <td className="px-2 py-2.5 text-right tnum font-semibold" style={{ color: blocked && !isResolved ? "var(--color-warning-fg)" : "var(--color-brand)" }}>
                         {d.next}
                       </td>
-                      <td className="px-2 py-2.5 text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                        {d.source}
+                      <td className="px-2 py-2.5 text-[10px]">
+                        <button
+                          onClick={() => setPreviewRef(d.ref)}
+                          className="rounded border px-1.5 py-0.5 font-medium hover:bg-[var(--color-tag-bg)]"
+                          style={{ borderColor: "var(--color-border-default)", color: "var(--color-brand)" }}
+                          title="Preview source page"
+                        >
+                          {d.ref.doc.split(" ")[0]} · p.{d.ref.page}
+                        </button>
                       </td>
                       <td
                         className="px-2 py-2.5 text-right tnum font-semibold"
@@ -177,12 +190,22 @@ function DiffReview() {
                     {justifying === i && !isResolved && (
                       <tr style={{ background: "#FEF9F0" }}>
                         <td colSpan={9} className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={reasonCode}
+                              onChange={(e) => setReasonCode(e.target.value)}
+                              className="rounded-md border px-2 py-1.5 text-[12px]"
+                              style={{ borderColor: "var(--color-border-strong)", background: "#fff" }}
+                            >
+                              {REASON_CODES.map((c) => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
                             <input
                               value={reason}
                               onChange={(e) => setReason(e.target.value)}
                               placeholder="Justification (e.g. matches signed audited statement, p.71)"
-                              className="flex-1 rounded-md border px-3 py-1.5 text-[12px]"
+                              className="flex-1 min-w-[260px] rounded-md border px-3 py-1.5 text-[12px]"
                               style={{ borderColor: "var(--color-border-strong)" }}
                             />
                             <button
@@ -229,8 +252,14 @@ function DiffReview() {
           </div>
         </div>
 
-        {/* RIGHT — model preview */}
-        <ModelPreview flashCell={flashCell} resolved={resolved} />
+        {/* RIGHT — model preview, or source preview when a chip is clicked */}
+        {previewRef ? (
+          <div className="sticky top-4 self-start">
+            <SourcePreview source={previewRef} onClose={() => setPreviewRef(null)} />
+          </div>
+        ) : (
+          <ModelPreview flashCell={flashCell} resolved={resolved} />
+        )}
       </div>
     </PageShell>
   );
