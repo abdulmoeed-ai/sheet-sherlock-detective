@@ -252,8 +252,14 @@ function DiffReview() {
           </div>
         </div>
 
-        {/* RIGHT — model preview */}
-        <ModelPreview flashCell={flashCell} resolved={resolved} />
+        {/* RIGHT — model preview, or source preview when a chip is clicked */}
+        {previewRef ? (
+          <div className="sticky top-4 self-start">
+            <SourcePreview source={previewRef} onClose={() => setPreviewRef(null)} />
+          </div>
+        ) : (
+          <ModelPreview flashCell={flashCell} resolved={resolved} />
+        )}
       </div>
     </PageShell>
   );
