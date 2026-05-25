@@ -190,12 +190,22 @@ function DiffReview() {
                     {justifying === i && !isResolved && (
                       <tr style={{ background: "#FEF9F0" }}>
                         <td colSpan={9} className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={reasonCode}
+                              onChange={(e) => setReasonCode(e.target.value)}
+                              className="rounded-md border px-2 py-1.5 text-[12px]"
+                              style={{ borderColor: "var(--color-border-strong)", background: "#fff" }}
+                            >
+                              {REASON_CODES.map((c) => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
                             <input
                               value={reason}
                               onChange={(e) => setReason(e.target.value)}
                               placeholder="Justification (e.g. matches signed audited statement, p.71)"
-                              className="flex-1 rounded-md border px-3 py-1.5 text-[12px]"
+                              className="flex-1 min-w-[260px] rounded-md border px-3 py-1.5 text-[12px]"
                               style={{ borderColor: "var(--color-border-strong)" }}
                             />
                             <button
