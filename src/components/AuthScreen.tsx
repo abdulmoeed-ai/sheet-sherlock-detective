@@ -58,15 +58,15 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Aut
     <main className="min-h-screen bg-page px-4 py-6 text-text-primary sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center">
         <section className="grid w-full overflow-hidden rounded-lg border border-border-default bg-card shadow-sm lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="flex flex-col justify-between bg-sidebar-bg p-6 text-white sm:p-8">
+          <div className="flex flex-col justify-between border-b border-border-default bg-table-header p-6 sm:p-8 lg:border-b-0 lg:border-r">
             <div>
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">
                   <ShieldCheck className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <h1 className="text-xl font-semibold tracking-normal">Sheet Sherlock</h1>
-                  <p className="text-sm text-sidebar-text">Role-based financial workflow access</p>
+                  <h1 className="text-xl font-semibold tracking-normal text-text-primary">Sheet Sherlock</h1>
+                  <p className="text-sm text-text-secondary">Role-based financial workflow access</p>
                 </div>
               </div>
 
@@ -74,16 +74,16 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Aut
                 {roleOptions.map((option) => (
                   <div
                     key={option.value}
-                    className="rounded-md border border-white/10 bg-white/[0.04] p-4"
+                    className="rounded-md border border-border-default bg-card p-4"
                   >
-                    <p className="text-sm font-semibold">{option.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-sidebar-text-active/70">{option.summary}</p>
+                    <p className="text-sm font-semibold text-text-primary">{option.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-text-secondary">{option.summary}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <p className="mt-8 text-xs leading-5 text-sidebar-text">
+            <p className="mt-8 text-xs leading-5 text-text-muted">
               Sheet Sherlock System remains an internal AI audit actor and is not a signup role.
             </p>
           </div>
