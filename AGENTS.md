@@ -20,3 +20,8 @@ Sheet Sherlock frontend lives in this directory and runs with Bun.
 ## Local Development
 
 The frontend dev server is expected at `http://localhost:8080/` when started locally.
+
+## UI Direction
+
+- Keep the product in light mode.
+- Do not introduce dark sections, dark panels, or dark page treatments unless the user explicitly asks for a dark-mode feature.
