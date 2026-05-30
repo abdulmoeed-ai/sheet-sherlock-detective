@@ -10,6 +10,7 @@ import {
 import { useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import { AskAiTrigger } from "@/components/AskAiTrigger";
+import { AuthGate } from "@/components/AuthGate";
 
 import appCss from "../styles.css?url";
 
@@ -128,8 +129,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <AskAiTrigger />
+      <AuthGate>
+        <Outlet />
+        <AskAiTrigger />
+      </AuthGate>
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -143,4 +146,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
