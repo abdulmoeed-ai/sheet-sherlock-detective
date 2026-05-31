@@ -16,6 +16,7 @@ export interface CycleState {
   period: string;
   status: CycleStatus;
   startedAt: string | null;
+  projectId: string | null;
 }
 
 const initial: CycleState = {
@@ -24,6 +25,7 @@ const initial: CycleState = {
   period: "FY2025",
   status: "idle",
   startedAt: null,
+  projectId: null,
 };
 
 let state: CycleState = { ...initial };
@@ -42,7 +44,12 @@ export const cycleStore = {
       ...input,
       status: "ingestion",
       startedAt: new Date().toISOString(),
+      projectId: null,
     };
+    emit();
+  },
+  setProjectId: (projectId: string | null) => {
+    state = { ...state, projectId };
     emit();
   },
   setStatus: (status: CycleStatus) => {

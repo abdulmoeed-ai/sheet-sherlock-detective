@@ -4,6 +4,7 @@ import {
   createProjectForCycle,
   getMappingRules,
   startProjectExtraction,
+  submitProjectForManagerReview,
   uploadProjectDocument,
 } from "../src/lib/api/projects";
 
@@ -70,6 +71,30 @@ describe("project ingestion api client", () => {
     await expect(startProjectExtraction("project-1")).rejects.toThrow(
       "Acknowledge the current Data Mapping Rules before extraction.",
     );
+  });
+
+  it("submits the manager review handoff and surfaces three-statement blocking messages", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        detail: {
+          message: "Resolve or explicitly clear automatic three-statement check items before submitting.",
+          threeStatementCheck: {
+            status: "failed",
+            summary: { blocking: true, errorCount: 1, warningCount: 0 },
+            items: [{ checkCode: "BS_BALANCES", severity: "error" }],
+          },
+        },
+      }, 409);
+    }) as typeof fetch;
+
+    await expect(submitProjectForManagerReview("project-1", "Ready for manager review")).rejects.toThrow(
+      "Resolve or explicitly clear automatic three-statement check items before submitting.",
+    );
+    expect(requests[0].url).toEndWith("/api/projects/project-1/review/submit");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({ note: "Ready for manager review" });
   });
 });
 

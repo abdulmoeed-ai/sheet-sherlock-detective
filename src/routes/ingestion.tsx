@@ -257,6 +257,7 @@ function Ingestion() {
             })
           : { id: projectId };
       setProjectId(project.id);
+      cycleStore.setProjectId(project.id);
       if (projectId === null) {
         await uploadProjectDocument(project.id, file);
       }

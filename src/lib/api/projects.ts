@@ -106,6 +106,18 @@ export async function startProjectExtraction(projectId: string): Promise<Extract
   });
 }
 
+export async function submitProjectForManagerReview(projectId: string, note: string | null = null): Promise<{
+  projectId: string;
+  status: string;
+  locked: boolean;
+  message: string;
+}> {
+  return apiRequest(`/api/projects/${projectId}/review/submit`, {
+    method: "POST",
+    json: { note },
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
@@ -145,6 +157,9 @@ async function readErrorMessage(response: Response): Promise<string> {
     const body = (await response.json()) as { detail?: unknown };
     if (typeof body.detail === "string") {
       return body.detail;
+    }
+    if (body.detail && typeof body.detail === "object" && "message" in body.detail) {
+      return String((body.detail as { message: unknown }).message);
     }
     if (Array.isArray(body.detail) && body.detail[0]?.msg) {
       return String(body.detail[0].msg);
