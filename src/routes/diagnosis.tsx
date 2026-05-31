@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { submitProjectForManagerReview } from "@/lib/api/projects";
 import { toast } from "sonner";
 import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -176,6 +177,7 @@ function Diagnosis() {
   const [historyPopover, setHistoryPopover] = useState<{ x: number; y: number; addr: string } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [readyModal, setReadyModal] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
   const cycle = useCycle();
   const locked = cycle.status === "review" || cycle.status === "approved";
   const gridRef = useRef<HTMLDivElement>(null);
@@ -325,7 +327,7 @@ function Diagnosis() {
               }}
             >
               {locked && <Lock className="h-3 w-3" />}
-              {locked ? "Locked — Ready for CEO review" : allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
+              {locked ? "Locked — Ready for Finance Manager review" : allClear ? "All clear" : `${openIssueCount} issue${openIssueCount === 1 ? "" : "s"} open`}
             </div>
           </div>
 
@@ -385,9 +387,9 @@ function Diagnosis() {
                 opacity: (allClear && !locked) || locked ? 1 : 0.45,
                 cursor: allClear && !locked ? "pointer" : locked ? "default" : "not-allowed",
               }}
-              title={locked ? "Diagnosis locked & sent for CEO review" : "Lock diagnosis and mark ready for CEO review"}
+              title={locked ? "Diagnosis locked & sent for Finance Manager review" : "Lock diagnosis and mark ready for Finance Manager review"}
             >
-              {locked ? "✓ Ready for CEO review" : "Mark ready for CEO review →"}
+              {locked ? "✓ Ready for Finance Manager review" : "Mark ready for Finance Manager review →"}
             </button>
           </div>
         </div>
@@ -1047,7 +1049,7 @@ function Diagnosis() {
                   <Lock className="h-4 w-4" style={{ color: "#7B68EE" }} />
                 </div>
                 <div className="text-[15px] font-bold" style={{ color: "#292D34" }}>
-                  Mark diagnosis ready for CEO review
+                  Mark diagnosis ready for Finance Manager review
                 </div>
               </div>
               <p className="mt-3 text-[13px] leading-[1.55]" style={{ color: "#4F546B" }}>
@@ -1081,15 +1083,27 @@ function Diagnosis() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    cycleStore.setStatus("review");
-                    setReadyModal(false);
-                    toast.success("Diagnosis locked — sent for CEO review. Forecast is now using these figures.");
-                    setTimeout(() => navigate({ to: "/forecast" }), 600);
+                  disabled={submittingReview}
+                  onClick={async () => {
+                    setSubmittingReview(true);
+                    try {
+                      if (cycle.projectId) {
+                        await submitProjectForManagerReview(cycle.projectId, "Ready for manager review");
+                      }
+                      cycleStore.setStatus("review");
+                      setReadyModal(false);
+                      toast.success("Diagnosis locked — sent for Finance Manager review. Forecast is now using these figures.");
+                      setTimeout(() => navigate({ to: "/forecast" }), 600);
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not submit diagnosis for review.");
+                    } finally {
+                      setSubmittingReview(false);
+                    }
                   }}
-                  className="h-9 rounded-md px-4 text-[12px] font-semibold text-white"
+                  className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[12px] font-semibold text-white disabled:opacity-60"
                   style={{ background: "#7B68EE" }}
                 >
+                  {submittingReview && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Confirm &amp; lock →
                 </button>
               </div>
