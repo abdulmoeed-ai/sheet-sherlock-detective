@@ -135,6 +135,18 @@ export async function askProjectAi(projectId: string, question: string): Promise
   });
 }
 
+export async function runBalanceSheetDiagnosis(projectId: string): Promise<{
+  runId: string | null;
+  projectId: string;
+  status: string;
+  imbalanceAmount: string | null;
+  candidates: Array<Record<string, unknown>>;
+}> {
+  return apiRequest(`/api/projects/${projectId}/diagnosis/balance-sheet/run`, {
+    method: "POST",
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
