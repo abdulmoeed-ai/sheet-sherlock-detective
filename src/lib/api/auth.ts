@@ -48,6 +48,8 @@ export const roleOptions: Array<{ value: HumanRole; label: string; summary: stri
   },
 ];
 
+export const selfServiceRoleOptions = roleOptions.filter((option) => option.value !== "admin");
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 export class ApiError extends Error {

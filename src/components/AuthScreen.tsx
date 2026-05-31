@@ -15,6 +15,7 @@ import {
   loginUser,
   registerUser,
   roleOptions,
+  selfServiceRoleOptions,
   type HumanRole,
   type User,
 } from "@/lib/api/auth";
@@ -168,7 +169,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Aut
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {roleOptions.map((option) => (
+                      {selfServiceRoleOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
