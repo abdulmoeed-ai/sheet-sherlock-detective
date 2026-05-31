@@ -3,11 +3,15 @@ import {
   askProjectAi,
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
+  acknowledgeAnalysisRequest,
+  convertAnalysisRequestToProject,
+  createAnalysisRequest,
   createReviewComment,
   createProjectForCycle,
   downloadArchiveAuditJson,
   generateExecutiveBrief,
   getLatestModelArchive,
+  listAnalysisRequests,
   getMappingRules,
   runBalanceSheetDiagnosis,
   startProjectExtraction,
@@ -249,6 +253,70 @@ describe("project ingestion api client", () => {
     expect((audit.approvalSummary as { status: string }).status).toBe("approved");
     expect(requests[0].url).toEndWith("/api/projects/project-1/archive/latest");
     expect(requests[1].url).toEndWith("/api/projects/project-1/archive/archive-1/audit.json");
+  });
+
+  it("runs the analysis request inbox actions", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      const path = String(url);
+      const body = {
+        id: "request-1",
+        assignedAnalystEmail: "analyst@example.com",
+        companyName: "Millat Tractors Limited",
+        companySymbol: "MTL",
+        sector: "Industrial Engineering",
+        fiscalYear: "2025",
+        template: "Millat - Template.xlsx",
+        priority: "high",
+        dueDate: "2026-06-15T00:00:00+00:00",
+        note: "Prepare FY2025 review.",
+        status: path.endsWith("convert-to-project") ? "converted" : path.endsWith("acknowledge") ? "acknowledged" : "pending",
+        projectId: path.endsWith("convert-to-project") ? "project-1" : null,
+        emailStatus: "failed",
+        emailResult: { reason: "missing_resend_api_key" },
+        createdAt: "2026-05-31T00:00:00Z",
+        acknowledgedAt: null,
+        convertedAt: null,
+      };
+      if (path.endsWith("/api/analysis-requests") && init?.method === "GET") {
+        return jsonResponse([body]);
+      }
+      return jsonResponse(body, init?.method === "POST" && path.endsWith("/api/analysis-requests") ? 201 : 200);
+    }) as typeof fetch;
+
+    const created = await createAnalysisRequest({
+      assignedAnalystEmail: "analyst@example.com",
+      companyName: "Millat Tractors Limited",
+      companySymbol: "MTL",
+      sector: "Industrial Engineering",
+      fiscalYear: "2025",
+      priority: "high",
+      dueDate: "2026-06-15T00:00:00+00:00",
+      note: "Prepare FY2025 review.",
+    });
+    const listed = await listAnalysisRequests();
+    const acknowledged = await acknowledgeAnalysisRequest(created.id);
+    const converted = await convertAnalysisRequestToProject(created.id);
+
+    expect(listed[0].id).toBe("request-1");
+    expect(acknowledged.status).toBe("acknowledged");
+    expect(converted.projectId).toBe("project-1");
+    expect(requests[0].url).toEndWith("/api/analysis-requests");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({
+      assignedAnalystEmail: "analyst@example.com",
+      companyName: "Millat Tractors Limited",
+      companySymbol: "MTL",
+      sector: "Industrial Engineering",
+      fiscalYear: "2025",
+      priority: "high",
+      dueDate: "2026-06-15T00:00:00+00:00",
+      note: "Prepare FY2025 review.",
+      template: "Millat - Template.xlsx",
+    });
+    expect(requests[2].url).toEndWith("/api/analysis-requests/request-1/acknowledge");
+    expect(requests[3].url).toEndWith("/api/analysis-requests/request-1/convert-to-project");
   });
 });
 

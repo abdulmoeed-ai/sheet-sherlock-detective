@@ -208,6 +208,65 @@ export async function downloadArchiveAuditJson(projectId: string, archiveId: str
   return apiRequest(`/api/projects/${projectId}/archive/${archiveId}/audit.json`);
 }
 
+export type AnalysisRequestResponse = {
+  id: string;
+  assignedAnalystEmail: string;
+  companyName: string;
+  companySymbol: string | null;
+  sector: string | null;
+  fiscalYear: string | null;
+  template: string;
+  priority: string;
+  dueDate: string | null;
+  note: string | null;
+  status: string;
+  projectId: string | null;
+  emailStatus: string;
+  emailResult: Record<string, unknown>;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  convertedAt: string | null;
+};
+
+export async function createAnalysisRequest(input: {
+  assignedAnalystEmail: string;
+  companyName: string;
+  companySymbol?: string;
+  sector?: string;
+  fiscalYear?: string;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueDate?: string;
+  note?: string;
+}): Promise<AnalysisRequestResponse> {
+  return apiRequest("/api/analysis-requests", {
+    method: "POST",
+    json: {
+      ...input,
+      template: "Millat - Template.xlsx",
+    },
+  });
+}
+
+export async function listAnalysisRequests(): Promise<AnalysisRequestResponse[]> {
+  return apiRequest("/api/analysis-requests");
+}
+
+export async function getAnalysisRequest(requestId: string): Promise<AnalysisRequestResponse> {
+  return apiRequest(`/api/analysis-requests/${requestId}`);
+}
+
+export async function acknowledgeAnalysisRequest(requestId: string): Promise<AnalysisRequestResponse> {
+  return apiRequest(`/api/analysis-requests/${requestId}/acknowledge`, {
+    method: "POST",
+  });
+}
+
+export async function convertAnalysisRequestToProject(requestId: string): Promise<AnalysisRequestResponse> {
+  return apiRequest(`/api/analysis-requests/${requestId}/convert-to-project`, {
+    method: "POST",
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
