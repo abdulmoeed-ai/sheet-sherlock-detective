@@ -5,6 +5,7 @@ import {
   acknowledgeMappingRules,
   createReviewComment,
   createProjectForCycle,
+  generateExecutiveBrief,
   getMappingRules,
   runBalanceSheetDiagnosis,
   startProjectExtraction,
@@ -186,6 +187,31 @@ describe("project ingestion api client", () => {
     expect(response.id).toBe("comment-1");
     expect(requests[0].url).toEndWith("/api/projects/project-1/comments");
     expect(JSON.parse(String(requests[0].init?.body))).toEqual({ body: "Please review @Ayesha", fieldId: "field-1" });
+  });
+
+  it("generates the CFO executive brief for the active project", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        id: "brief-1",
+        projectId: "project-1",
+        version: 1,
+        status: "generated",
+        generatedBy: "user-1",
+        payload: { header: { company: "Millat Tractors Limited" } },
+        createdAt: "2026-05-31T00:00:00Z",
+        lockedAt: null,
+      }, 201);
+    }) as typeof fetch;
+
+    const response = await generateExecutiveBrief("project-1");
+
+    expect(response.id).toBe("brief-1");
+    expect(response.status).toBe("generated");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/briefs/generate");
+    expect(requests[0].init?.method).toBe("POST");
   });
 });
 
