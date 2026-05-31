@@ -158,6 +158,23 @@ export async function acceptBalanceSheetDiagnosis(projectId: string, candidateId
   });
 }
 
+export async function createReviewComment(projectId: string, input: {
+  body: string;
+  fieldId?: string;
+  templateCell?: string;
+  sheetName?: string;
+}): Promise<{
+  id: string;
+  body: string;
+  status: string;
+  mentions: Record<string, unknown>;
+}> {
+  return apiRequest(`/api/projects/${projectId}/comments`, {
+    method: "POST",
+    json: input,
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
