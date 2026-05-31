@@ -5,7 +5,9 @@ import {
   acknowledgeMappingRules,
   createReviewComment,
   createProjectForCycle,
+  downloadArchiveAuditJson,
   generateExecutiveBrief,
+  getLatestModelArchive,
   getMappingRules,
   runBalanceSheetDiagnosis,
   startProjectExtraction,
@@ -212,6 +214,41 @@ describe("project ingestion api client", () => {
     expect(response.status).toBe("generated");
     expect(requests[0].url).toEndWith("/api/projects/project-1/briefs/generate");
     expect(requests[0].init?.method).toBe("POST");
+  });
+
+  it("reads archive metadata and downloads audit json", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      const path = String(url);
+      if (path.endsWith("/api/projects/project-1/archive/latest")) {
+        return jsonResponse({
+          id: "archive-1",
+          projectId: "project-1",
+          version: 1,
+          status: "created",
+          checksumSha256: "f".repeat(64),
+          createdAt: "2026-05-31T00:00:00Z",
+          approvedBy: "cfo-1",
+          auditJsonUrl: "/api/projects/project-1/archive/archive-1/audit.json",
+          pdfAvailable: false,
+        });
+      }
+      return jsonResponse({
+        approvalSummary: { status: "approved" },
+        sourceLineage: [],
+        auditEventTimeline: [],
+      });
+    }) as typeof fetch;
+
+    const archive = await getLatestModelArchive("project-1");
+    const audit = await downloadArchiveAuditJson("project-1", archive.id);
+
+    expect(archive.checksumSha256).toBe("f".repeat(64));
+    expect((audit.approvalSummary as { status: string }).status).toBe("approved");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/archive/latest");
+    expect(requests[1].url).toEndWith("/api/projects/project-1/archive/archive-1/audit.json");
   });
 });
 

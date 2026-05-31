@@ -190,6 +190,24 @@ export async function generateExecutiveBrief(projectId: string): Promise<{
   });
 }
 
+export async function getLatestModelArchive(projectId: string): Promise<{
+  id: string;
+  projectId: string;
+  version: number;
+  status: string;
+  checksumSha256: string;
+  createdAt: string;
+  approvedBy: string;
+  auditJsonUrl: string;
+  pdfAvailable: boolean;
+}> {
+  return apiRequest(`/api/projects/${projectId}/archive/latest`);
+}
+
+export async function downloadArchiveAuditJson(projectId: string, archiveId: string): Promise<Record<string, unknown>> {
+  return apiRequest(`/api/projects/${projectId}/archive/${archiveId}/audit.json`);
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
