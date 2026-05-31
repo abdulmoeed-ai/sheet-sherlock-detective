@@ -10,6 +10,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
+import { askProjectAi } from "@/lib/api/projects";
 
 type Msg =
   | { id: string; role: "user"; text: string }
@@ -28,6 +29,7 @@ export function AskAiTrigger() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [asking, setAsking] = useState(false);
   const cycle = useCycle();
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export function AskAiTrigger() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
-  const send = (text: string) => {
+  const send = async (text: string) => {
     if (!text.trim()) return;
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
@@ -47,6 +49,35 @@ export function AskAiTrigger() {
       setTimeout(() => {
         setMessages((m) => [...m, { id: `c-${Date.now()}`, role: "ai", kind: "clarify" }]);
       }, 400);
+      return;
+    }
+
+    if (cycle.projectId) {
+      setAsking(true);
+      try {
+        const response = await askProjectAi(cycle.projectId, text);
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text: response.answer,
+          },
+        ]);
+      } catch (error) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text: error instanceof Error ? error.message : "Ask AI is unavailable for this project.",
+          },
+        ]);
+      } finally {
+        setAsking(false);
+      }
       return;
     }
 
@@ -154,7 +185,7 @@ export function AskAiTrigger() {
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
-                    onClick={() => send(s)}
+                    onClick={() => void send(s)}
                     className="block w-full rounded-lg border px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-[var(--color-tag-bg)]"
                     style={{
                       borderColor: "var(--color-border-default)",
@@ -309,19 +340,19 @@ export function AskAiTrigger() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") send(input);
+                if (e.key === "Enter") void send(input);
               }}
               placeholder="Ask anything about this model…"
               className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)]"
               style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
             />
             <button
-              onClick={() => send(input)}
-              disabled={!input.trim()}
+              onClick={() => void send(input)}
+              disabled={!input.trim() || asking}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-white disabled:opacity-40"
               style={{ background: "var(--color-brand)" }}
             >
-              <Send className="h-4 w-4" />
+              {asking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
           </div>
         </aside>

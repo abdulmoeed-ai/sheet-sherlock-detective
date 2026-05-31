@@ -118,6 +118,23 @@ export async function submitProjectForManagerReview(projectId: string, note: str
   });
 }
 
+export async function askProjectAi(projectId: string, question: string): Promise<{
+  answer: string;
+  sourcesUsed: Array<Record<string, unknown>>;
+  modelCitations: Array<Record<string, unknown>>;
+  sourceCitations: Array<Record<string, unknown>>;
+  warnings: string[];
+  usage: Record<string, unknown>;
+}> {
+  return apiRequest(`/api/projects/${projectId}/ask-ai`, {
+    method: "POST",
+    json: {
+      question,
+      includeExternalSources: false,
+    },
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
