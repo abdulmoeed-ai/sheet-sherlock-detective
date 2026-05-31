@@ -147,6 +147,17 @@ export async function runBalanceSheetDiagnosis(projectId: string): Promise<{
   });
 }
 
+export async function acceptBalanceSheetDiagnosis(projectId: string, candidateId: string): Promise<{
+  id: string;
+  action: string;
+  reasonCode: string;
+  field: Record<string, unknown> | null;
+}> {
+  return apiRequest(`/api/projects/${projectId}/diagnosis/balance-sheet/${candidateId}/accept`, {
+    method: "POST",
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},

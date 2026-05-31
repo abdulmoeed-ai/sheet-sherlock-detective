@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
-import { runBalanceSheetDiagnosis, submitProjectForManagerReview } from "@/lib/api/projects";
+import { acceptBalanceSheetDiagnosis, runBalanceSheetDiagnosis, submitProjectForManagerReview } from "@/lib/api/projects";
 import { toast } from "sonner";
 import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -278,7 +278,11 @@ function Diagnosis() {
     setRechecking(true);
     if (cycle.projectId) {
       try {
-        await runBalanceSheetDiagnosis(cycle.projectId);
+        const diagnosis = await runBalanceSheetDiagnosis(cycle.projectId);
+        const candidateId = diagnosis.candidates[0]?.candidateId ? String(diagnosis.candidates[0].candidateId) : null;
+        if (candidateId) {
+          await acceptBalanceSheetDiagnosis(cycle.projectId, candidateId);
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not run balance sheet diagnosis.");
         setRechecking(false);
