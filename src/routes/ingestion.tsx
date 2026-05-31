@@ -348,7 +348,12 @@ function Ingestion() {
                 type="file"
                 className="hidden"
                 accept=".pdf,.xlsx"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] ?? null);
+                  setProjectId(null);
+                  setMappingRules(null);
+                  setIngestionError(null);
+                }}
               />
             </label>
           ) : (
@@ -360,7 +365,15 @@ function Ingestion() {
                   {(file.size / (1024 * 1024)).toFixed(1)} MB · ready for OCR
                 </div>
               </div>
-              <button onClick={() => setFile(null)} className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)]">
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setProjectId(null);
+                  setMappingRules(null);
+                  setIngestionError(null);
+                }}
+                className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)]"
+              >
                 <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
               </button>
             </div>
