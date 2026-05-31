@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
+  askProjectAi,
   acknowledgeMappingRules,
   createProjectForCycle,
   getMappingRules,
@@ -95,6 +96,32 @@ describe("project ingestion api client", () => {
     );
     expect(requests[0].url).toEndWith("/api/projects/project-1/review/submit");
     expect(JSON.parse(String(requests[0].init?.body))).toEqual({ note: "Ready for manager review" });
+  });
+
+  it("asks the project-scoped Ask AI endpoint with bearer auth", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        answer: "Revenue is supported by PL1!F5 [1].",
+        sourcesUsed: [],
+        modelCitations: [],
+        sourceCitations: [],
+        warnings: [],
+        usage: {},
+      });
+    }) as typeof fetch;
+
+    const response = await askProjectAi("project-1", "What is revenue?");
+
+    expect(response.answer).toContain("[1]");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/ask-ai");
+    expect((requests[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer access-token");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({
+      question: "What is revenue?",
+      includeExternalSources: false,
+    });
   });
 });
 
