@@ -175,6 +175,21 @@ export async function createReviewComment(projectId: string, input: {
   });
 }
 
+export async function generateExecutiveBrief(projectId: string): Promise<{
+  id: string;
+  projectId: string;
+  version: number;
+  status: string;
+  generatedBy: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  lockedAt: string | null;
+}> {
+  return apiRequest(`/api/projects/${projectId}/briefs/generate`, {
+    method: "POST",
+  });
+}
+
 async function apiRequest<T>(
   path: string,
   init: { method?: string; json?: unknown; body?: BodyInit } = {},
