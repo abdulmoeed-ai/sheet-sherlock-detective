@@ -3,6 +3,14 @@ import { useEffect, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { getSectorPack } from "@/lib/sector-packs";
+import {
+  acknowledgeMappingRules,
+  createProjectForCycle,
+  getMappingRules,
+  startProjectExtraction,
+  uploadProjectDocument,
+  type MappingRulesSummary,
+} from "@/lib/api/projects";
 import { SourcePreview, type SourceRef } from "@/components/SourcePreviewPanel";
 import {
   CloudUpload,
@@ -179,6 +187,10 @@ function Ingestion() {
   const [feedDone, setFeedDone] = useState(false);
   const [ocrResolved, setOcrResolved] = useState<Record<number, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [mappingRules, setMappingRules] = useState<MappingRulesSummary | null>(null);
+  const [pendingExtraction, setPendingExtraction] = useState(false);
+  const [ingestionError, setIngestionError] = useState<string | null>(null);
 
   const ocrIssues: SourceRef[] = [
     { doc: "MTL Annual Report 2025", page: 42, field: "Revenue FY2025", value: "PKR 54.8B", conf: 87, bbox: [20, 38, 56, 5] },
@@ -190,8 +202,10 @@ function Ingestion() {
   const allResolved =
     feedDone && needsAction.every((_, i) => ocrResolved[i + 1]);
 
-  const startIngestion = () => {
+  const runLocalFeed = () => {
     setRunning(true);
+    setPendingExtraction(false);
+    setIngestionError(null);
     const initial: FeedRow[] = SOURCES.map((s) => ({
       name: s.name,
       state: s.status === "down" ? "skipped" : "pending",
@@ -226,6 +240,56 @@ function Ingestion() {
       }, 500);
     };
     tick();
+  };
+
+  const startIngestion = async () => {
+    if (!file) return;
+    setPendingExtraction(true);
+    setIngestionError(null);
+    try {
+      const project =
+        projectId === null
+          ? await createProjectForCycle({
+              companyName: cycle.company,
+              projectLabel: `${cycle.company} ${cycle.period} annual report analysis`,
+              sector: cycle.sector,
+              fiscalYear: cycle.period.replace(/^FY/i, ""),
+            })
+          : { id: projectId };
+      setProjectId(project.id);
+      if (projectId === null) {
+        await uploadProjectDocument(project.id, file);
+      }
+      const summary = await getMappingRules(project.id);
+      setMappingRules(summary);
+      if (!summary.acknowledged) {
+        setRulesOpen(true);
+        setPendingExtraction(false);
+        return;
+      }
+      await startProjectExtraction(project.id);
+      runLocalFeed();
+    } catch (error) {
+      setPendingExtraction(false);
+      setIngestionError(error instanceof Error ? error.message : "Could not start ingestion.");
+    }
+  };
+
+  const acknowledgeAndStart = async () => {
+    if (!projectId || !mappingRules) return;
+    setPendingExtraction(true);
+    setIngestionError(null);
+    try {
+      await acknowledgeMappingRules(projectId, mappingRules);
+      const refreshed = await getMappingRules(projectId);
+      setMappingRules(refreshed);
+      setRulesOpen(false);
+      await startProjectExtraction(projectId);
+      runLocalFeed();
+    } catch (error) {
+      setPendingExtraction(false);
+      setIngestionError(error instanceof Error ? error.message : "Could not acknowledge rules.");
+    }
   };
 
   const liveCount = SOURCES.filter((s) => s.status === "live").length;
@@ -320,6 +384,11 @@ function Ingestion() {
               </span>
             </div>
           )}
+          {ingestionError && (
+            <div className="mt-4 rounded-md border px-3 py-2 text-[12px]" style={{ borderColor: "#FCA5A5", color: "#991B1B", background: "#FEF2F2" }}>
+              {ingestionError}
+            </div>
+          )}
         </div>
 
         {/* Source registry OR live feed */}
@@ -338,7 +407,14 @@ function Ingestion() {
         )}
       </div>
 
-      {rulesOpen && <RulePackModal onClose={() => setRulesOpen(false)} />}
+      {rulesOpen && (
+        <RulePackModal
+          summary={mappingRules}
+          pending={pendingExtraction}
+          onAcknowledge={mappingRules ? acknowledgeAndStart : undefined}
+          onClose={() => setRulesOpen(false)}
+        />
+      )}
 
       <StickyFooter
         running={running}
@@ -349,6 +425,7 @@ function Ingestion() {
         liveCount={liveCount}
         staleCount={staleCount}
         downCount={downCount}
+        pending={pendingExtraction}
         onStart={startIngestion}
         onReviewDiffs={() => {
           cycleStore.setStatus("diff-review");
@@ -359,11 +436,22 @@ function Ingestion() {
   );
 }
 
-function RulePackModal({ onClose }: { onClose: () => void }) {
+function RulePackModal({
+  summary,
+  pending,
+  onAcknowledge,
+  onClose,
+}: {
+  summary: MappingRulesSummary | null;
+  pending: boolean;
+  onAcknowledge?: () => void;
+  onClose: () => void;
+}) {
   const cycle = useCycle();
   const pack = getSectorPack(cycle.sector);
   const overrideSet = new Set(pack.sectorOverrides);
   const all = [...pack.sectorOverrides, ...pack.baseRules];
+  const backendRules = summary?.rules ?? [];
 
   return (
     <div
@@ -383,7 +471,9 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               {pack.sector} · Data Mapping Rules
             </div>
             <div className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {pack.ruleCount} active rules · {pack.template} · {pack.yearEnd} year-end · {pack.currency}
+              {summary
+                ? `${summary.enabledRulesCount} enabled · ${summary.criticalCount} critical · ${summary.advisoryCount} advisory`
+                : `${pack.ruleCount} active rules · ${pack.template} · ${pack.yearEnd} year-end · ${pack.currency}`}
             </div>
           </div>
           <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-tag-bg)]">
@@ -392,6 +482,24 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="overflow-y-auto px-5 py-3">
+          {summary && (
+            <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              {[
+                ["Rules", summary.rulesCount],
+                ["Enabled", summary.enabledRulesCount],
+                ["Critical", summary.criticalCount],
+                ["Disabled", summary.disabledRulesCount],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-md border px-3 py-2" style={{ borderColor: "var(--color-border-default)" }}>
+                  <div className="text-[10px] uppercase" style={{ color: "var(--color-text-muted)" }}>{label}</div>
+                  <div className="text-[16px] font-semibold tnum" style={{ color: "var(--color-text-primary)" }}>{value}</div>
+                </div>
+              ))}
+              <div className="col-span-2 md:col-span-4 rounded-md bg-[var(--color-tag-bg)] px-3 py-2 font-mono text-[11px]" style={{ color: "var(--color-brand)" }}>
+                {summary.rulesHash}
+              </div>
+            </div>
+          )}
           <div className="mb-3 flex flex-wrap gap-1.5">
             {pack.macroVariables.map((m) => (
               <span
@@ -425,23 +533,28 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               </tr>
             </thead>
             <tbody>
-              {all.map((rule, i) => {
-                const isOverride = overrideSet.has(rule);
+              {(backendRules.length > 0 ? backendRules : all).map((rule, i) => {
+                const label = typeof rule === "string" ? rule : rule.description;
+                const code = typeof rule === "string" ? i + 1 : rule.code;
+                const type = typeof rule === "string" ? (overrideSet.has(rule) ? "Sector override" : "Universal") : rule.severity;
                 return (
-                  <tr key={`${rule}-${i}`} className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
-                    <td className="px-3 py-2 tnum text-[var(--color-text-muted)]">{i + 1}</td>
-                    <td className="px-2 py-2">{rule}</td>
+                  <tr key={`${code}-${i}`} className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                    <td className="px-3 py-2 tnum text-[var(--color-text-muted)]">{code}</td>
+                    <td className="px-2 py-2">{label}</td>
                     <td className="px-2 py-2">
-                      {isOverride ? (
+                      {type === "Sector override" || type === "Critical" ? (
                         <span
                           className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-                          style={{ background: "#EDE9FE", color: "var(--color-brand)" }}
+                          style={{
+                            background: type === "Critical" ? "#FEE2E2" : "#EDE9FE",
+                            color: type === "Critical" ? "#991B1B" : "var(--color-brand)",
+                          }}
                         >
-                          Sector override
+                          {type}
                         </span>
                       ) : (
                         <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                          Universal
+                          {type}
                         </span>
                       )}
                     </td>
@@ -451,6 +564,21 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
             </tbody>
           </table>
         </div>
+        {summary && onAcknowledge && (
+          <div className="flex items-center justify-between border-t px-5 py-3" style={{ borderColor: "var(--color-border-default)" }}>
+            <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Acknowledgement is required before extraction can start.
+            </div>
+            <button
+              onClick={onAcknowledge}
+              disabled={pending}
+              className="h-9 rounded-md px-4 text-[12px] font-semibold text-white disabled:opacity-60"
+              style={{ background: "var(--color-brand)" }}
+            >
+              {pending ? "Acknowledging..." : "Acknowledge and start"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -778,6 +906,7 @@ function StickyFooter({
   liveCount,
   staleCount,
   downCount,
+  pending,
   onStart,
   onReviewDiffs,
 }: {
@@ -789,6 +918,7 @@ function StickyFooter({
   liveCount: number;
   staleCount: number;
   downCount: number;
+  pending: boolean;
   onStart: () => void;
   onReviewDiffs: () => void;
 }) {
@@ -809,11 +939,11 @@ function StickyFooter({
           </div>
           <button
             onClick={onStart}
-            disabled={!file}
+            disabled={!file || pending}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ background: "var(--color-brand)" }}
           >
-            Start ingestion →
+            {pending ? "Preparing..." : "Start ingestion →"}
           </button>
         </>
       ) : (
