@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   askProjectAi,
+  acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
   createProjectForCycle,
   getMappingRules,
@@ -143,6 +144,26 @@ describe("project ingestion api client", () => {
 
     expect(response.status).toBe("ready_to_apply");
     expect(requests[0].url).toEndWith("/api/projects/project-1/diagnosis/balance-sheet/run");
+    expect(requests[0].init?.method).toBe("POST");
+  });
+
+  it("accepts a balance sheet diagnosis candidate", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        id: "decision-1",
+        action: "accept",
+        reasonCode: "diagnosis_accepted",
+        field: { fieldId: "field-1", value: "0" },
+      });
+    }) as typeof fetch;
+
+    const response = await acceptBalanceSheetDiagnosis("project-1", "candidate-1");
+
+    expect(response.action).toBe("accept");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/diagnosis/balance-sheet/candidate-1/accept");
     expect(requests[0].init?.method).toBe("POST");
   });
 });
