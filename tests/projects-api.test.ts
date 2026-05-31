@@ -3,6 +3,7 @@ import {
   askProjectAi,
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
+  createReviewComment,
   createProjectForCycle,
   getMappingRules,
   runBalanceSheetDiagnosis,
@@ -165,6 +166,26 @@ describe("project ingestion api client", () => {
     expect(response.action).toBe("accept");
     expect(requests[0].url).toEndWith("/api/projects/project-1/diagnosis/balance-sheet/candidate-1/accept");
     expect(requests[0].init?.method).toBe("POST");
+  });
+
+  it("creates review comments with mention text", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        id: "comment-1",
+        body: "Please review @Ayesha",
+        status: "open",
+        mentions: { resolved: [{ email: "ayesha@example.com" }], unresolved: [] },
+      }, 201);
+    }) as typeof fetch;
+
+    const response = await createReviewComment("project-1", { body: "Please review @Ayesha", fieldId: "field-1" });
+
+    expect(response.id).toBe("comment-1");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/comments");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({ body: "Please review @Ayesha", fieldId: "field-1" });
   });
 });
 
