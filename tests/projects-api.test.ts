@@ -4,6 +4,7 @@ import {
   acknowledgeMappingRules,
   createProjectForCycle,
   getMappingRules,
+  runBalanceSheetDiagnosis,
   startProjectExtraction,
   submitProjectForManagerReview,
   uploadProjectDocument,
@@ -122,6 +123,27 @@ describe("project ingestion api client", () => {
       question: "What is revenue?",
       includeExternalSources: false,
     });
+  });
+
+  it("runs balance sheet diagnosis for the active project", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({
+        runId: "diagnosis-1",
+        projectId: "project-1",
+        status: "ready_to_apply",
+        imbalanceAmount: "100",
+        candidates: [{ fieldId: "field-1", classification: "debit_credit_classification" }],
+      });
+    }) as typeof fetch;
+
+    const response = await runBalanceSheetDiagnosis("project-1");
+
+    expect(response.status).toBe("ready_to_apply");
+    expect(requests[0].url).toEndWith("/api/projects/project-1/diagnosis/balance-sheet/run");
+    expect(requests[0].init?.method).toBe("POST");
   });
 });
 

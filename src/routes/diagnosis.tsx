@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
-import { submitProjectForManagerReview } from "@/lib/api/projects";
+import { runBalanceSheetDiagnosis, submitProjectForManagerReview } from "@/lib/api/projects";
 import { toast } from "sonner";
 import { Lock, PanelRightClose, PanelRightOpen } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -274,8 +274,17 @@ function Diagnosis() {
   const openIssueCount = ISSUES.filter((i) => i.status === "Open" && !corrected[i.addr]).length;
   const allClear = openIssueCount === 0;
 
-  const applyCorrection = () => {
+  const applyCorrection = async () => {
     setRechecking(true);
+    if (cycle.projectId) {
+      try {
+        await runBalanceSheetDiagnosis(cycle.projectId);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not run balance sheet diagnosis.");
+        setRechecking(false);
+        return;
+      }
+    }
     setTimeout(() => {
       setOverrides((o) => ({ ...o, "BS!D42": 15600 }));
       setCorrected((c) => ({ ...c, "BS!D42": true }));
@@ -868,7 +877,7 @@ function Diagnosis() {
                             )}
                           </div>
                           <button
-                            onClick={applyCorrection}
+                            onClick={() => void applyCorrection()}
                             disabled={rechecking}
                             className="h-8 rounded-md px-3.5 text-[12px] font-semibold text-white"
                             style={{ background: "#7B68EE", opacity: rechecking ? 0.6 : 1 }}
