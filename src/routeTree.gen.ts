@@ -13,6 +13,8 @@ import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as SignOffRouteImport } from './routes/sign-off'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as RegistryRouteImport } from './routes/registry'
+import { Route as ProtectionRouteImport } from './routes/protection'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as IngestionRouteImport } from './routes/ingestion'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as ForecastRouteImport } from './routes/forecast'
@@ -40,6 +42,16 @@ const ReviewRoute = ReviewRouteImport.update({
 const RegistryRoute = RegistryRouteImport.update({
   id: '/registry',
   path: '/registry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtectionRoute = ProtectionRouteImport.update({
+  id: '/protection',
+  path: '/protection',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngestionRoute = IngestionRouteImport.update({
@@ -92,6 +104,8 @@ export interface FileRoutesByFullPath {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/notifications': typeof NotificationsRoute
+  '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
   '/review': typeof ReviewRoute
   '/sign-off': typeof SignOffRoute
@@ -106,6 +120,8 @@ export interface FileRoutesByTo {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/notifications': typeof NotificationsRoute
+  '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
   '/review': typeof ReviewRoute
   '/sign-off': typeof SignOffRoute
@@ -121,6 +137,8 @@ export interface FileRoutesById {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/notifications': typeof NotificationsRoute
+  '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
   '/review': typeof ReviewRoute
   '/sign-off': typeof SignOffRoute
@@ -137,6 +155,8 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/notifications'
+    | '/protection'
     | '/registry'
     | '/review'
     | '/sign-off'
@@ -151,6 +171,8 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/notifications'
+    | '/protection'
     | '/registry'
     | '/review'
     | '/sign-off'
@@ -165,6 +187,8 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/notifications'
+    | '/protection'
     | '/registry'
     | '/review'
     | '/sign-off'
@@ -180,6 +204,8 @@ export interface RootRouteChildren {
   ForecastRoute: typeof ForecastRoute
   InboxRoute: typeof InboxRoute
   IngestionRoute: typeof IngestionRoute
+  NotificationsRoute: typeof NotificationsRoute
+  ProtectionRoute: typeof ProtectionRoute
   RegistryRoute: typeof RegistryRoute
   ReviewRoute: typeof ReviewRoute
   SignOffRoute: typeof SignOffRoute
@@ -214,6 +240,20 @@ declare module '@tanstack/react-router' {
       path: '/registry'
       fullPath: '/registry'
       preLoaderRoute: typeof RegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/protection': {
+      id: '/protection'
+      path: '/protection'
+      fullPath: '/protection'
+      preLoaderRoute: typeof ProtectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingestion': {
@@ -284,6 +324,8 @@ const rootRouteChildren: RootRouteChildren = {
   ForecastRoute: ForecastRoute,
   InboxRoute: InboxRoute,
   IngestionRoute: IngestionRoute,
+  NotificationsRoute: NotificationsRoute,
+  ProtectionRoute: ProtectionRoute,
   RegistryRoute: RegistryRoute,
   ReviewRoute: ReviewRoute,
   SignOffRoute: SignOffRoute,

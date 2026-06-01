@@ -8,14 +8,17 @@ import {
   Loader2,
   TrendingUp,
   AlertTriangle,
+  Paperclip,
+  FileText as FileIcon,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
 
 type Msg =
-  | { id: string; role: "user"; text: string }
+  | { id: string; role: "user"; text: string; attachment?: { name: string; size: string } }
   | { id: string; role: "ai"; kind: "text"; text: string }
   | { id: string; role: "ai"; kind: "clarify" }
   | { id: string; role: "ai"; kind: "status"; steps: string[] }
+  | { id: string; role: "ai"; kind: "pdf-parsed"; name: string; pages: number; entities: string[] }
   | { id: string; role: "ai"; kind: "prediction" };
 
 const SUGGESTIONS = [
@@ -31,10 +34,56 @@ export function AskAiTrigger() {
   const cycle = useCycle();
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
+
+  const onPickFile = (file: File) => {
+    const sizeKB = (file.size / 1024).toFixed(0);
+    const userMsg: Msg = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      text: "Parse this annual report and surface key figures.",
+      attachment: { name: file.name, size: `${sizeKB} KB` },
+    };
+    setMessages((m) => [...m, userMsg]);
+    setTimeout(() => {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `s-${Date.now()}`,
+          role: "ai",
+          kind: "status",
+          steps: [
+            "Uploading PDF to Sherlock",
+            "OCR + table extraction",
+            "Mapping to Banking / Industrials rule pack",
+            "Cross-checking against ingestion manifest",
+          ],
+        },
+      ]);
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `pdf-${Date.now()}`,
+            role: "ai",
+            kind: "pdf-parsed",
+            name: file.name,
+            pages: 142,
+            entities: [
+              "Revenue PKR 54.8B (p.12)",
+              "EBITDA PKR 12.9B (p.14)",
+              "Tractor units 47,210 (p.31)",
+              "KIBOR avg 18.5% (p.88)",
+            ],
+          },
+        ]);
+      }, 3400);
+    }, 300);
+  };
 
   const send = (text: string) => {
     if (!text.trim()) return;
@@ -180,9 +229,51 @@ export function AskAiTrigger() {
                         borderRadius: "12px 12px 2px 12px",
                       }}
                     >
+                      {m.attachment && (
+                        <div
+                          className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
+                          style={{ background: "rgba(255,255,255,0.18)" }}
+                        >
+                          <FileIcon className="h-3.5 w-3.5" />
+                          <span className="font-semibold">{m.attachment.name}</span>
+                          <span className="opacity-70">· {m.attachment.size}</span>
+                        </div>
+                      )}
                       {m.text}
                     </div>
                   </div>
+                );
+              }
+              if (m.kind === "pdf-parsed") {
+                return (
+                  <AiBubble key={m.id}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <FileIcon className="h-4 w-4 text-[var(--color-brand)]" />
+                      <span className="text-[13px] font-semibold">{m.name}</span>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">· {m.pages} pages</span>
+                    </div>
+                    <p className="text-[12px] text-[var(--color-text-secondary)]">
+                      Parsed and mapped to active sector pack. Extracted figures:
+                    </p>
+                    <ul className="mt-2 space-y-1 text-[12px]">
+                      {m.entities.map((e) => (
+                        <li key={e} className="flex items-start gap-1.5">
+                          <Check className="mt-0.5 h-3 w-3 text-[var(--color-success-fg)]" />
+                          <span>{e}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        navigate({ to: "/diff-review" });
+                      }}
+                      className="mt-3 h-8 w-full rounded-md text-[12px] font-semibold text-white"
+                      style={{ background: "var(--color-brand)" }}
+                    >
+                      Send to Diff Review →
+                    </button>
+                  </AiBubble>
                 );
               }
               if (m.kind === "text") {
@@ -306,12 +397,31 @@ export function AskAiTrigger() {
             style={{ borderColor: "var(--color-border-default)" }}
           >
             <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onPickFile(f);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach PDF"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-[var(--color-tag-bg)]"
+              style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") send(input);
               }}
-              placeholder="Ask anything about this model…"
+              placeholder="Ask anything · or attach a PDF…"
               className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)]"
               style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
             />
