@@ -34,10 +34,56 @@ export function AskAiTrigger() {
   const cycle = useCycle();
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
+
+  const onPickFile = (file: File) => {
+    const sizeKB = (file.size / 1024).toFixed(0);
+    const userMsg: Msg = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      text: "Parse this annual report and surface key figures.",
+      attachment: { name: file.name, size: `${sizeKB} KB` },
+    };
+    setMessages((m) => [...m, userMsg]);
+    setTimeout(() => {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `s-${Date.now()}`,
+          role: "ai",
+          kind: "status",
+          steps: [
+            "Uploading PDF to Sherlock",
+            "OCR + table extraction",
+            "Mapping to Banking / Industrials rule pack",
+            "Cross-checking against ingestion manifest",
+          ],
+        },
+      ]);
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `pdf-${Date.now()}`,
+            role: "ai",
+            kind: "pdf-parsed",
+            name: file.name,
+            pages: 142,
+            entities: [
+              "Revenue PKR 54.8B (p.12)",
+              "EBITDA PKR 12.9B (p.14)",
+              "Tractor units 47,210 (p.31)",
+              "KIBOR avg 18.5% (p.88)",
+            ],
+          },
+        ]);
+      }, 3400);
+    }, 300);
+  };
 
   const send = (text: string) => {
     if (!text.trim()) return;
