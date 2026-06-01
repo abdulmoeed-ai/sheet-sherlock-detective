@@ -190,6 +190,15 @@ function Ingestion() {
   const allResolved =
     feedDone && needsAction.every((_, i) => ocrResolved[i + 1]);
 
+  useEffect(() => {
+    if (!allResolved) return;
+    const timer = window.setTimeout(() => {
+      cycleStore.setStatus("diagnosis");
+      navigate({ to: "/diagnosis" });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [allResolved, navigate]);
+
   const startIngestion = () => {
     setRunning(true);
     const initial: FeedRow[] = SOURCES.map((s) => ({
@@ -350,9 +359,9 @@ function Ingestion() {
         staleCount={staleCount}
         downCount={downCount}
         onStart={startIngestion}
-        onReviewDiffs={() => {
-          cycleStore.setStatus("diff-review");
-          navigate({ to: "/diff-review" });
+        onOpenDiagnosis={() => {
+          cycleStore.setStatus("diagnosis");
+          navigate({ to: "/diagnosis" });
         }}
       />
     </PageShell>
@@ -549,13 +558,9 @@ function SourceCard({ s, threshold }: { s: Source; threshold: number }) {
                       <td className="px-2 py-1.5"><ConfPill v={f.confidence} /></td>
                       <td className="px-2 py-1.5 text-[11px]" style={{ color: "var(--color-text-muted)" }}>{f.timestamp}</td>
                       <td className="px-2 py-1.5 text-right">
-                        <a
-                          href={`/diff-review#row-${f.cell}`}
-                          className="text-[10px] font-semibold"
-                          style={{ color: "var(--color-brand)" }}
-                        >
-                          View in diff →
-                        </a>
+                        <span className="text-[10px] font-semibold" style={{ color: "var(--color-brand)" }}>
+                          Diagnosis
+                        </span>
                       </td>
                     </tr>
                   );
@@ -779,7 +784,7 @@ function StickyFooter({
   staleCount,
   downCount,
   onStart,
-  onReviewDiffs,
+  onOpenDiagnosis,
 }: {
   running: boolean;
   file: File | null;
@@ -790,7 +795,7 @@ function StickyFooter({
   staleCount: number;
   downCount: number;
   onStart: () => void;
-  onReviewDiffs: () => void;
+  onOpenDiagnosis: () => void;
 }) {
   const doneCount = feed.filter((r) => r.state === "done").length;
   const totalCount = feed.filter((r) => r.state !== "skipped").length;
@@ -831,12 +836,12 @@ function StickyFooter({
             </div>
           </div>
           <button
-            onClick={onReviewDiffs}
+            onClick={onOpenDiagnosis}
             disabled={!allResolved}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ background: "var(--color-brand)" }}
           >
-            Review diffs →
+            Open diagnosis →
           </button>
         </>
       )}

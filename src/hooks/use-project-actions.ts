@@ -2,9 +2,11 @@ import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-q
 import {
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
+  createExcelExport,
   createComment,
   deleteComment,
   decideBalanceSheetDiagnosis,
+  downloadExcelExport,
   generateAssumptions,
   generateExecutiveBrief,
   recordCfoSignoff,
@@ -47,6 +49,18 @@ export function useStartExtraction(projectId: string) {
   return useMutation<ExtractionJobResponse, Error, boolean | undefined>({
     mutationFn: (force) => startExtraction(projectId, force ?? false),
     onSuccess: () => invalidateProject(queryClient, projectId),
+  });
+}
+
+export function useCreateExcelExport(projectId: string) {
+  return useMutation({
+    mutationFn: () => createExcelExport(projectId),
+  });
+}
+
+export function useDownloadExcelExport(projectId: string) {
+  return useMutation({
+    mutationFn: (exportId: string) => downloadExcelExport(projectId, exportId),
   });
 }
 

@@ -1,6 +1,7 @@
 import { apiBlob, apiFetch, apiStream } from "./client";
 import type {
   AssumptionsGenerateResponse,
+  ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
   ForecastRunResponse,
@@ -225,6 +226,16 @@ export function readLatestArchive(projectId: string) {
 
 export function downloadArchiveAuditJson(projectId: string, archiveId: string) {
   return apiBlob(`/api/projects/${projectId}/archive/${archiveId}/audit.json`);
+}
+
+export function createExcelExport(projectId: string) {
+  return apiFetch<ExcelExportResponse>(`/api/projects/${projectId}/exports/excel`, {
+    method: "POST",
+  });
+}
+
+export function downloadExcelExport(projectId: string, exportId: string) {
+  return apiBlob(`/api/projects/${projectId}/exports/${exportId}/download`);
 }
 
 export function submitForManagerReview(projectId: string, note: string | null) {

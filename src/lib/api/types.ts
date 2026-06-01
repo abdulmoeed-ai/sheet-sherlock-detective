@@ -59,6 +59,7 @@ export interface WorkspaceResponse {
   review: Record<string, unknown>;
   auditEvents: Array<Record<string, unknown>>;
   exportPreview: Record<string, unknown>;
+  diagnosisWorkbook?: Record<string, unknown> | null;
   dashboard: Record<string, unknown>;
   ingestionPreviewSummary?: Record<string, unknown> | null;
   threeStatementCheck?: Record<string, unknown> | null;
@@ -141,6 +142,15 @@ export interface ReviewCommentResponse {
   editedAt: string | null;
   resolvedAt: string | null;
   resolvedBy: string | null;
+}
+
+export interface ExcelExportResponse {
+  id: string;
+  projectId: string;
+  status: string;
+  warnings: Array<Record<string, unknown>>;
+  exportedAt: string | null;
+  downloadUrl: string;
 }
 
 export interface ForecastRunResponse {
