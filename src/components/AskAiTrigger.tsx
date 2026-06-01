@@ -397,12 +397,31 @@ export function AskAiTrigger() {
             style={{ borderColor: "var(--color-border-default)" }}
           >
             <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onPickFile(f);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach PDF"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-[var(--color-tag-bg)]"
+              style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") send(input);
               }}
-              placeholder="Ask anything about this model…"
+              placeholder="Ask anything · or attach a PDF…"
               className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)]"
               style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
             />
