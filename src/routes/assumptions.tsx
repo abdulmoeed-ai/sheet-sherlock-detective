@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { AlertTriangle, FileText, Loader2, Send, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileText, Loader2, Send, Sparkles } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { ApiErrorDetails } from "@/components/ApiErrorDetails";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { useWorkspace } from "@/hooks/use-projects";
 import { useGenerateAssumptions, useSubmitForManagerReview } from "@/hooks/use-project-actions";
-import type { AssumptionsGenerateResponse } from "@/lib/api/types";
+import { getStoredForecast } from "@/lib/forecast-store";
+import type { AssumptionsGenerateResponse, ForecastRunResponse } from "@/lib/api/types";
 
 export const Route = createFileRoute("/assumptions")({
   head: () => ({
@@ -25,10 +27,20 @@ function Assumptions() {
   const generate = useGenerateAssumptions(projectId ?? "");
   const submit = useSubmitForManagerReview(projectId ?? "");
   const [assumptions, setAssumptions] = useState<AssumptionsGenerateResponse | null>(null);
+  const [forecastContext, setForecastContext] = useState<ForecastRunResponse | null>(() =>
+    projectId ? getStoredForecast(projectId) : null,
+  );
   const [note, setNote] = useState("Ready for manager review.");
 
+  useEffect(() => {
+    setForecastContext(projectId ? getStoredForecast(projectId) : null);
+  }, [projectId]);
+
   const runGenerate = async () => {
-    const result = await generate.mutateAsync({ includeForecastDrivers: true, forecast: null });
+    const result = await generate.mutateAsync({
+      includeForecastDrivers: true,
+      forecast: forecastContext as unknown as Record<string, unknown> | null,
+    });
     setAssumptions(result);
   };
 
@@ -50,17 +62,15 @@ function Assumptions() {
         <Card>No project selected.</Card>
       ) : (
         <div className="space-y-5 pb-24">
-          {error && (
-            <div className="flex items-center gap-2 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[13px] text-[var(--color-danger-fg)]">
-              <AlertTriangle className="h-4 w-4" />
-              {error instanceof Error ? error.message : "Request failed."}
-            </div>
-          )}
+          {error && <ApiErrorDetails error={error} fallback="Request failed." />}
           <Card>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-[var(--color-accent-sparkle)]" />
                 <h2 className="text-[15px] font-semibold">Assumptions generation</h2>
+                <Badge tone={forecastContext ? "success" : "warning"}>
+                  {forecastContext ? "Forecast context attached" : "No forecast context"}
+                </Badge>
               </div>
               <Button onClick={runGenerate} disabled={generate.isPending}>
                 {generate.isPending ? (

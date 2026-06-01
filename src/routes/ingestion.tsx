@@ -257,7 +257,7 @@ function Ingestion() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={() => navigate({ to: "/diff-review" })}>Open Diff Review</Button>
+            <Button onClick={() => navigate({ to: "/diagnosis" })}>Open Diagnosis</Button>
           </div>
         </div>
       )}

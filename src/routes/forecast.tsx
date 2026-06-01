@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Play, Sparkles } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { useWorkspace } from "@/hooks/use-projects";
 import { useRunForecast } from "@/hooks/use-project-actions";
+import { getStoredForecast, setStoredForecast } from "@/lib/forecast-store";
 import type { ForecastRunResponse } from "@/lib/api/types";
 
 export const Route = createFileRoute("/forecast")({
@@ -23,17 +24,25 @@ function Forecast() {
   const projectId = useSelectedProjectId();
   const workspace = useWorkspace(projectId);
   const runForecast = useRunForecast(projectId ?? "");
-  const [forecast, setForecast] = useState<ForecastRunResponse | null>(null);
+  const [forecast, setForecast] = useState<ForecastRunResponse | null>(() =>
+    projectId ? getStoredForecast(projectId) : null,
+  );
   const [projectionYears, setProjectionYears] = useState(5);
   const [query, setQuery] = useState("Build base, bull, and bear revenue scenarios.");
 
+  useEffect(() => {
+    setForecast(projectId ? getStoredForecast(projectId) : null);
+  }, [projectId]);
+
   const run = async () => {
+    if (!projectId) return;
     const result = await runForecast.mutateAsync({
       query,
       sourceGroup: "forecast",
       projectionYears,
     });
     setForecast(result);
+    setStoredForecast(projectId, result);
   };
 
   return (

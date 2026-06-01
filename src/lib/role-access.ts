@@ -33,7 +33,6 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/inbox": ["finance_analyst"],
   "/registry": ["finance_analyst", "finance_manager", "cfo", "admin"],
   "/ingestion": ["finance_analyst"],
-  "/diff-review": ["finance_analyst"],
   "/diagnosis": ["finance_analyst"],
   "/forecast": ["finance_analyst"],
   "/assumptions": ["finance_analyst"],

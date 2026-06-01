@@ -7,6 +7,8 @@ import type {
   MappingRulesSummaryResponse,
   ModelArchiveResponse,
   ProjectResponse,
+  ReviewCommentInput,
+  ReviewCommentResponse,
   ReviewHandoffResponse,
   WorkspaceResponse,
 } from "./types";
@@ -91,29 +93,41 @@ export function toggleMappingRule(projectId: string, ruleCode: string, enabled: 
 }
 
 export function listComments(projectId: string) {
-  return apiFetch<Array<Record<string, unknown>>>(`/api/projects/${projectId}/comments`);
+  return apiFetch<ReviewCommentResponse[]>(`/api/projects/${projectId}/comments`);
 }
 
-export function createComment(
-  projectId: string,
-  input: {
-    body: string;
-    fieldId?: string | null;
-    templateCell?: string | null;
-    sheetName?: string | null;
-  },
-) {
-  return apiFetch<Record<string, unknown>>(`/api/projects/${projectId}/comments`, {
+export function createComment(projectId: string, input: ReviewCommentInput) {
+  return apiFetch<ReviewCommentResponse>(`/api/projects/${projectId}/comments`, {
     method: "POST",
     body: input,
   });
 }
 
+export function updateComment(projectId: string, commentId: string, input: ReviewCommentInput) {
+  return apiFetch<ReviewCommentResponse>(`/api/projects/${projectId}/comments/${commentId}`, {
+    method: "PATCH",
+    body: input,
+  });
+}
+
 export function resolveComment(projectId: string, commentId: string) {
-  return apiFetch<Record<string, unknown>>(
+  return apiFetch<ReviewCommentResponse>(
     `/api/projects/${projectId}/comments/${commentId}/resolve`,
     { method: "POST" },
   );
+}
+
+export function reopenComment(projectId: string, commentId: string) {
+  return apiFetch<ReviewCommentResponse>(
+    `/api/projects/${projectId}/comments/${commentId}/reopen`,
+    { method: "POST" },
+  );
+}
+
+export function deleteComment(projectId: string, commentId: string) {
+  return apiFetch<ReviewCommentResponse>(`/api/projects/${projectId}/comments/${commentId}`, {
+    method: "DELETE",
+  });
 }
 
 export function readIngestionPreview(projectId: string, runId?: string | null) {

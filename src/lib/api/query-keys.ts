@@ -8,6 +8,8 @@ export const queryKeys = {
     ["projects", projectId, "extractions", jobId] as const,
   comments: (projectId: string) => ["projects", projectId, "comments"] as const,
   mappingRules: (projectId: string) => ["projects", projectId, "mapping-rules"] as const,
+  adminMappingRules: (projectId: string) =>
+    ["projects", projectId, "mapping-rules", "admin"] as const,
   ingestionPreview: (projectId: string, runId?: string | null) =>
     ["projects", projectId, "ingestion-preview", runId ?? "latest"] as const,
   latestBrief: (projectId: string) => ["projects", projectId, "briefs", "latest"] as const,

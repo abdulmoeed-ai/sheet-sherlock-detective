@@ -3,7 +3,6 @@ import { useSyncExternalStore } from "react";
 export type CycleStatus =
   | "idle"
   | "ingestion"
-  | "diff-review"
   | "diagnosis"
   | "forecast"
   | "assumptions"
@@ -56,16 +55,11 @@ export const cycleStore = {
 };
 
 export function useCycle(): CycleState {
-  return useSyncExternalStore(
-    cycleStore.subscribe,
-    cycleStore.get,
-    cycleStore.get,
-  );
+  return useSyncExternalStore(cycleStore.subscribe, cycleStore.get, cycleStore.get);
 }
 
 export const CYCLE_STEPS: { key: CycleStatus; label: string; to: string }[] = [
   { key: "ingestion", label: "Ingestion", to: "/ingestion" },
-  { key: "diff-review", label: "Diff Review", to: "/diff-review" },
   { key: "diagnosis", label: "Diagnosis", to: "/diagnosis" },
   { key: "forecast", label: "Forecast", to: "/forecast" },
   { key: "assumptions", label: "Assumptions", to: "/assumptions" },

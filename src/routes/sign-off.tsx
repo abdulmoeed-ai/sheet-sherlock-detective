@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { ApiErrorDetails } from "@/components/ApiErrorDetails";
 import { useCfoSignoff } from "@/hooks/use-project-actions";
 import { useWorkspace } from "@/hooks/use-projects";
 import { ApiError } from "@/lib/api/errors";
@@ -155,14 +156,8 @@ function SignOff() {
           />
 
           {signoff.error ? (
-            <div
-              className="mb-5 flex items-center gap-3 rounded-[10px] border px-5 py-3.5"
-              style={{ borderColor: "#FCA5A5" }}
-            >
-              <AlertTriangle className="h-5 w-5 text-[var(--color-danger-fg)]" />
-              <div className="text-[13px] font-semibold text-[var(--color-danger-fg)]">
-                {errorMessage(signoff.error)}
-              </div>
+            <div className="mb-5">
+              <ApiErrorDetails error={signoff.error} fallback="CFO sign-off request failed." />
             </div>
           ) : null}
 

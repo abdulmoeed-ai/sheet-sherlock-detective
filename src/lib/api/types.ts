@@ -119,6 +119,30 @@ export interface ReviewHandoffResponse {
   message: string;
 }
 
+export interface ReviewCommentInput {
+  body: string;
+  fieldId?: string | null;
+  templateCell?: string | null;
+  sheetName?: string | null;
+}
+
+export interface ReviewCommentResponse {
+  id: string;
+  projectId: string;
+  fieldId: string | null;
+  templateCell: string | null;
+  sheetName: string | null;
+  actor: string;
+  body: string;
+  mentions: Record<string, unknown>;
+  status: string;
+  createdAt: string;
+  updatedAt: string | null;
+  editedAt: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
 export interface ForecastRunResponse {
   status: string;
   projectId: string;

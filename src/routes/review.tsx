@@ -3,15 +3,32 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { ApiErrorDetails } from "@/components/ApiErrorDetails";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { queryKeys } from "@/lib/api/query-keys";
-import { listComments } from "@/lib/api/projects";
-import type { WorkspaceResponse } from "@/lib/api/types";
+import { listComments, readLatestExecutiveBrief } from "@/lib/api/projects";
+import type { ReviewCommentResponse, WorkspaceResponse } from "@/lib/api/types";
 import { auditRows, dashboardMetrics } from "@/lib/mappers/workspace";
-import { useCreateComment, useManagerDecision } from "@/hooks/use-project-actions";
+import {
+  useCreateComment,
+  useDeleteComment,
+  useManagerDecision,
+  useReopenComment,
+  useResolveComment,
+  useUpdateComment,
+} from "@/hooks/use-project-actions";
 import { useWorkspace } from "@/hooks/use-projects";
 import { useSelectedProjectId } from "@/lib/project-store";
-import { CheckCircle2, MessageSquare, Send, RotateCcw, FileCheck, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  MessageSquare,
+  Send,
+  RotateCcw,
+  FileCheck,
+  Loader2,
+  Edit3,
+  Trash2,
+} from "lucide-react";
 
 export const Route = createFileRoute("/review")({
   head: () => ({
@@ -110,6 +127,9 @@ type CommentRow = {
   at: string;
   status: string;
   target?: string;
+  fieldId?: string | null;
+  templateCell?: string | null;
+  sheetName?: string | null;
 };
 type LooseRecord = Record<string, unknown>;
 
@@ -120,11 +140,25 @@ function Review() {
   const workspace = useWorkspace(projectId);
   const managerDecision = useManagerDecision(projectId ?? "");
   const createComment = useCreateComment(projectId ?? "");
+  const updateComment = useUpdateComment(projectId ?? "");
+  const resolveComment = useResolveComment(projectId ?? "");
+  const reopenComment = useReopenComment(projectId ?? "");
+  const deleteComment = useDeleteComment(projectId ?? "");
   const [draft, setDraft] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
 
   const commentsQuery = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
+    enabled: !!projectId,
+    retry: false,
+  });
+  const brief = useQuery({
+    queryKey: projectId
+      ? queryKeys.latestBrief(projectId)
+      : ["projects", "none", "briefs", "latest"],
+    queryFn: () => readLatestExecutiveBrief(projectId as string),
     enabled: !!projectId,
     retry: false,
   });
@@ -138,7 +172,12 @@ function Review() {
     : null;
   const project = workspace.data?.project;
   const decisionPending = managerDecision.isPending;
-  const commentPending = createComment.isPending;
+  const commentPending =
+    createComment.isPending ||
+    updateComment.isPending ||
+    resolveComment.isPending ||
+    reopenComment.isPending ||
+    deleteComment.isPending;
   const actionDisabled = !projectId || workspace.isLoading || decisionPending;
   const pageError =
     workspace.error instanceof Error
@@ -147,16 +186,38 @@ function Review() {
   const commentsError =
     commentsQuery.error instanceof Error ? commentsQuery.error.message : "Unable to load comments.";
   const mutationError =
-    managerDecision.error instanceof Error
-      ? managerDecision.error.message
-      : createComment.error instanceof Error
-        ? createComment.error.message
-        : null;
+    managerDecision.error ??
+    createComment.error ??
+    updateComment.error ??
+    resolveComment.error ??
+    reopenComment.error ??
+    deleteComment.error ??
+    null;
 
   const submit = async () => {
     if (!projectId || !draft.trim()) return;
-    await createComment.mutateAsync({ body: draft.trim() });
+    await createComment.mutateAsync({ body: draft.trim(), sheetName: "Manager Review" });
     setDraft("");
+  };
+
+  const startEdit = (comment: CommentRow) => {
+    setEditingCommentId(comment.id);
+    setEditingBody(comment.text);
+  };
+
+  const saveEdit = async (comment: CommentRow) => {
+    if (!projectId || !editingBody.trim()) return;
+    await updateComment.mutateAsync({
+      commentId: comment.id,
+      input: {
+        body: editingBody.trim(),
+        fieldId: comment.fieldId ?? null,
+        templateCell: comment.templateCell ?? null,
+        sheetName: comment.sheetName ?? null,
+      },
+    });
+    setEditingCommentId(null);
+    setEditingBody("");
   };
 
   const sendBack = async () => {
@@ -173,6 +234,7 @@ function Review() {
     cycleStore.setStatus("review");
     await managerDecision.mutateAsync({ action: "approve", note: draft.trim() || null });
     cycleStore.setStatus("approved");
+    await brief.refetch();
     navigate({ to: "/sign-off" });
   };
 
@@ -228,10 +290,46 @@ function Review() {
       ) : (
         <>
           {mutationError ? (
-            <div className="mb-5 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
-              {mutationError}
+            <div className="mb-5">
+              <ApiErrorDetails error={mutationError} fallback="Manager review request failed." />
             </div>
           ) : null}
+
+          <Card className="mb-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-[15px] font-semibold">Manager approval handoff</h3>
+                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                  Latest executive brief status after approval.
+                </p>
+              </div>
+              {brief.isLoading ? (
+                <Badge tone="neutral">Checking brief</Badge>
+              ) : brief.data ? (
+                <Badge tone={brief.data.status === "generated" ? "success" : "info"}>
+                  {brief.data.status}
+                </Badge>
+              ) : (
+                <Badge tone="warning">No brief yet</Badge>
+              )}
+            </div>
+            {brief.data ? (
+              <div className="mt-3 grid grid-cols-3 gap-3 text-[12px]">
+                <div>
+                  <div className="text-[var(--color-text-muted)]">Brief ID</div>
+                  <div className="mt-1 font-mono">{brief.data.id}</div>
+                </div>
+                <div>
+                  <div className="text-[var(--color-text-muted)]">Version</div>
+                  <div className="mt-1 font-semibold">{brief.data.version}</div>
+                </div>
+                <div>
+                  <div className="text-[var(--color-text-muted)]">Generated</div>
+                  <div className="mt-1">{formatDate(brief.data.createdAt)}</div>
+                </div>
+              </div>
+            ) : null}
+          </Card>
 
           <Card className="mb-5">
             <div className="mb-3 flex items-center justify-between">
@@ -369,13 +467,79 @@ function Review() {
                         {comment.at}
                       </span>
                     </div>
-                    <div className="mt-1 text-[13px]">{comment.text}</div>
+                    {editingCommentId === comment.id ? (
+                      <div className="mt-2 space-y-2">
+                        <textarea
+                          value={editingBody}
+                          onChange={(event) => setEditingBody(event.target.value)}
+                          className="min-h-[72px] w-full rounded-md border px-3 py-2 text-[13px]"
+                          style={{ borderColor: "var(--color-border-strong)" }}
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setEditingCommentId(null);
+                              setEditingBody("");
+                            }}
+                            disabled={commentPending}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={() => saveEdit(comment)}
+                            disabled={!editingBody.trim() || commentPending}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-[13px]">{comment.text}</div>
+                    )}
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
                       <Badge tone={comment.status === "resolved" ? "success" : "warning"}>
                         {comment.status}
                       </Badge>
                       {comment.target ? <span>{comment.target}</span> : null}
                     </div>
+                    {editingCommentId !== comment.id ? (
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => startEdit(comment)}
+                          disabled={commentPending}
+                        >
+                          <Edit3 className="h-4 w-4" />
+                          Edit
+                        </Button>
+                        {comment.status === "resolved" ? (
+                          <Button
+                            variant="secondary"
+                            onClick={() => reopenComment.mutate(comment.id)}
+                            disabled={commentPending}
+                          >
+                            Reopen
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            onClick={() => resolveComment.mutate(comment.id)}
+                            disabled={commentPending}
+                          >
+                            Resolve
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          onClick={() => deleteComment.mutate(comment.id)}
+                          disabled={commentPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ol>
@@ -543,16 +707,20 @@ function reviewRevisionOverrides(workspace?: WorkspaceResponse): OverrideRow[] {
   });
 }
 
-function commentRows(rawComments?: LooseRecord[]): CommentRow[] {
+function commentRows(rawComments?: ReviewCommentResponse[] | LooseRecord[]): CommentRow[] {
   return (rawComments ?? []).map((comment, index) => {
-    const target = firstString(comment.templateCell, comment.sheetName, comment.fieldId, "");
+    const item = comment as LooseRecord;
+    const target = firstString(item.templateCell, item.sheetName, item.fieldId, "");
     return {
-      id: stringValue(comment.id, `comment-${index}`),
-      author: stringValue(comment.actor ?? comment.author ?? comment.user, "Reviewer"),
-      text: stringValue(comment.body ?? comment.text ?? comment.comment, ""),
-      at: formatDate(stringValue(comment.createdAt ?? comment.updatedAt, "")),
-      status: stringValue(comment.status, "open"),
+      id: stringValue(item.id, `comment-${index}`),
+      author: stringValue(item.actor ?? item.author ?? item.user, "Reviewer"),
+      text: stringValue(item.body ?? item.text ?? item.comment, ""),
+      at: formatDate(stringValue(item.createdAt ?? item.updatedAt, "")),
+      status: stringValue(item.status, "open"),
       target: target || undefined,
+      fieldId: stringOrNull(item.fieldId),
+      templateCell: stringOrNull(item.templateCell),
+      sheetName: stringOrNull(item.sheetName),
     };
   });
 }
@@ -627,4 +795,8 @@ function stringValue(value: unknown, fallback: undefined): string | undefined;
 function stringValue(value: unknown, fallback: string | undefined): string | undefined {
   if (value === undefined || value === null || value === "") return fallback;
   return String(value);
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }

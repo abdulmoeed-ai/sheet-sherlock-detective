@@ -13,11 +13,13 @@
 ## Implementation Scope
 
 In scope:
+
 - Add frontend API client, DTOs, auth store, query keys, and hooks.
 - Add Login/Register role selection for Analyst, Manager, and CFO; Admin login is supported for seeded/admin-created users because backend self-service registration does not currently accept `admin`.
 - Add a Manager Request form for creating analyst work requests.
 - Treat `/inbox` as the renamed Requests tab where analysts see manager-generated requests.
 - Replace static data on all workflow screens with backend API reads and mutations.
+- Remove the Diff Review frontend surface; analysts move from ingestion into diagnosis/review-cell resolution without a separate `/diff-review` route.
 - Route Analyst, Manager, CFO, and Admin users to different default experiences.
 - Filter `src/components/Sidebar.tsx` menus to show only the items relevant to the logged-in user role.
 - Surface backend error details in UI.
@@ -25,6 +27,7 @@ In scope:
 - Record any unclear implementation detail in `docs/implementation/api-integration/03-open-questions.md` and ask the user instead of assuming.
 
 Out of scope:
+
 - Backend schema or permission changes.
 - Replacing backend archive PDF support; backend currently reports `pdfAvailable`.
 - Self-service Admin registration unless the backend `UserCreate` contract changes.
@@ -33,6 +36,7 @@ Out of scope:
 ## File Structure
 
 Create:
+
 - `src/lib/api/config.ts`: API and WebSocket URL helpers.
 - `src/lib/api/errors.ts`: typed error class and backend detail parsing.
 - `src/lib/api/types.ts`: TypeScript DTOs matching `backend/app/schemas/auth.py` and `backend/app/schemas/projects.py`.
@@ -55,6 +59,7 @@ Create:
 - `src/routes/login.tsx`: login/register screen with Analyst/Manager/CFO selector and support for Admin login.
 
 Modify:
+
 - `src/router.tsx`: QueryClient defaults.
 - `src/routes/__root.tsx`: auth hydration, route protection shell, Ask AI project context.
 - `src/components/Sidebar.tsx`: user identity, role label, and role-filtered nav for Analyst, Manager, CFO, and Admin.
@@ -65,7 +70,6 @@ Modify:
 - `src/routes/inbox.tsx`: analyst Inbox for manager-generated analysis requests.
 - `src/routes/registry.tsx`: project registry from backend projects.
 - `src/routes/ingestion.tsx`: source registry, mapping rules, upload, extraction, progress.
-- `src/routes/diff-review.tsx`: workspace review rows and review-cell mutations.
 - `src/routes/diagnosis.tsx`: workbook preview, diagnosis, comments, review-cell edits.
 - `src/routes/forecast.tsx`: backend forecast response.
 - `src/routes/assumptions.tsx`: backend assumptions generation and submit-to-manager handoff.
@@ -75,6 +79,7 @@ Modify:
 - `src/routes/sources.tsx`: Admin source registry and admin mapping-rule entry points where project context exists.
 
 Test:
+
 - Add `src/lib/api/client.test.ts`.
 - Add `src/lib/role-access.test.ts`.
 - Add `src/lib/mappers/workspace.test.ts`.
@@ -83,6 +88,7 @@ Test:
 ## Task 1: API Foundation
 
 **Files:**
+
 - Create: `src/lib/api/config.ts`
 - Create: `src/lib/api/errors.ts`
 - Create: `src/lib/auth-store.ts`
@@ -127,7 +133,9 @@ describe("apiFetch", () => {
 
   it("adds a bearer token when one is stored", async () => {
     setAuthTokens({ accessToken: "access-1", refreshToken: "refresh-1" });
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await apiFetch<{ ok: boolean }>("/api/projects");
@@ -136,7 +144,16 @@ describe("apiFetch", () => {
   });
 
   it("throws the backend detail string when the backend returns an error", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Only PDF files are supported." }), { status: 400 })));
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail: "Only PDF files are supported." }), {
+            status: 400,
+          }),
+        ),
+    );
 
     await expect(apiFetch("/api/projects/p1/documents")).rejects.toMatchObject({
       status: 400,
@@ -250,7 +267,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const response = await fetch(apiUrl(path), {
     ...options,
     headers,
-    body: options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
+    body:
+      options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
   });
   if (!response.ok) {
     const payload = await safeJson(response);
@@ -282,7 +300,8 @@ async function safeJson(response: Response): Promise<any> {
 
 function backendMessage(payload: any, status: number): string {
   if (typeof payload?.detail === "string") return payload.detail;
-  if (payload?.detail?.message && typeof payload.detail.message === "string") return payload.detail.message;
+  if (payload?.detail?.message && typeof payload.detail.message === "string")
+    return payload.detail.message;
   return `Request failed with ${status}`;
 }
 ```
@@ -319,6 +338,7 @@ Expected: tests pass.
 ## Task 2: Typed API Modules
 
 **Files:**
+
 - Create: `src/lib/api/types.ts`
 - Create: `src/lib/api/auth.ts`
 - Create: `src/lib/api/analysis-requests.ts`
@@ -448,7 +468,12 @@ Create `src/lib/api/auth.ts`:
 import { apiFetch } from "./client";
 import type { BackendRole, TokenResponse, UserRead } from "./types";
 
-export function registerUser(input: { email: string; name: string; password: string; role: Extract<BackendRole, "finance_analyst" | "finance_manager" | "cfo"> }) {
+export function registerUser(input: {
+  email: string;
+  name: string;
+  password: string;
+  role: Extract<BackendRole, "finance_analyst" | "finance_manager" | "cfo">;
+}) {
   return apiFetch<UserRead>("/api/auth/register", { method: "POST", body: input });
 }
 
@@ -457,7 +482,10 @@ export function loginUser(input: { email: string; password: string }) {
 }
 
 export function refreshToken(refreshToken: string) {
-  return apiFetch<TokenResponse>("/api/auth/refresh", { method: "POST", body: { refresh_token: refreshToken } });
+  return apiFetch<TokenResponse>("/api/auth/refresh", {
+    method: "POST",
+    body: { refresh_token: refreshToken },
+  });
 }
 
 export function readCurrentUser() {
@@ -490,15 +518,23 @@ export function listAnalysisRequests() {
 }
 
 export function createAnalysisRequest(input: AnalysisRequestCreateInput) {
-  return apiFetch<AnalysisRequestResponse>("/api/analysis-requests", { method: "POST", body: input });
+  return apiFetch<AnalysisRequestResponse>("/api/analysis-requests", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function acknowledgeAnalysisRequest(requestId: string) {
-  return apiFetch<AnalysisRequestResponse>(`/api/analysis-requests/${requestId}/acknowledge`, { method: "POST" });
+  return apiFetch<AnalysisRequestResponse>(`/api/analysis-requests/${requestId}/acknowledge`, {
+    method: "POST",
+  });
 }
 
 export function convertAnalysisRequestToProject(requestId: string) {
-  return apiFetch<AnalysisRequestResponse>(`/api/analysis-requests/${requestId}/convert-to-project`, { method: "POST" });
+  return apiFetch<AnalysisRequestResponse>(
+    `/api/analysis-requests/${requestId}/convert-to-project`,
+    { method: "POST" },
+  );
 }
 ```
 
@@ -508,7 +544,12 @@ Create `src/lib/api/projects.ts` with endpoint wrappers for every project API li
 
 ```ts
 import { apiBlob, apiFetch } from "./client";
-import type { ExtractionJobResponse, ProjectResponse, ReviewHandoffResponse, WorkspaceResponse } from "./types";
+import type {
+  ExtractionJobResponse,
+  ProjectResponse,
+  ReviewHandoffResponse,
+  WorkspaceResponse,
+} from "./types";
 
 export function listProjects() {
   return apiFetch<ProjectResponse[]>("/api/projects");
@@ -521,7 +562,13 @@ export function createProject(input: {
   fiscalYear?: string | null;
   currencyUnit?: string | null;
   template: "Millat - Template.xlsx";
-  teamMembers: Array<{ name: string; email: string; initials?: string | null; role: string; canRemove: boolean }>;
+  teamMembers: Array<{
+    name: string;
+    email: string;
+    initials?: string | null;
+    role: string;
+    canRemove: boolean;
+  }>;
 }) {
   return apiFetch<ProjectResponse>("/api/projects", { method: "POST", body: input });
 }
@@ -537,7 +584,10 @@ export function uploadDocument(projectId: string, file: File) {
 }
 
 export function startExtraction(projectId: string, force = false) {
-  return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions?force=${force ? "true" : "false"}`, { method: "POST" });
+  return apiFetch<ExtractionJobResponse>(
+    `/api/projects/${projectId}/extractions?force=${force ? "true" : "false"}`,
+    { method: "POST" },
+  );
 }
 
 export function readExtractionJob(projectId: string, jobId: string) {
@@ -549,11 +599,20 @@ export function readDocumentPageImage(projectId: string, documentId: string, pdf
 }
 
 export function submitForManagerReview(projectId: string, note: string | null) {
-  return apiFetch<ReviewHandoffResponse>(`/api/projects/${projectId}/review/submit`, { method: "POST", body: { note } });
+  return apiFetch<ReviewHandoffResponse>(`/api/projects/${projectId}/review/submit`, {
+    method: "POST",
+    body: { note },
+  });
 }
 
-export function recordManagerDecision(projectId: string, input: { action: "approve" | "send_back"; note?: string | null }) {
-  return apiFetch<ReviewHandoffResponse>(`/api/projects/${projectId}/review/manager-decision`, { method: "POST", body: input });
+export function recordManagerDecision(
+  projectId: string,
+  input: { action: "approve" | "send_back"; note?: string | null },
+) {
+  return apiFetch<ReviewHandoffResponse>(`/api/projects/${projectId}/review/manager-decision`, {
+    method: "POST",
+    body: input,
+  });
 }
 ```
 
@@ -582,13 +641,15 @@ export const queryKeys = {
   projects: ["projects"] as const,
   workspace: (projectId: string) => ["projects", projectId, "workspace"] as const,
   sourceRegistry: ["source-registry"] as const,
-  extractionJob: (projectId: string, jobId: string) => ["projects", projectId, "extractions", jobId] as const,
+  extractionJob: (projectId: string, jobId: string) =>
+    ["projects", projectId, "extractions", jobId] as const,
 };
 ```
 
 ## Task 3: Auth, Roles, And Navigation
 
 **Files:**
+
 - Create: `src/lib/role-access.ts`
 - Create: `src/hooks/use-auth.ts`
 - Create: `src/routes/login.tsx`
@@ -609,7 +670,9 @@ export function frontendRole(role: BackendRole): FrontendRole {
   return role;
 }
 
-export function backendRole(role: Exclude<FrontendRole, "admin">): "finance_analyst" | "finance_manager" | "cfo" {
+export function backendRole(
+  role: Exclude<FrontendRole, "admin">,
+): "finance_analyst" | "finance_manager" | "cfo" {
   if (role === "manager") return "finance_manager";
   if (role === "analyst") return "finance_analyst";
   return "cfo";
@@ -634,7 +697,6 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/inbox": ["finance_analyst"],
   "/registry": ["finance_analyst", "finance_manager", "cfo", "admin"],
   "/ingestion": ["finance_analyst"],
-  "/diff-review": ["finance_analyst"],
   "/diagnosis": ["finance_analyst"],
   "/forecast": ["finance_analyst"],
   "/assumptions": ["finance_analyst"],
@@ -736,6 +798,7 @@ export function useLogout() {
 - [ ] **Step 4: Add `/login` route**
 
 Create `src/routes/login.tsx`:
+
 - Tabs or segmented control for registration: `Analyst`, `Manager`, `CFO`.
 - Admin users log in with seeded/admin-created credentials; do not show Admin registration unless backend `UserCreate` accepts it.
 - Login form: email/password.
@@ -746,6 +809,7 @@ Create `src/routes/login.tsx`:
 - [ ] **Step 5: Protect root routes**
 
 Modify `src/routes/__root.tsx`:
+
 - Use `useCurrentUser`.
 - If no token and route is not `/login`, redirect or render login link.
 - If `canSeeRoute(user.role, pathname)` is false, redirect to `defaultRouteForRole(user.role)`.
@@ -753,12 +817,13 @@ Modify `src/routes/__root.tsx`:
 - [ ] **Step 6: Role-filter sidebar**
 
 Modify `src/components/Sidebar.tsx`:
+
 - Read `useCurrentUser`.
 - Display user initials, name, and `roleLabel(user.role)`.
 - Filter nav items with `canSeeRoute`.
 - Define `roles` on each nav item and render only items where `roles.includes(currentUser.role)`.
 - Expected Sidebar visibility:
-  - Analyst: Dashboard, Inbox, Model Registry, Ingestion, Diff Review, Diagnosis, Forecast, Assumptions, Notifications, Audit Trail.
+  - Analyst: Dashboard, Inbox, Model Registry, Ingestion, Diagnosis, Forecast, Assumptions, Notifications, Audit Trail.
   - Manager: Dashboard, Model Registry, Manager Review, Notifications, Audit Trail.
   - CFO: Dashboard, Model Registry, CFO Sign-Off, Notifications, Audit Trail.
   - Admin: Dashboard, Model Registry, Sources Admin, Protection, Notifications, Audit Trail.
@@ -766,6 +831,7 @@ Modify `src/components/Sidebar.tsx`:
 ## Task 4: Project, Manager Request Form, And Analyst Inbox State
 
 **Files:**
+
 - Create: `src/lib/project-store.ts`
 - Create: `src/hooks/use-analysis-requests.ts`
 - Create: `src/hooks/use-projects.ts`
@@ -802,7 +868,12 @@ Create `src/hooks/use-analysis-requests.ts`:
 
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { acknowledgeAnalysisRequest, convertAnalysisRequestToProject, createAnalysisRequest, listAnalysisRequests } from "@/lib/api/analysis-requests";
+import {
+  acknowledgeAnalysisRequest,
+  convertAnalysisRequestToProject,
+  createAnalysisRequest,
+  listAnalysisRequests,
+} from "@/lib/api/analysis-requests";
 import { queryKeys } from "@/lib/api/query-keys";
 
 export function useAnalysisRequests() {
@@ -868,6 +939,7 @@ export function useWorkspace(projectId: string | null) {
 - [ ] **Step 3: Replace Inbox seed data**
 
 Modify `src/routes/inbox.tsx`:
+
 - Replace `SEED` and local `items`.
 - Keep the route label and screen copy as `Inbox`, not `Requests`.
 - Treat Inbox as the analyst view of requests generated by the analyst's manager.
@@ -879,6 +951,7 @@ Modify `src/routes/inbox.tsx`:
 - [ ] **Step 4: Add Manager Request form**
 
 Modify `src/routes/index.tsx` for Manager:
+
 - Show a form titled `Request` or `New Request`.
 - The form creates analyst work requests and must include assigned analyst email, company, symbol, sector, fiscal year, priority, due date, and note.
 - The form submits this payload shape:
@@ -902,6 +975,7 @@ Modify `src/routes/index.tsx` for Manager:
 - Do not create a separate manager `Requests` tab unless a future requirement asks for it; manager request creation belongs on the manager dashboard for this phase.
 
 Modify `src/routes/index.tsx` for Analyst:
+
 - Show project list from `useProjects`.
 - Selecting a project stores selected project id and opens workflow.
 - Empty state points to `/inbox`.
@@ -909,6 +983,7 @@ Modify `src/routes/index.tsx` for Analyst:
 - [ ] **Step 5: Registry from projects**
 
 Modify `src/routes/registry.tsx`:
+
 - Replace `modelRegistry` static data with `useProjects`.
 - Use `project.companyName`, `project.fiscalYear`, `project.status`, `project.reviewProgress`, and `project.updatedAt`.
 - "Begin" creates or selects a backend project, then stores selected project id and navigates to `/ingestion`.
@@ -916,6 +991,7 @@ Modify `src/routes/registry.tsx`:
 ## Task 5: Ingestion And Progress
 
 **Files:**
+
 - Create: `src/hooks/use-project-actions.ts`
 - Create: `src/hooks/use-progress-stream.ts`
 - Modify: `src/routes/ingestion.tsx`
@@ -925,6 +1001,7 @@ Modify `src/routes/registry.tsx`:
 - [ ] **Step 1: Add action hooks**
 
 Create `src/hooks/use-project-actions.ts` with mutations for:
+
 - `uploadDocument`
 - `startExtraction`
 - `submitForManagerReview`
@@ -940,6 +1017,7 @@ Each mutation should invalidate `queryKeys.workspace(projectId)` on success.
 - [ ] **Step 2: Add progress stream hook**
 
 Create `src/hooks/use-progress-stream.ts`:
+
 - Build URL with `wsUrl("/api/ws/projects/${projectId}/progress")`.
 - Maintain latest event array.
 - Close socket on unmount or project change.
@@ -948,6 +1026,7 @@ Create `src/hooks/use-progress-stream.ts`:
 - [ ] **Step 3: Replace ingestion route data**
 
 Modify `src/routes/ingestion.tsx`:
+
 - Load selected project id from `project-store`.
 - Read workspace and source registry.
 - Read mapping rules and block extraction until acknowledged.
@@ -959,6 +1038,7 @@ Modify `src/routes/ingestion.tsx`:
 - [ ] **Step 4: Source preview images**
 
 Modify `src/components/SourcePreviewPanel.tsx`:
+
 - If source evidence includes `documentId` and zero-based `pdfPageIndex`, call `readDocumentPageImage`.
 - Render returned PNG as an object URL.
 - Keep the current synthetic preview only when backend evidence lacks document/page metadata.
@@ -966,6 +1046,7 @@ Modify `src/components/SourcePreviewPanel.tsx`:
 - [ ] **Step 5: Source registry screen**
 
 Modify `src/routes/sources.tsx`:
+
 - Replace hardcoded `SOURCES` with `GET /api/source-registry`.
 - Restrict route to Admin via `role-access`.
 - Render source metadata from the backend registry.
@@ -975,9 +1056,9 @@ Modify `src/routes/sources.tsx`:
 ## Task 6: Review, Diagnosis, Forecast, And Assumptions
 
 **Files:**
+
 - Create: `src/lib/mappers/workspace.ts`
 - Test: `src/lib/mappers/workspace.test.ts`
-- Modify: `src/routes/diff-review.tsx`
 - Modify: `src/routes/diagnosis.tsx`
 - Modify: `src/routes/forecast.tsx`
 - Modify: `src/routes/assumptions.tsx`
@@ -985,7 +1066,8 @@ Modify `src/routes/sources.tsx`:
 - [ ] **Step 1: Add workspace mapper**
 
 Create `src/lib/mappers/workspace.ts`:
-- `reviewRows(workspace)` returns rows for diff review from `workspace.review`.
+
+- `reviewRows(workspace)` returns rows for diagnosis/review-cell workflows from `workspace.review`.
 - `workbookSheets(workspace)` returns workbook sheets from `workspace.exportPreview`.
 - `auditRows(workspace)` returns normalized `workspace.auditEvents`.
 - `dashboardMetrics(workspace)` returns cards from `workspace.dashboard`.
@@ -1019,17 +1101,14 @@ describe("workspace mappers", () => {
 });
 ```
 
-- [ ] **Step 3: Wire diff review**
+- [ ] **Step 3: Remove Diff Review route**
 
-Modify `src/routes/diff-review.tsx`:
-- Replace `DIFFS` with `reviewRows(workspace)`.
-- Accept calls `PATCH /review-cells/{field_id}` with `{ "action": "accept" }`.
-- Edit calls `{ "action": "edit", "value": draft, "note": reason }`.
-- Flag calls `{ "action": "flag", "note": reason }`.
+Remove `src/routes/diff-review.tsx`, remove `/diff-review` from `src/lib/role-access.ts`, remove the Sidebar nav item, and route ingestion follow-up actions to `/diagnosis`.
 
 - [ ] **Step 4: Wire diagnosis**
 
 Modify `src/routes/diagnosis.tsx`:
+
 - Replace `ROWS`, `ISSUES`, and local override state with `workbookSheets(workspace)` and latest diagnosis.
 - Recheck button calls `POST /diagnosis/balance-sheet/run`.
 - Accept/apply calls diagnosis accept/apply endpoints.
@@ -1039,6 +1118,7 @@ Modify `src/routes/diagnosis.tsx`:
 - [ ] **Step 5: Wire forecast**
 
 Modify `src/routes/forecast.tsx`:
+
 - Replace `BASE_SCENARIOS` with `POST /forecast/run`.
 - Use returned `scenarios`, `assumptions`, `citations`, and `warnings`.
 - Keep macro sliders as local overlays and clearly mark values as what-if edits until persisted by a future backend endpoint.
@@ -1046,6 +1126,7 @@ Modify `src/routes/forecast.tsx`:
 - [ ] **Step 6: Wire assumptions**
 
 Modify `src/routes/assumptions.tsx`:
+
 - Generate rows with `POST /assumptions/generate`.
 - Use latest forecast response as the `forecast` request body when available.
 - Submit button calls `POST /review/submit`.
@@ -1054,6 +1135,7 @@ Modify `src/routes/assumptions.tsx`:
 ## Task 7: Manager Review, Briefs, Audit, And Ask AI
 
 **Files:**
+
 - Create: `src/hooks/use-ask-ai-stream.ts`
 - Modify: `src/routes/review.tsx`
 - Modify: `src/routes/sign-off.tsx`
@@ -1064,6 +1146,7 @@ Modify `src/routes/assumptions.tsx`:
 - [ ] **Step 1: Manager review**
 
 Modify `src/routes/review.tsx`:
+
 - Restrict route to Manager via `role-access`.
 - Read selected project workspace.
 - Render KPIs from `workspace.dashboard`.
@@ -1075,6 +1158,7 @@ Modify `src/routes/review.tsx`:
 - [ ] **Step 2: CFO sign-off route**
 
 Modify `src/routes/sign-off.tsx`:
+
 - Restrict route to CFO via `role-access`.
 - Read selected project latest brief with `GET /briefs/latest`.
 - Approve or reject with `POST /review/cfo-signoff`.
@@ -1083,6 +1167,7 @@ Modify `src/routes/sign-off.tsx`:
 - [ ] **Step 3: Audit route**
 
 Modify `src/routes/audit.tsx`:
+
 - Replace static `log` with `workspace.auditEvents`.
 - Replace export JSON with `GET /archive/latest` then `GET /archive/{archive_id}/audit.json`.
 - Keep local signed PDF export disabled or labeled unavailable when `pdfAvailable` is false.
@@ -1090,6 +1175,7 @@ Modify `src/routes/audit.tsx`:
 - [ ] **Step 4: Ask AI stream**
 
 Create `src/hooks/use-ask-ai-stream.ts`:
+
 - POST to `/api/projects/{project_id}/ask-ai`.
 - Send `question`, `sessionId`, `routePath`, `screenName`, `sourceIds`, `documentIds`, `filters`, and `includeExternalSources`.
 - Read `text/event-stream` with `ReadableStreamDefaultReader`.
@@ -1097,6 +1183,7 @@ Create `src/hooks/use-ask-ai-stream.ts`:
 - On backend error, show parsed backend detail.
 
 Modify `AskAiTrigger` and `AskAiPanel`:
+
 - Use selected project id.
 - Include current route path and screen name on every question.
 - Disable Ask AI until a project is selected.
@@ -1109,7 +1196,7 @@ Modify `AskAiTrigger` and `AskAiPanel`:
 - [ ] Login as Analyst: `/inbox` loads assigned requests from backend.
 - [ ] Analyst accepts and converts a request to a project.
 - [ ] Analyst uploads a PDF and sees backend extraction progress or exact backend failure detail.
-- [ ] Analyst can review cells, run diagnosis, generate forecast, generate assumptions, and submit for manager review.
+- [ ] Analyst can resolve review-cell blockers through the diagnosis/workflow screens, run diagnosis, generate forecast, generate assumptions, and submit for manager review.
 - [ ] Login as Manager: dashboard shows the Manager Request form and existing analysis requests.
 - [ ] Manager can create a request from the dashboard form.
 - [ ] Manager can open a submitted project review pack if backend project access allows it.

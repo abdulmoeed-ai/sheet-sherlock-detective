@@ -3,7 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { readSourceRegistry } from "@/lib/api/source-registry";
+import { readAdminMappingRules } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
+import { useToggleMappingRule } from "@/hooks/use-project-actions";
+import { useSelectedProjectId } from "@/lib/project-store";
 import { RefreshCw, AlertTriangle, CheckCircle2, Activity, Globe2 } from "lucide-react";
 
 export const Route = createFileRoute("/sources")({
@@ -28,6 +31,16 @@ interface SourceRow extends SourceRecord {
   enabled?: boolean;
   allowedDomains: string[];
   groups: string[];
+}
+
+interface MappingRuleRow {
+  code: string;
+  title: string;
+  category: string;
+  severity: string;
+  description: string;
+  enabled: boolean;
+  sourceReference?: string;
 }
 
 const PRIMARY_FIELDS = new Set([
@@ -58,14 +71,26 @@ function statusBadge(enabled: boolean | undefined) {
 }
 
 function Sources() {
+  const projectId = useSelectedProjectId();
+  const toggleMappingRule = useToggleMappingRule(projectId ?? "");
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: queryKeys.sourceRegistry,
     queryFn: readSourceRegistry,
   });
+  const mappingRules = useQuery({
+    queryKey: projectId
+      ? queryKeys.adminMappingRules(projectId)
+      : ["projects", "none", "mapping-rules", "admin"],
+    queryFn: () => readAdminMappingRules(projectId as string),
+    enabled: !!projectId,
+    retry: false,
+  });
 
   const sources = (data?.sources ?? []).map(normalizeSource);
+  const rules = (mappingRules.data?.rules ?? []).map(normalizeRule);
   const disabled = sources.filter((s) => s.enabled === false);
   const totalDomains = sources.reduce((count, source) => count + source.allowedDomains.length, 0);
+  const disabledRules = rules.filter((rule) => !rule.enabled);
 
   return (
     <PageShell
@@ -116,6 +141,51 @@ function Sources() {
         ) : null}
         {!isLoading && !isError && sources.length === 0 ? <EmptyState /> : null}
         {!isLoading && !isError && sources.length > 0 ? <SourceTable sources={sources} /> : null}
+      </Card>
+
+      <Card className="mt-5">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-semibold">Mapping rules</h2>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Admin controls for backend extraction rule availability.
+            </p>
+          </div>
+          {mappingRules.data ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Badge tone="info">{mappingRules.data.enabledRulesCount} enabled</Badge>
+              <Badge tone={disabledRules.length > 0 ? "warning" : "success"}>
+                {disabledRules.length} disabled
+              </Badge>
+            </div>
+          ) : null}
+        </div>
+        {!projectId ? (
+          <div className="text-[13px] text-[var(--color-text-muted)]">
+            Select a project to manage mapping rules.
+          </div>
+        ) : mappingRules.isLoading ? (
+          <LoadingState />
+        ) : mappingRules.isError ? (
+          <ErrorState
+            title="Mapping rules failed to load"
+            message={
+              mappingRules.error instanceof Error
+                ? mappingRules.error.message
+                : "Unable to load mapping rules."
+            }
+          />
+        ) : rules.length === 0 ? (
+          <EmptyState title="No mapping rules configured" />
+        ) : (
+          <MappingRulesTable
+            rules={rules}
+            pending={toggleMappingRule.isPending}
+            onToggle={(rule) =>
+              toggleMappingRule.mutate({ ruleCode: rule.code, enabled: !rule.enabled })
+            }
+          />
+        )}
       </Card>
     </PageShell>
   );
@@ -177,7 +247,13 @@ function LoadingState() {
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({
+  message,
+  title = "Source registry failed to load",
+}: {
+  message: string;
+  title?: string;
+}) {
   return (
     <div
       className="flex items-center gap-3 rounded-[10px] border px-5 py-4"
@@ -185,25 +261,84 @@ function ErrorState({ message }: { message: string }) {
     >
       <AlertTriangle className="h-5 w-5 text-[var(--color-danger-fg)]" />
       <div>
-        <div className="text-[13px] font-semibold text-[var(--color-danger-fg)]">
-          Source registry failed to load
-        </div>
+        <div className="text-[13px] font-semibold text-[var(--color-danger-fg)]">{title}</div>
         <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">{message}</div>
       </div>
     </div>
   );
 }
 
-function EmptyState() {
+function EmptyState({ title = "No sources configured" }: { title?: string }) {
   return (
     <div
       className="rounded-[10px] border border-dashed px-5 py-8 text-center"
       style={{ borderColor: "var(--color-border-default)" }}
     >
-      <div className="text-[14px] font-semibold">No sources configured</div>
+      <div className="text-[14px] font-semibold">{title}</div>
       <div className="mt-1 text-[12px] text-[var(--color-text-muted)]">
         The backend returned an empty source registry.
       </div>
+    </div>
+  );
+}
+
+function MappingRulesTable({
+  rules,
+  pending,
+  onToggle,
+}: {
+  rules: MappingRuleRow[];
+  pending: boolean;
+  onToggle: (rule: MappingRuleRow) => void;
+}) {
+  return (
+    <div className="max-h-[520px] overflow-auto">
+      <table className="w-full text-[13px]">
+        <thead className="border-b text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
+          <tr>
+            <th className="py-2 text-left">Rule</th>
+            <th className="text-left">Category</th>
+            <th className="text-left">Severity</th>
+            <th className="text-left">Status</th>
+            <th className="text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((rule) => (
+            <tr key={rule.code} className="border-b align-top last:border-0">
+              <td className="py-3">
+                <div className="font-semibold">
+                  {rule.code} · {rule.title}
+                </div>
+                <div className="mt-1 max-w-[620px] text-[12px] text-[var(--color-text-muted)]">
+                  {rule.description}
+                </div>
+                {rule.sourceReference ? (
+                  <div className="mt-1 font-mono text-[11px] text-[var(--color-text-muted)]">
+                    {rule.sourceReference}
+                  </div>
+                ) : null}
+              </td>
+              <td className="py-3">{rule.category}</td>
+              <td className="py-3">
+                <Badge tone={rule.severity === "Critical" ? "danger" : "neutral"}>
+                  {rule.severity}
+                </Badge>
+              </td>
+              <td className="py-3">{statusBadge(rule.enabled)}</td>
+              <td className="py-3 text-right">
+                <Button
+                  variant={rule.enabled ? "secondary" : "primary"}
+                  onClick={() => onToggle(rule)}
+                  disabled={pending}
+                >
+                  {rule.enabled ? "Disable" : "Enable"}
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -265,6 +400,18 @@ function normalizeSource(source: SourceRecord): SourceRow {
   };
 }
 
+function normalizeRule(rule: SourceRecord): MappingRuleRow {
+  return {
+    code: stringValue(rule.code) ?? stringValue(rule.ruleCode) ?? "unknown",
+    title: stringValue(rule.title) ?? stringValue(rule.name) ?? "Untitled rule",
+    category: stringValue(rule.category) ?? "Uncategorized",
+    severity: stringValue(rule.severity) ?? "Advisory",
+    description: stringValue(rule.description) ?? "",
+    enabled: booleanValue(rule.isEnabled ?? rule.enabled, true),
+    sourceReference: stringValue(rule.sourceReference ?? rule.source_reference),
+  };
+}
+
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
@@ -272,6 +419,10 @@ function stringValue(value: unknown) {
 function stringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function formatLabel(value: string) {

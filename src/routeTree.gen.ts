@@ -19,7 +19,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as IngestionRouteImport } from './routes/ingestion'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as ForecastRouteImport } from './routes/forecast'
-import { Route as DiffReviewRouteImport } from './routes/diff-review'
 import { Route as DiagnosisRouteImport } from './routes/diagnosis'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AssumptionsRouteImport } from './routes/assumptions'
@@ -75,11 +74,6 @@ const ForecastRoute = ForecastRouteImport.update({
   path: '/forecast',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DiffReviewRoute = DiffReviewRouteImport.update({
-  id: '/diff-review',
-  path: '/diff-review',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DiagnosisRoute = DiagnosisRouteImport.update({
   id: '/diagnosis',
   path: '/diagnosis',
@@ -106,7 +100,6 @@ export interface FileRoutesByFullPath {
   '/assumptions': typeof AssumptionsRoute
   '/audit': typeof AuditRoute
   '/diagnosis': typeof DiagnosisRoute
-  '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
@@ -123,7 +116,6 @@ export interface FileRoutesByTo {
   '/assumptions': typeof AssumptionsRoute
   '/audit': typeof AuditRoute
   '/diagnosis': typeof DiagnosisRoute
-  '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
@@ -141,7 +133,6 @@ export interface FileRoutesById {
   '/assumptions': typeof AssumptionsRoute
   '/audit': typeof AuditRoute
   '/diagnosis': typeof DiagnosisRoute
-  '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
@@ -160,7 +151,6 @@ export interface FileRouteTypes {
     | '/assumptions'
     | '/audit'
     | '/diagnosis'
-    | '/diff-review'
     | '/forecast'
     | '/inbox'
     | '/ingestion'
@@ -177,7 +167,6 @@ export interface FileRouteTypes {
     | '/assumptions'
     | '/audit'
     | '/diagnosis'
-    | '/diff-review'
     | '/forecast'
     | '/inbox'
     | '/ingestion'
@@ -194,7 +183,6 @@ export interface FileRouteTypes {
     | '/assumptions'
     | '/audit'
     | '/diagnosis'
-    | '/diff-review'
     | '/forecast'
     | '/inbox'
     | '/ingestion'
@@ -212,7 +200,6 @@ export interface RootRouteChildren {
   AssumptionsRoute: typeof AssumptionsRoute
   AuditRoute: typeof AuditRoute
   DiagnosisRoute: typeof DiagnosisRoute
-  DiffReviewRoute: typeof DiffReviewRoute
   ForecastRoute: typeof ForecastRoute
   InboxRoute: typeof InboxRoute
   IngestionRoute: typeof IngestionRoute
@@ -297,13 +284,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForecastRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/diff-review': {
-      id: '/diff-review'
-      path: '/diff-review'
-      fullPath: '/diff-review'
-      preLoaderRoute: typeof DiffReviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/diagnosis': {
       id: '/diagnosis'
       path: '/diagnosis'
@@ -340,7 +320,6 @@ const rootRouteChildren: RootRouteChildren = {
   AssumptionsRoute: AssumptionsRoute,
   AuditRoute: AuditRoute,
   DiagnosisRoute: DiagnosisRoute,
-  DiffReviewRoute: DiffReviewRoute,
   ForecastRoute: ForecastRoute,
   InboxRoute: InboxRoute,
   IngestionRoute: IngestionRoute,

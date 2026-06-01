@@ -3,11 +3,13 @@ import {
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
   createComment,
+  deleteComment,
   decideBalanceSheetDiagnosis,
   generateAssumptions,
   generateExecutiveBrief,
   recordCfoSignoff,
   recordManagerDecision,
+  reopenComment,
   resolveComment,
   revertReviewCell,
   runBalanceSheetDiagnosis,
@@ -15,15 +17,21 @@ import {
   startExtraction,
   submitForManagerReview,
   toggleMappingRule,
+  updateComment,
   updateReviewCell,
   uploadDocument,
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { ExtractionJobResponse } from "@/lib/api/types";
+import type { ExtractionJobResponse, ReviewCommentInput } from "@/lib/api/types";
 
 function invalidateProject(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.workspace(projectId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+}
+
+function invalidateComments(queryClient: QueryClient, projectId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.comments(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.workspace(projectId) });
 }
 
 export function useUploadDocument(projectId: string) {
@@ -56,20 +64,27 @@ export function useToggleMappingRule(projectId: string) {
   return useMutation({
     mutationFn: ({ ruleCode, enabled }: { ruleCode: string; enabled: boolean }) =>
       toggleMappingRule(projectId, ruleCode, enabled),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.mappingRules(projectId) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mappingRules(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminMappingRules(projectId) });
+    },
   });
 }
 
 export function useCreateComment(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      body: string;
-      fieldId?: string | null;
-      templateCell?: string | null;
-      sheetName?: string | null;
-    }) => createComment(projectId, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.comments(projectId) }),
+    mutationFn: (input: ReviewCommentInput) => createComment(projectId, input),
+    onSuccess: () => invalidateComments(queryClient, projectId),
+  });
+}
+
+export function useUpdateComment(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, input }: { commentId: string; input: ReviewCommentInput }) =>
+      updateComment(projectId, commentId, input),
+    onSuccess: () => invalidateComments(queryClient, projectId),
   });
 }
 
@@ -77,7 +92,23 @@ export function useResolveComment(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (commentId: string) => resolveComment(projectId, commentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.comments(projectId) }),
+    onSuccess: () => invalidateComments(queryClient, projectId),
+  });
+}
+
+export function useReopenComment(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => reopenComment(projectId, commentId),
+    onSuccess: () => invalidateComments(queryClient, projectId),
+  });
+}
+
+export function useDeleteComment(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => deleteComment(projectId, commentId),
+    onSuccess: () => invalidateComments(queryClient, projectId),
   });
 }
 

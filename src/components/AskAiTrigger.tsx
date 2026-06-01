@@ -115,16 +115,27 @@ export function AskAiTrigger() {
       { id: aiId, role: "ai", kind: "text", text: "Checking the backend workspace..." },
     ]);
 
-    const answer = await askAi.sendQuestion({
-      question: text,
-      sessionId: "global-ask-ai",
-      routePath: pathname,
-      screenName: screenName(pathname),
-      includeExternalSources: false,
-      sourceIds: [],
-      documentIds: [],
-      filters: {},
-    });
+    const updateAiMessage = (chunk: string) => {
+      setMessages((m) =>
+        m.map((message) =>
+          message.id === aiId ? { ...message, text: chunk || "Checking..." } : message,
+        ),
+      );
+    };
+
+    const answer = await askAi.sendQuestion(
+      {
+        question: text,
+        sessionId: "global-ask-ai",
+        routePath: pathname,
+        screenName: screenName(pathname),
+        includeExternalSources: false,
+        sourceIds: [],
+        documentIds: [],
+        filters: {},
+      },
+      { onChunk: updateAiMessage },
+    );
 
     setMessages((m) =>
       m.map((message) =>
@@ -162,8 +173,10 @@ export function AskAiTrigger() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Open Ask AI"
-          className="group fixed right-0 top-1/2 z-40 flex flex-col items-center justify-center gap-2"
+          disabled={!projectId}
+          aria-label={projectId ? "Open Ask AI" : "Select a project before using Ask AI"}
+          title={projectId ? "Open Ask AI" : "Select a project before using Ask AI"}
+          className="group fixed right-0 top-1/2 z-40 flex flex-col items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             transform: "translateY(-50%)",
             width: 36,
@@ -237,7 +250,8 @@ export function AskAiTrigger() {
                   <button
                     key={s}
                     onClick={() => void send(s)}
-                    className="block w-full rounded-lg border px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-[var(--color-tag-bg)]"
+                    disabled={!projectId || askAi.loading}
+                    className="block w-full rounded-lg border px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-[var(--color-tag-bg)] disabled:cursor-not-allowed disabled:opacity-60"
                     style={{
                       borderColor: "var(--color-border-default)",
                       color: "var(--color-text-secondary)",
@@ -303,12 +317,12 @@ export function AskAiTrigger() {
                     <button
                       onClick={() => {
                         setOpen(false);
-                        navigate({ to: "/diff-review" });
+                        navigate({ to: "/diagnosis" });
                       }}
                       className="mt-3 h-8 w-full rounded-md text-[12px] font-semibold text-white"
                       style={{ background: "var(--color-brand)" }}
                     >
-                      Send to Diff Review →
+                      Send to Diagnosis →
                     </button>
                   </AiBubble>
                 );
@@ -474,8 +488,9 @@ export function AskAiTrigger() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void send(input);
               }}
+              disabled={!projectId}
               placeholder="Ask anything · or attach a PDF…"
-              className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)]"
+              className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)] disabled:bg-[var(--color-table-header)]"
               style={{
                 borderColor: "var(--color-border-default)",
                 color: "var(--color-text-primary)",
@@ -483,7 +498,7 @@ export function AskAiTrigger() {
             />
             <button
               onClick={() => void send(input)}
-              disabled={!input.trim() || askAi.loading}
+              disabled={!projectId || !input.trim() || askAi.loading}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-white disabled:opacity-40"
               style={{ background: "var(--color-brand)" }}
             >

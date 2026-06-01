@@ -27,22 +27,23 @@ The frontend must use `GET /api/auth/me` as the source of truth for the logged-i
 Default route after login: `/inbox`
 
 Primary jobs:
+
 - See assigned analysis requests in the Inbox. The old "Requests" tab is now named "Inbox".
 - Acknowledge manager-generated requests.
 - Convert acknowledged requests to projects.
 - Upload annual report PDFs.
 - Run extraction.
-- Review cells and source evidence.
+- Resolve review-cell blockers through diagnosis/workflow screens.
 - Run balance-sheet diagnosis.
 - Generate forecast and assumptions.
 - Submit the project for manager review.
 
 Visible Sidebar menus:
+
 - Dashboard
 - Inbox
 - Model Registry
 - Ingestion
-- Diff Review
 - Diagnosis
 - Forecast
 - Assumptions
@@ -54,6 +55,7 @@ Visible Sidebar menus:
 Default route after login: `/`
 
 Primary jobs:
+
 - Create analysis requests for analysts from a Manager Request form.
 - See all analysis requests returned by `GET /api/analysis-requests`.
 - Track request status: `pending`, `acknowledged`, `converted`.
@@ -61,6 +63,7 @@ Primary jobs:
 - Approve or send back with `POST /api/projects/{project_id}/review/manager-decision`.
 
 Visible Sidebar menus:
+
 - Dashboard
 - Model Registry
 - Manager Review
@@ -72,11 +75,13 @@ Visible Sidebar menus:
 Default route after login: `/sign-off`
 
 Primary jobs:
+
 - Review generated executive briefs.
 - Approve or reject CFO sign-off with `POST /api/projects/{project_id}/review/cfo-signoff`.
 - Read archive and audit outputs for approved models.
 
 Visible Sidebar menus:
+
 - Dashboard
 - Model Registry
 - CFO Sign-Off
@@ -88,12 +93,14 @@ Visible Sidebar menus:
 Default route after login: `/sources`
 
 Primary jobs:
+
 - Read source registry.
 - Access admin mapping-rule controls.
 - Monitor project/request state where backend access allows it.
 - Keep operational/admin views separate from analyst workbench actions.
 
 Visible Sidebar menus:
+
 - Dashboard
 - Model Registry
 - Sources Admin
@@ -101,12 +108,14 @@ Visible Sidebar menus:
 - Notifications
 
 Admin-only API surfaces:
+
 - `GET /api/projects/{project_id}/mapping-rules/admin`
 - `PATCH /api/projects/{project_id}/mapping-rules/{rule_code}`
 
 ## Auth Screen Requirements
 
 The `/login` screen should support:
+
 - Existing user login.
 - Development registration.
 - A segmented role selector with `Analyst`, `Manager`, and `CFO` for self-service registration.
@@ -124,6 +133,7 @@ const rolePayloadByFrontendRole = {
 ```
 
 After login:
+
 1. Store tokens returned by `POST /api/auth/login`.
 2. Call `GET /api/auth/me`.
 3. Route user:
@@ -136,22 +146,21 @@ After login:
 
 `src/components/Sidebar.tsx` should derive visible nav items from the logged-in user's backend role. Do not hardcode one static `nav` list directly into JSX. Use a role-aware nav definition and filter it before rendering.
 
-| Sidebar menu | Route | Analyst | Manager | CFO | Admin |
-| --- | --- | --- | --- | --- | --- |
-| Dashboard | `/` | Yes | Yes | Yes | Yes |
-| Inbox | `/inbox` | Yes | No | No | No |
-| Model Registry | `/registry` | Yes | Yes | Yes | Yes |
-| Ingestion | `/ingestion` | Yes | No | No | No |
-| Diff Review | `/diff-review` | Yes | No | No | No |
-| Diagnosis | `/diagnosis` | Yes | No | No | No |
-| Forecast | `/forecast` | Yes | No | No | No |
-| Assumptions | `/assumptions` | Yes | No | No | No |
-| Manager Review | `/review` | No | Yes | No | No |
-| CFO Sign-Off | `/sign-off` | No | No | Yes | No |
-| Protection | `/protection` | No | No | No | Yes |
-| Notifications | `/notifications` | Yes | Yes | Yes | Yes |
-| Audit Trail | `/audit` | Yes | Yes | Yes | Yes |
-| Sources Admin | `/sources` | No | No | No | Yes |
+| Sidebar menu   | Route            | Analyst | Manager | CFO | Admin |
+| -------------- | ---------------- | ------- | ------- | --- | ----- |
+| Dashboard      | `/`              | Yes     | Yes     | Yes | Yes   |
+| Inbox          | `/inbox`         | Yes     | No      | No  | No    |
+| Model Registry | `/registry`      | Yes     | Yes     | Yes | Yes   |
+| Ingestion      | `/ingestion`     | Yes     | No      | No  | No    |
+| Diagnosis      | `/diagnosis`     | Yes     | No      | No  | No    |
+| Forecast       | `/forecast`      | Yes     | No      | No  | No    |
+| Assumptions    | `/assumptions`   | Yes     | No      | No  | No    |
+| Manager Review | `/review`        | No      | Yes     | No  | No    |
+| CFO Sign-Off   | `/sign-off`      | No      | No      | Yes | No    |
+| Protection     | `/protection`    | No      | No      | No  | Yes   |
+| Notifications  | `/notifications` | Yes     | Yes     | Yes | Yes   |
+| Audit Trail    | `/audit`         | Yes     | Yes     | Yes | Yes   |
+| Sources Admin  | `/sources`       | No      | No      | No  | Yes   |
 
 Implementation sketch for `src/lib/role-access.ts`:
 
@@ -184,7 +193,6 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/inbox": ["finance_analyst"],
   "/registry": ["finance_analyst", "finance_manager", "cfo", "admin"],
   "/ingestion": ["finance_analyst"],
-  "/diff-review": ["finance_analyst"],
   "/diagnosis": ["finance_analyst"],
   "/forecast": ["finance_analyst"],
   "/assumptions": ["finance_analyst"],
@@ -206,19 +214,38 @@ Implementation sketch for `src/components/Sidebar.tsx`:
 
 ```ts
 const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["finance_analyst", "finance_manager", "cfo", "admin"] },
+  {
+    to: "/",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
   { to: "/inbox", label: "Inbox", icon: Inbox, roles: ["finance_analyst"] },
-  { to: "/registry", label: "Model Registry", icon: GitBranch, roles: ["finance_analyst", "finance_manager", "cfo", "admin"] },
+  {
+    to: "/registry",
+    label: "Model Registry",
+    icon: GitBranch,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
   { to: "/ingestion", label: "Ingestion", icon: Download, roles: ["finance_analyst"] },
-  { to: "/diff-review", label: "Diff Review", icon: GitCompare, roles: ["finance_analyst"] },
   { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope, roles: ["finance_analyst"] },
   { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
   { to: "/assumptions", label: "Assumptions", icon: FileText, roles: ["finance_analyst"] },
   { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
   { to: "/sign-off", label: "CFO Sign-Off", icon: Lock, roles: ["cfo"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
-  { to: "/notifications", label: "Notifications", icon: Bell, roles: ["finance_analyst", "finance_manager", "cfo", "admin"] },
-  { to: "/audit", label: "Audit Trail", icon: ShieldCheck, roles: ["finance_analyst", "finance_manager", "cfo", "admin"] },
+  {
+    to: "/notifications",
+    label: "Notifications",
+    icon: Bell,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
+  {
+    to: "/audit",
+    label: "Audit Trail",
+    icon: ShieldCheck,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
   { to: "/sources", label: "Sources Admin", icon: KeyRound, roles: ["admin"] },
 ] as const;
 
@@ -227,23 +254,22 @@ const visibleNav = nav.filter((item) => item.roles.includes(currentUser.role));
 
 ## Route Access Matrix
 
-| Route | Analyst | Manager | CFO | Admin | Backend source |
-| --- | --- | --- | --- | --- | --- |
-| `/login` | Yes | Yes | Yes | Yes | Auth APIs |
-| `/` | Yes | Yes | Yes | Yes | Dashboard summaries by role |
-| `/inbox` | Yes | No | No | No | Analyst Inbox backed by `GET /api/analysis-requests` |
-| `/registry` | Yes | Yes | Yes | Yes | `GET /api/projects` |
-| `/ingestion` | Yes | No | No | No | source registry, mapping rules, documents, extraction |
-| `/diff-review` | Yes | No | No | No | workspace review and review-cells |
-| `/diagnosis` | Yes | No | No | No | workspace, diagnosis, comments |
-| `/forecast` | Yes | No | No | No | forecast/run, search |
-| `/assumptions` | Yes | No | No | No | assumptions/generate, review/submit |
-| `/review` | No | Yes | No | No | review/manager-decision, briefs |
-| `/sign-off` | No | No | Yes | No | review/cfo-signoff, briefs, archive |
-| `/protection` | No | No | No | Yes | admin-only controls or placeholder until backend support is confirmed |
-| `/notifications` | Yes | Yes | Yes | Yes | local or future backend notifications |
-| `/audit` | Yes | Yes | Yes | Yes | workspace audit, archive |
-| `/sources` | No | No | No | Yes | source registry and admin mapping-rule controls |
+| Route            | Analyst | Manager | CFO | Admin | Backend source                                                        |
+| ---------------- | ------- | ------- | --- | ----- | --------------------------------------------------------------------- |
+| `/login`         | Yes     | Yes     | Yes | Yes   | Auth APIs                                                             |
+| `/`              | Yes     | Yes     | Yes | Yes   | Dashboard summaries by role                                           |
+| `/inbox`         | Yes     | No      | No  | No    | Analyst Inbox backed by `GET /api/analysis-requests`                  |
+| `/registry`      | Yes     | Yes     | Yes | Yes   | `GET /api/projects`                                                   |
+| `/ingestion`     | Yes     | No      | No  | No    | source registry, mapping rules, documents, extraction                 |
+| `/diagnosis`     | Yes     | No      | No  | No    | workspace, diagnosis, comments                                        |
+| `/forecast`      | Yes     | No      | No  | No    | forecast/run, search                                                  |
+| `/assumptions`   | Yes     | No      | No  | No    | assumptions/generate, review/submit                                   |
+| `/review`        | No      | Yes     | No  | No    | review/manager-decision, briefs                                       |
+| `/sign-off`      | No      | No      | Yes | No    | review/cfo-signoff, briefs, archive                                   |
+| `/protection`    | No      | No      | No  | Yes   | admin-only controls or placeholder until backend support is confirmed |
+| `/notifications` | Yes     | Yes     | Yes | Yes   | local or future backend notifications                                 |
+| `/audit`         | Yes     | Yes     | Yes | Yes   | workspace audit, archive                                              |
+| `/sources`       | No      | No      | No  | Yes   | source registry and admin mapping-rule controls                       |
 
 ## Manager Workflow
 
@@ -371,6 +397,7 @@ PATCH /api/projects/{project_id}/mapping-rules/{rule_code}
 Sidebar identity should come from `GET /api/auth/me`.
 
 Display:
+
 - Name: `user.name`
 - Role: `roleLabel(user.role)`
 - Initials: derive from `user.name`, fallback to first two email characters.
@@ -380,18 +407,22 @@ Role-filtered nav must be computed at render time, not hardcoded by hiding with 
 ## Error Handling
 
 Authentication:
+
 - 401 on `GET /api/auth/me`: clear tokens and route to `/login`.
 - 401 on protected request: refresh once; if refresh fails, clear tokens and route to `/login`.
 
 Authorization:
+
 - 403: show "You do not have access to this action with your current role."
 - 404 on project/request: show "This item is not available to your account."
 
 Validation:
+
 - Show backend `detail` string exactly.
 - If backend `detail` is an object with `message`, show `message` and attach the object to expandable details.
 
 Workflow conflicts:
+
 - 409 on submit for manager review should show blocking checklist from backend detail.
 - 409 on manager decision should tell the manager the project is no longer awaiting manager review and refresh workspace.
 - 409 on CFO sign-off should tell the CFO whether the project is not awaiting sign-off or the executive brief is not ready.
@@ -414,25 +445,35 @@ curl -s http://127.0.0.1:8000/api/health
 Expected:
 
 ```json
-{"status":"ok","service":"sheet-sherlock-backend"}
+{ "status": "ok", "service": "sheet-sherlock-backend" }
 ```
 
 Manager registration payload:
 
 ```json
-{"email":"manager@example.com","name":"Omar Manager","password":"password123","role":"finance_manager"}
+{
+  "email": "manager@example.com",
+  "name": "Omar Manager",
+  "password": "password123",
+  "role": "finance_manager"
+}
 ```
 
 Analyst registration payload:
 
 ```json
-{"email":"analyst@example.com","name":"Ayesha Analyst","password":"password123","role":"finance_analyst"}
+{
+  "email": "analyst@example.com",
+  "name": "Ayesha Analyst",
+  "password": "password123",
+  "role": "finance_analyst"
+}
 ```
 
 CFO registration payload:
 
 ```json
-{"email":"cfo@example.com","name":"CFO User","password":"password123","role":"cfo"}
+{ "email": "cfo@example.com", "name": "CFO User", "password": "password123", "role": "cfo" }
 ```
 
 Admin user note:
