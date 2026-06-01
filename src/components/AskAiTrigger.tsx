@@ -229,9 +229,51 @@ export function AskAiTrigger() {
                         borderRadius: "12px 12px 2px 12px",
                       }}
                     >
+                      {m.attachment && (
+                        <div
+                          className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
+                          style={{ background: "rgba(255,255,255,0.18)" }}
+                        >
+                          <FileIcon className="h-3.5 w-3.5" />
+                          <span className="font-semibold">{m.attachment.name}</span>
+                          <span className="opacity-70">· {m.attachment.size}</span>
+                        </div>
+                      )}
                       {m.text}
                     </div>
                   </div>
+                );
+              }
+              if (m.kind === "pdf-parsed") {
+                return (
+                  <AiBubble key={m.id}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <FileIcon className="h-4 w-4 text-[var(--color-brand)]" />
+                      <span className="text-[13px] font-semibold">{m.name}</span>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">· {m.pages} pages</span>
+                    </div>
+                    <p className="text-[12px] text-[var(--color-text-secondary)]">
+                      Parsed and mapped to active sector pack. Extracted figures:
+                    </p>
+                    <ul className="mt-2 space-y-1 text-[12px]">
+                      {m.entities.map((e) => (
+                        <li key={e} className="flex items-start gap-1.5">
+                          <Check className="mt-0.5 h-3 w-3 text-[var(--color-success-fg)]" />
+                          <span>{e}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        navigate({ to: "/diff-review" });
+                      }}
+                      className="mt-3 h-8 w-full rounded-md text-[12px] font-semibold text-white"
+                      style={{ background: "var(--color-brand)" }}
+                    >
+                      Send to Diff Review →
+                    </button>
+                  </AiBubble>
                 );
               }
               if (m.kind === "text") {
