@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { loadSession } from "@/lib/auth-session";
 import {
   createAnalysisRequest,
+  DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
   listAnalysisRequests,
   type AnalysisRequestResponse,
 } from "@/lib/api/projects";
@@ -34,7 +35,7 @@ function RequestsPage() {
     companySymbol: "MTL",
     sector: "Industrial Engineering",
     fiscalYear: "FY2025",
-    assignedAnalystEmail: "",
+    assignedAnalystEmail: DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
     note: "",
   });
 
@@ -120,7 +121,7 @@ function RequestsPage() {
                   data-testid="request-analyst-email"
                   type="email"
                   value={form.assignedAnalystEmail}
-                  onChange={(event) => setForm((next) => ({ ...next, assignedAnalystEmail: event.target.value }))}
+                  readOnly
                   required
                 />
               </Field>

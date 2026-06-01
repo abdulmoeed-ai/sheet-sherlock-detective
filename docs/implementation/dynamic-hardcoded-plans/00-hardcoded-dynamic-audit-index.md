@@ -21,7 +21,7 @@
 | `05-diagnosis-workbook-comments-plan.md` | Static workbook rows, sheet tabs, issue list, team members, local comments/corrections/export | Backend has workspace review rows, comments, diagnosis run/decision | High |
 | `06-forecast-assumptions-plan.md` | Static scenario arrays, mock sensitivity math, static assumptions rows and submission state | Backend has forecast and assumptions generation endpoints | Medium |
 | `07-audit-review-archive-plan.md` | Static event log/counts, local manager/CFO buttons, fake PDF/JSON export | Backend has review decisions, brief generation, latest archive/audit JSON | High |
-| `08-ask-ai-dynamic-prediction-plan.md` | Prediction intent bypasses backend and renders canned forecast, fallback answers are static | Backend has Ask AI SSE, route/screen context, forecast endpoint | Medium |
+| `08-ask-ai-dynamic-prediction-plan.md` | Prediction intent bypasses backend and renders canned forecast, fallback answers are static | Backend has Ask AI SSE with session/route/screen/document/filter context plus forecast endpoint | Medium |
 
 ## Repo Evidence
 
@@ -32,9 +32,9 @@
 - `src/routes/forecast.tsx` hardcodes scenario arrays and driver sliders instead of calling `runProjectForecast`.
 - `src/routes/assumptions.tsx` hardcodes rows and review submission summary instead of calling `generateProjectAssumptions` or review submit.
 - `src/routes/audit.tsx` hardcodes audit log, review state, brief status, archive id, and fake export blobs.
-- `src/components/AskAiTrigger.tsx` streams project Ask AI only for generic questions; forecast/prediction prompts branch to static UI.
+- `src/components/AskAiTrigger.tsx` streams project Ask AI for generic questions with session, route, screen, and cycle filters; forecast/prediction prompts still branch to static UI.
 - `src/components/SourcePreviewPanel.tsx` renders a synthetic page instead of the backend page image endpoint.
-- `src/lib/api/projects.ts` already contains many backend clients, but it still hardcodes Millat template/currency and lacks workspace, extraction job polling, ingestion preview, latest brief, review cell update, and comment-list wrappers.
+- `src/lib/api/projects.ts` already contains many backend clients and streams Ask AI with `sessionId`, `routePath`, `screenName`, `documentIds`, and `filters`; it still hardcodes Millat template/currency and lacks workspace, extraction job polling, ingestion preview, latest brief, review cell update, and comment-list wrappers.
 
 ## Backend Evidence
 
@@ -52,4 +52,3 @@
 4. Implement `07-audit-review-archive-plan.md` after review submission is wired.
 5. Implement `02-dashboard-model-summary-plan.md` once the workflow endpoints produce useful summaries.
 6. Implement `08-ask-ai-dynamic-prediction-plan.md` after forecast and dashboard contracts are stable.
-

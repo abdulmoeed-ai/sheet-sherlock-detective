@@ -259,7 +259,8 @@ function Ingestion() {
       setProjectId(project.id);
       cycleStore.setProjectId(project.id);
       if (projectId === null) {
-        await uploadProjectDocument(project.id, file);
+        const uploadedDocument = await uploadProjectDocument(project.id, file);
+        cycleStore.addDocumentId(uploadedDocument.id);
       }
       const summary = await getMappingRules(project.id);
       setMappingRules(summary);

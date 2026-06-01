@@ -175,3 +175,24 @@
 .animate-ss-fade-in {
   animation: ss-fade-in 0.35s ease-out;
 }
+
+details[open] .details-closed-icon {
+  display: none;
+}
+
+details[open] .details-open-icon {
+  display: block;
+}
+
+.copy-tooltip {
+  background: #111827;
+  color: #FFFFFF;
+  transform: translateY(2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.copy-button:hover .copy-tooltip,
+.copy-button:focus-visible .copy-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}

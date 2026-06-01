@@ -1,6 +1,7 @@
 import { loadSession } from "@/lib/auth-session";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+export const DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL = "mubashar.javed@camp1.tkxel.com";
 
 export class ProjectApiError extends Error {
   status: number;
@@ -107,6 +108,16 @@ export type ProjectResponse = {
   status: string;
 };
 
+export type DocumentResponse = {
+  id: string;
+  filename: string;
+  pages: number;
+  sizeMB: number;
+  status: string;
+  cells: { total: number; reviewed: number };
+  uploadedAt: string | null;
+};
+
 export type ExtractionJobResponse = {
   id: string;
   projectId: string;
@@ -135,10 +146,10 @@ export async function createProjectForCycle(input: {
   });
 }
 
-export async function uploadProjectDocument(projectId: string, file: File): Promise<void> {
+export async function uploadProjectDocument(projectId: string, file: File): Promise<DocumentResponse> {
   const formData = new FormData();
   formData.append("file", file);
-  await apiRequest(`/api/projects/${projectId}/documents`, {
+  return apiRequest(`/api/projects/${projectId}/documents`, {
     method: "POST",
     body: formData,
   });
@@ -432,7 +443,7 @@ export type AnalysisRequestResponse = {
 };
 
 export async function createAnalysisRequest(input: {
-  assignedAnalystEmail: string;
+  assignedAnalystEmail?: string;
   companyName: string;
   companySymbol?: string;
   sector?: string;
@@ -445,6 +456,7 @@ export async function createAnalysisRequest(input: {
     method: "POST",
     json: {
       ...input,
+      assignedAnalystEmail: DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
       template: "Millat - Template.xlsx",
     },
   });

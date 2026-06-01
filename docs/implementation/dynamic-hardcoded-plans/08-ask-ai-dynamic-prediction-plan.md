@@ -4,32 +4,43 @@
 
 **Goal:** Remove the canned Ask AI prediction and generic fallback answers so every response uses project-aware backend Ask AI, forecast, or a clear no-project state.
 
-**Architecture:** Keep the existing Ask AI SSE path as the default for project questions. For forecast/prediction intents, call the backend forecast endpoint and render a forecast response bubble from returned scenarios and citations. When no project is active, prompt the user to open or create a project instead of returning static Millat answers.
+**Architecture:** Keep the existing Ask AI SSE path as the default for project questions. The SSE client already sends chat/session and active screen context. For forecast/prediction intents, call the backend forecast endpoint and render a forecast response bubble from returned scenarios and citations. When no project is active, prompt the user to open or create a project instead of returning static Millat answers.
 
-**Tech Stack:** React, FastAPI Ask AI SSE, forecast endpoint, route/screen context, Bun tests, pytest.
+**Tech Stack:** React, FastAPI Ask AI SSE, forecast endpoint, session/route/screen context, Bun tests, pytest.
 
 ---
 
 ## Hardcoded Evidence
 
 - `src/components/AskAiTrigger.tsx:41` defines fixed suggestions with Millat-specific prompt text.
-- `src/components/AskAiTrigger.tsx:77` routes forecast/prediction text away from backend.
-- `src/components/AskAiTrigger.tsx:124` returns canned fallback answers when no `projectId` exists.
-- `src/components/AskAiTrigger.tsx:194` defines fake prediction progress steps.
-- `src/components/AskAiTrigger.tsx:327` renders fixed forecast horizon/scenarios.
+- `src/components/AskAiTrigger.tsx:78` routes forecast/prediction text away from backend.
+- `src/components/AskAiTrigger.tsx:127` returns canned fallback answers when no `projectId` exists.
+- `src/components/AskAiTrigger.tsx:184` defines fake prediction progress steps.
+- `src/components/AskAiTrigger.tsx:324` renders a fixed forecast confirmation card.
 - `src/components/AskAiTrigger.tsx:363` renders static projected CAGR and PKR values.
-- `src/components/AskAiTrigger.tsx:606` renders a static mini forecast chart.
+- `src/components/AskAiTrigger.tsx:609` renders a static mini forecast chart.
+- `src/components/AskAiTrigger.tsx:96` now streams normal project questions through backend Ask AI with `sessionId`, route/screen, and cycle filters, so the remaining gap is forecast/no-project behavior rather than the generic SSE path.
+- `src/lib/api/projects.ts:56` and `src/lib/api/projects.ts:210` already support streaming Ask AI with `sessionId`, `routePath`, `screenName`, `documentIds`, and `filters`.
 
 ## Backend Current State
 
-- `POST /api/projects/{project_id}/ask-ai` streams status/source/approach/token/final events and accepts `routePath` and `screenName`.
+- `POST /api/projects/{project_id}/ask-ai` streams status/source/approach/token/final events and accepts `sessionId`, `routePath`, `screenName`, `documentIds`, and `filters`.
 - `POST /api/projects/{project_id}/forecast/run` returns forecast scenarios and assumptions.
-- Backend Ask AI context already has route and screen fields in `AskAiRequest`.
+- Backend Ask AI context already has session, route, screen, selected-document, and filter fields in `AskAiRequest`.
+
+## Already Implemented Baseline
+
+- [x] `streamProjectAi` accepts and serializes `sessionId`, `routePath`, `screenName`, `documentIds`, and `filters`.
+- [x] `AskAiTrigger` passes a stable chat session id plus current route/screen and cycle filters for normal project Ask AI questions.
+- [x] `AskAiTrigger` renders streamed status/source/approach/token/final events and source cards for normal Ask AI responses.
+- [x] `tests/projects-api.test.ts` covers the enriched Ask AI streaming request payload.
+
+Do not redo this baseline when implementing the remaining tasks. The remaining work is replacing the forecast/prediction branch and the no-project canned fallback.
 
 ## Files
 
 - Modify: `sheet-sherlock-detective/src/components/AskAiTrigger.tsx`
-- Modify: `sheet-sherlock-detective/src/lib/api/projects.ts`
+- Modify: `sheet-sherlock-detective/src/lib/api/projects.ts` only if the forecast response type or request options need refinement.
 - Test: `sheet-sherlock-detective/tests/projects-api.test.ts`
 - Optional backend test: `backend_code/backend/tests/unit/test_ask_ai_gateway_streaming.py`
 
@@ -182,7 +193,7 @@ Expected: build completes.
 
 - [ ] **Step 2: Backend Ask AI smoke**
 
-Run: `cd backend_code/backend && uv run python -m pytest tests/unit/test_ask_ai_gateway_streaming.py tests/unit/test_ask_ai_context.py -q`
+Run: `cd backend_code/backend && uv run python -m pytest tests/unit/test_ask_ai_gateway_streaming.py tests/unit/test_ask_ai_context.py tests/unit/test_ask_ai_request_schema.py -q`
 
 Expected: PASS.
 
@@ -195,4 +206,3 @@ cd sheet-sherlock-detective
 git add src/components/AskAiTrigger.tsx src/lib/api/projects.ts tests/projects-api.test.ts
 git commit -m "feat(ask-ai): route prediction prompts to backend forecast"
 ```
-

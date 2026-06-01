@@ -8,6 +8,7 @@ import {
   createAnalysisRequest,
   createReviewComment,
   createProjectForCycle,
+  DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
   downloadArchiveAuditJson,
   generateExecutiveBrief,
   generateProjectAssumptions,
@@ -65,12 +66,13 @@ describe("project ingestion api client", () => {
       sector: "Engineering & Industrials",
       fiscalYear: "2025",
     });
-    await uploadProjectDocument(project.id, new File(["%PDF-1.4"], "Millat - 2025.pdf", { type: "application/pdf" }));
+    const uploadedDocument = await uploadProjectDocument(project.id, new File(["%PDF-1.4"], "Millat - 2025.pdf", { type: "application/pdf" }));
     const summary = await getMappingRules(project.id);
     await acknowledgeMappingRules(project.id, summary);
     const job = await startProjectExtraction(project.id);
 
     expect(job.id).toBe("job-1");
+    expect(uploadedDocument.id).toBe("document-1");
     expect(requests).toHaveLength(5);
     expect((requests[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer access-token");
     expect(requests[1].init?.body).toBeInstanceOf(FormData);
@@ -421,7 +423,7 @@ describe("project ingestion api client", () => {
       const path = String(url);
       const body = {
         id: "request-1",
-        assignedAnalystEmail: "analyst@example.com",
+        assignedAnalystEmail: DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
         companyName: "Millat Tractors Limited",
         companySymbol: "MTL",
         sector: "Industrial Engineering",
@@ -445,7 +447,7 @@ describe("project ingestion api client", () => {
     }) as typeof fetch;
 
     const created = await createAnalysisRequest({
-      assignedAnalystEmail: "analyst@example.com",
+      assignedAnalystEmail: "ignored@example.com",
       companyName: "Millat Tractors Limited",
       companySymbol: "MTL",
       sector: "Industrial Engineering",
@@ -463,7 +465,7 @@ describe("project ingestion api client", () => {
     expect(converted.projectId).toBe("project-1");
     expect(requests[0].url).toEndWith("/api/analysis-requests");
     expect(JSON.parse(String(requests[0].init?.body))).toEqual({
-      assignedAnalystEmail: "analyst@example.com",
+      assignedAnalystEmail: DEFAULT_ANALYSIS_REQUEST_ANALYST_EMAIL,
       companyName: "Millat Tractors Limited",
       companySymbol: "MTL",
       sector: "Industrial Engineering",

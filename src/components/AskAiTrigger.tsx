@@ -8,18 +8,28 @@ import {
   Loader2,
   TrendingUp,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
+import { ASK_AI_PROMPT_MIN_HEIGHT, getAskAiPromptKeyAction, getAskAiPromptTextareaLayout } from "@/lib/ask-ai-input";
+import { buildNoProjectAskAiResponse } from "@/lib/ask-ai-empty-context";
+import { getAskAiCitationTitle } from "@/lib/ask-ai-citations";
+import { parseChatMarkdown, type ChatMarkdownInline } from "@/lib/chat-markdown";
+import {
+  buildAskAiReasoningSummary,
+  type AskAiReasoningSummary,
+  type StreamActivityEvent,
+} from "@/lib/ask-ai-reasoning";
 import {
   streamProjectAi,
   type AskAiFinalResponse,
   type AskAiSourceEvent,
   type AskAiStatusEvent,
 } from "@/lib/api/projects";
-
-type StreamActivity =
-  | { type: "status"; message: string; stage: string; percent: number }
-  | { type: "source"; message: string; kind: string; count: number };
 
 type Msg =
   | { id: string; role: "user"; text: string }
@@ -29,7 +39,7 @@ type Msg =
       role: "ai";
       kind: "stream";
       text: string;
-      activity: StreamActivity[];
+      activity: StreamActivityEvent[];
       approaches: string[];
       final?: AskAiFinalResponse;
       done: boolean;
@@ -46,6 +56,7 @@ const SUGGESTIONS = [
 
 export function AskAiTrigger() {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
@@ -53,6 +64,7 @@ export function AskAiTrigger() {
   const navigate = useNavigate();
   const routePath = useRouterState({ select: (s) => s.location.pathname });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
 
@@ -66,6 +78,15 @@ export function AskAiTrigger() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = `${ASK_AI_PROMPT_MIN_HEIGHT}px`;
+    const layout = getAskAiPromptTextareaLayout(textarea.scrollHeight);
+    textarea.style.height = `${layout.height}px`;
+    textarea.style.overflowY = layout.overflowY;
+  }, [input, open]);
+
   useEffect(() => () => abortStream(), []);
 
   const send = async (text: string) => {
@@ -75,6 +96,14 @@ export function AskAiTrigger() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
 
+    if (!cycle.projectId) {
+      setMessages((m) => [
+        ...m,
+        { id: `a-${Date.now()}`, role: "ai", kind: "text", text: buildNoProjectAskAiResponse(text) },
+      ]);
+      return;
+    }
+
     // Prediction flow trigger
     if (/financial strength|next 5 years|predict|forecast/i.test(text)) {
       setTimeout(() => {
@@ -83,62 +112,44 @@ export function AskAiTrigger() {
       return;
     }
 
-    if (cycle.projectId) {
-      setAsking(true);
-      const aiId = `a-${Date.now()}`;
-      const controller = new AbortController();
-      streamAbortRef.current = controller;
-      setMessages((m) => [
-        ...m,
-        { id: aiId, role: "ai", kind: "stream", text: "", activity: [], approaches: [], done: false },
-      ]);
-      try {
-        await streamProjectAi(cycle.projectId, text, {
-          sessionId: chatSessionIdRef.current,
-          routePath,
-          screenName: screenNameForPath(routePath),
-          filters: { cycleStatus: cycle.status, period: cycle.period, company: cycle.company },
-          includeExternalSources: false,
-          signal: controller.signal,
-          onStatus: (event) => updateStreamMessage(aiId, { type: "status", event }),
-          onSource: (event) => updateStreamMessage(aiId, { type: "source", event }),
-          onApproach: (event) => updateStreamMessage(aiId, { type: "approach", summary: event.summary }),
-          onToken: (event) => updateStreamMessage(aiId, { type: "token", delta: event.delta }),
-          onFinal: (event) => updateStreamMessage(aiId, { type: "final", final: event }),
-          onError: (event) => updateStreamMessage(aiId, { type: "token", delta: event.message }),
-        });
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setMessages((m) => [
-          ...m.filter((message) => message.id !== aiId),
-          { id: aiId, role: "ai", kind: "text", text: error instanceof Error ? error.message : "Ask AI is unavailable for this project." },
-        ]);
-      } finally {
-        if (streamAbortRef.current === controller) {
-          streamAbortRef.current = null;
-          setAsking(false);
-        }
+    setAsking(true);
+    const aiId = `a-${Date.now()}`;
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    setMessages((m) => [
+      ...m,
+      { id: aiId, role: "ai", kind: "stream", text: "", activity: [], approaches: [], done: false },
+    ]);
+    try {
+      await streamProjectAi(cycle.projectId, text, {
+        sessionId: chatSessionIdRef.current,
+        routePath,
+        screenName: screenNameForPath(routePath),
+        documentIds: cycle.documentIds,
+        filters: { cycleStatus: cycle.status, period: cycle.period, company: cycle.company },
+        includeExternalSources: false,
+        signal: controller.signal,
+        onStatus: (event) => updateStreamMessage(aiId, { type: "status", event }),
+        onSource: (event) => updateStreamMessage(aiId, { type: "source", event }),
+        onApproach: (event) => updateStreamMessage(aiId, { type: "approach", summary: event.summary }),
+        onToken: (event) => updateStreamMessage(aiId, { type: "token", delta: event.delta }),
+        onFinal: (event) => updateStreamMessage(aiId, { type: "final", final: event }),
+        onError: (event) => updateStreamMessage(aiId, { type: "token", delta: event.message }),
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return;
       }
-      return;
-    }
-
-    // Generic AI reply
-    setTimeout(() => {
       setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "ai",
-          kind: "text",
-          text:
-            /balance/i.test(text)
-              ? "The most common cause of imbalance is a missing credit entry. Sherlock traced your current cycle's imbalance to BS!D42 (Inventory). Open the Diagnosis tab to review the proposed correction."
-              : "Here's a summary of the key assumptions: KIBOR 18.5% (SBP), CPI 11.2% YoY (PBS), Tractor unit sales CAGR +5.6% (PAMA). All cited and editable in the Assumptions sheet.",
-        },
+        ...m.filter((message) => message.id !== aiId),
+        { id: aiId, role: "ai", kind: "text", text: error instanceof Error ? error.message : "Ask AI is unavailable for this project." },
       ]);
-    }, 800);
+    } finally {
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+        setAsking(false);
+      }
+    }
   };
 
   const updateStreamMessage = (
@@ -179,6 +190,7 @@ export function AskAiTrigger() {
                 kind: update.event.kind,
                 message: update.event.message,
                 count: update.event.count,
+                items: update.event.items,
               },
             ],
           };
@@ -237,7 +249,9 @@ export function AskAiTrigger() {
       {/* Panel */}
       {open && (
         <aside
-          className="fixed right-0 top-0 z-50 flex h-screen w-[380px] flex-col bg-white slide-in-right"
+          className={`fixed right-0 top-0 z-50 flex h-screen max-w-full flex-col bg-white slide-in-right ${
+            expanded ? "w-[min(760px,calc(100vw-24px))]" : "w-[380px]"
+          }`}
           style={{ borderLeft: "1px solid var(--color-border-default)", boxShadow: "-12px 0 32px -16px rgba(0,0,0,0.1)" }}
         >
           {/* Header */}
@@ -251,16 +265,31 @@ export function AskAiTrigger() {
                 Ask Sherlock
               </span>
             </div>
-            <button
-              onClick={() => {
-                abortStream();
-                setOpen(false);
-              }}
-              className="rounded-md p-1 hover:bg-[var(--color-tag-bg)]"
-              aria-label="Close"
-            >
-              <X className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setExpanded((value) => !value)}
+                className="rounded-md p-1 hover:bg-[var(--color-tag-bg)]"
+                aria-label={expanded ? "Collapse chat" : "Expand chat"}
+                title={expanded ? "Collapse chat" : "Expand chat"}
+              >
+                {expanded ? (
+                  <Minimize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                ) : (
+                  <Maximize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  abortStream();
+                  setOpen(false);
+                }}
+                className="rounded-md p-1 hover:bg-[var(--color-tag-bg)]"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+              </button>
+            </div>
           </div>
 
           {/* Context pill */}
@@ -303,27 +332,34 @@ export function AskAiTrigger() {
               if (m.role === "user") {
                 return (
                   <div key={m.id} className="flex justify-end">
-                    <div
-                      className="max-w-[85%] rounded-xl px-3.5 py-2.5 text-[13px] text-white"
-                      style={{
-                        background: "var(--color-brand)",
-                        borderRadius: "12px 12px 2px 12px",
-                      }}
-                    >
-                      {m.text}
+                    <div className="group flex max-w-[85%] flex-col items-end gap-1">
+                      <div
+                        className="rounded-xl px-3.5 py-2.5 text-[13px] text-white"
+                        style={{
+                          background: "var(--color-brand)",
+                          borderRadius: "12px 12px 2px 12px",
+                        }}
+                      >
+                        {m.text}
+                      </div>
+                      <CopyButton text={m.text} className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
                     </div>
                   </div>
                 );
               }
               if (m.kind === "text") {
-                return <AiBubble key={m.id}>{m.text}</AiBubble>;
+                return (
+                  <AiBubble key={m.id} copyText={m.text}>
+                    <MarkdownContent markdown={m.text} />
+                  </AiBubble>
+                );
               }
               if (m.kind === "stream") {
                 return <StreamingAiBubble key={m.id} message={m} />;
               }
               if (m.kind === "clarify") {
                 return (
-                  <AiBubble key={m.id}>
+                  <AiBubble key={m.id} copyText="I'll run a 5-year financial strength analysis.">
                     <div className="mb-3 text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
                       I'll run a 5-year financial strength analysis. Please confirm the details:
                     </div>
@@ -362,7 +398,7 @@ export function AskAiTrigger() {
               }
               if (m.kind === "prediction") {
                 return (
-                  <AiBubble key={m.id}>
+                  <AiBubble key={m.id} copyText={`${cycle.company} is projected to grow revenue at 11.2% CAGR under the base case.`}>
                     <p className="text-[13px] leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
                       {cycle.company} is projected to grow revenue at <b>11.2% CAGR</b> under the base case
                       (PKR 54.8B → PKR 78.4B by FY2030), driven by sustained tractor unit growth and
@@ -435,17 +471,23 @@ export function AskAiTrigger() {
 
           {/* Input */}
           <div
-            className="flex items-center gap-2 border-t p-3"
+            className="flex items-end gap-2 border-t p-3"
             style={{ borderColor: "var(--color-border-default)" }}
           >
-            <input
+            <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void send(input);
+                const action = getAskAiPromptKeyAction(e);
+                if (action === "submit") {
+                  e.preventDefault();
+                  void send(input);
+                }
               }}
               placeholder="Ask anything about this model…"
-              className="flex-1 rounded-lg border px-3.5 py-2 text-[13px] outline-none transition-colors focus:border-[var(--color-brand)]"
+              rows={1}
+              className="max-h-[120px] min-h-11 flex-1 resize-none overflow-hidden rounded-lg border px-4 py-2.5 text-[13px] leading-5 outline-none transition-colors focus:border-[var(--color-brand)]"
               style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
             />
             <button
@@ -463,18 +505,25 @@ export function AskAiTrigger() {
   );
 }
 
-function AiBubble({ children }: { children: React.ReactNode }) {
+function AiBubble({ children, copyText, wide = false }: { children: React.ReactNode; copyText?: string; wide?: boolean }) {
   return (
-    <div className="flex">
+    <div className="flex w-full">
       <div
-        className="max-w-[92%] rounded-xl border bg-white px-3.5 py-3 text-[13px]"
-        style={{
-          borderColor: "var(--color-border-default)",
-          borderRadius: "12px 12px 12px 2px",
-          color: "var(--color-text-primary)",
-        }}
+        className={`${wide ? "w-[92%]" : "max-w-[92%]"} group flex flex-col items-end gap-1`}
       >
-        {children}
+        <div
+          className="rounded-xl border bg-white px-3.5 py-3 text-[13px]"
+          style={{
+            borderColor: "var(--color-border-default)",
+            borderRadius: "12px 12px 12px 2px",
+            color: "var(--color-text-primary)",
+          }}
+        >
+          {children}
+        </div>
+        {copyText && (
+          <CopyButton text={copyText} className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" />
+        )}
       </div>
     </div>
   );
@@ -482,45 +531,18 @@ function AiBubble({ children }: { children: React.ReactNode }) {
 
 function StreamingAiBubble({ message }: { message: Extract<Msg, { kind: "stream" }> }) {
   const citations = message.final?.sourcesUsed ?? [];
+  const reasoning = buildAskAiReasoningSummary({
+    activity: message.activity,
+    approaches: message.approaches,
+    done: message.done,
+    final: message.final,
+  });
   return (
-    <AiBubble>
+    <AiBubble copyText={message.final?.answer ?? message.text} wide>
       <div className="space-y-3">
-        {message.activity.length > 0 && (
-          <div className="space-y-1.5">
-            {message.activity.slice(-6).map((activity, index) => (
-              <div
-                key={`${activity.type}-${index}`}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5"
-                style={{ background: "var(--color-tag-bg)", color: "var(--color-text-secondary)" }}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-success)" }} />
-                  <span className="truncate text-[12px]">{activity.message}</span>
-                </div>
-                <span className="shrink-0 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-                  {activity.type === "source" ? activity.count : `${activity.percent}%`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        {(message.activity.length > 0 || message.approaches.length > 0) && <ReasoningCapsule summary={reasoning} />}
 
-        {message.approaches.length > 0 && (
-          <details className="rounded-md border px-2.5 py-2" style={{ borderColor: "var(--color-border-default)" }}>
-            <summary className="cursor-pointer text-[12px] font-semibold" style={{ color: "var(--color-text-secondary)" }}>
-              Approach
-            </summary>
-            <div className="mt-1.5 space-y-1 text-[12px] leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
-              {message.approaches.map((summary) => (
-                <p key={summary}>{summary}</p>
-              ))}
-            </div>
-          </details>
-        )}
-
-        <p className="whitespace-pre-wrap text-[13px] leading-relaxed" style={{ color: "var(--color-text-primary)" }}>
-          {message.text || (message.done ? "" : "Preparing answer...")}
-        </p>
+        <MarkdownContent markdown={message.text || (message.done ? "" : "Preparing answer...")} />
 
         {citations.length > 0 && (
           <div className="border-t pt-2" style={{ borderColor: "var(--color-border-default)" }}>
@@ -535,9 +557,7 @@ function StreamingAiBubble({ message }: { message: Extract<Msg, { kind: "stream"
                   style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
                 >
                   <div className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                    {citation.kind === "model"
-                      ? `${String(citation.sheetName ?? "Model")} ${String(citation.cellReference ?? "")}`.trim()
-                      : String(citation.sourceName ?? citation.kind ?? "Source")}
+                    {getAskAiCitationTitle(citation)}
                   </div>
                   <div className="mt-1 line-clamp-2">{String(citation.excerpt ?? citation.currentValue ?? "")}</div>
                 </div>
@@ -556,6 +576,176 @@ function StreamingAiBubble({ message }: { message: Extract<Msg, { kind: "stream"
         )}
       </div>
     </AiBubble>
+  );
+}
+
+function ReasoningCapsule({ summary }: { summary: AskAiReasoningSummary }) {
+  const isComplete = summary.state === "complete";
+  return (
+    <details
+      className="group w-full rounded-[10px] border bg-white/95 px-3 py-2 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all"
+      style={{ borderColor: "rgba(123,104,238,0.18)" }}
+    >
+      <summary
+        className="flex cursor-pointer list-none items-center justify-between gap-3 outline-none"
+        aria-label="Toggle reasoning trail"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+            style={{
+              background: isComplete ? "var(--color-success-bg)" : "var(--color-tag-bg)",
+              color: isComplete ? "var(--color-success)" : "var(--color-brand)",
+            }}
+          >
+            {isComplete ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 animate-ss-pulse" />
+            )}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[12px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {summary.compactLabel}
+            </div>
+            {!isComplete && summary.chips.length > 0 && (
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
+                {summary.chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    style={{ background: "#F5F7FB", color: "var(--color-text-muted)" }}
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>
+          Trail
+          <ChevronRight className="h-3.5 w-3.5 details-closed-icon" />
+          <ChevronDown className="hidden h-3.5 w-3.5 details-open-icon" />
+        </span>
+      </summary>
+
+      <div
+        className="mt-2 max-h-[220px] space-y-3 overflow-y-auto rounded-lg border px-3 py-2.5"
+        style={{ background: "#FAFBFF", borderColor: "var(--color-border-default)" }}
+      >
+        {summary.groups.map((group) => (
+          <div key={group.title}>
+            <div className="mb-1 text-[10px] font-semibold uppercase" style={{ color: "var(--color-text-muted)" }}>
+              {group.title}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => (
+                <div key={item} className="flex items-start gap-2 text-[12px] leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+                  <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full" style={{ background: "var(--color-brand)" }} />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {summary.warnings.length > 0 && (
+          <div className="rounded-md px-2.5 py-2 text-[12px]" style={{ background: "#FFFBEB", color: "var(--color-warning-fg)" }}>
+            {summary.warnings.join(" · ")}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function MarkdownContent({ markdown }: { markdown: string }) {
+  const blocks = parseChatMarkdown(markdown);
+  return (
+    <div className="space-y-2 text-[13px] leading-relaxed" style={{ color: "var(--color-text-primary)" }}>
+      {blocks.map((block, index) => {
+        if (block.type === "heading") {
+          const HeadingTag = block.level === 1 ? "h3" : block.level === 2 ? "h4" : "h5";
+          return (
+            <HeadingTag key={index} className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {renderInline(block.children)}
+            </HeadingTag>
+          );
+        }
+        if (block.type === "list") {
+          const ListTag = block.ordered ? "ol" : "ul";
+          return (
+            <ListTag key={index} className={`space-y-1 pl-4 ${block.ordered ? "list-decimal" : "list-disc"}`}>
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInline(item)}</li>
+              ))}
+            </ListTag>
+          );
+        }
+        return (
+          <p key={index} className="whitespace-pre-wrap">
+            {renderInline(block.children)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderInline(nodes: ChatMarkdownInline[]) {
+  return nodes.map((node, index) => {
+    if (node.type === "strong") return <strong key={index}>{node.text}</strong>;
+    if (node.type === "em") return <em key={index}>{node.text}</em>;
+    if (node.type === "code") {
+      return (
+        <code key={index} className="rounded bg-[var(--color-tag-bg)] px-1 py-0.5 text-[12px]">
+          {node.text}
+        </code>
+      );
+    }
+    if (node.type === "link") {
+      return (
+        <a key={index} href={node.href} target="_blank" rel="noreferrer" className="font-medium underline">
+          {node.text}
+        </a>
+      );
+    }
+    return <span key={index}>{node.text}</span>;
+  });
+}
+
+function CopyButton({
+  text,
+  className = "",
+}: {
+  text: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    const value = text.trim();
+    if (!value) return;
+    await navigator.clipboard?.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1000);
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className={`copy-button relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-white transition hover:bg-[var(--color-tag-bg)] ${className}`}
+      style={{
+        borderColor: "var(--color-border-default)",
+        color: "var(--color-text-muted)",
+      }}
+      aria-label={copied ? "Copied" : "Copy message"}
+      title={copied ? "Copied" : "Copy"}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      <span className="copy-tooltip pointer-events-none absolute bottom-full right-0 mb-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium opacity-0 shadow-sm">
+        {copied ? "Copied" : "Copy"}
+      </span>
+    </button>
   );
 }
 
