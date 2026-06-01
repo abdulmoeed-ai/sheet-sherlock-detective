@@ -15,6 +15,7 @@ import { Route as ReviewRouteImport } from './routes/review'
 import { Route as RegistryRouteImport } from './routes/registry'
 import { Route as ProtectionRouteImport } from './routes/protection'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IngestionRouteImport } from './routes/ingestion'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as ForecastRouteImport } from './routes/forecast'
@@ -52,6 +53,11 @@ const ProtectionRoute = ProtectionRouteImport.update({
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngestionRoute = IngestionRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
   '/registry': typeof RegistryRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/login'
     | '/notifications'
     | '/protection'
     | '/registry'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/login'
     | '/notifications'
     | '/protection'
     | '/registry'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/forecast'
     | '/inbox'
     | '/ingestion'
+    | '/login'
     | '/notifications'
     | '/protection'
     | '/registry'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   ForecastRoute: typeof ForecastRoute
   InboxRoute: typeof InboxRoute
   IngestionRoute: typeof IngestionRoute
+  LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
   ProtectionRoute: typeof ProtectionRoute
   RegistryRoute: typeof RegistryRoute
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingestion': {
@@ -324,6 +344,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForecastRoute: ForecastRoute,
   InboxRoute: InboxRoute,
   IngestionRoute: IngestionRoute,
+  LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
   ProtectionRoute: ProtectionRoute,
   RegistryRoute: RegistryRoute,
@@ -334,3 +355,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

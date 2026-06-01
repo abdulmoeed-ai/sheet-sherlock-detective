@@ -4,15 +4,19 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import { AskAiTrigger } from "@/components/AskAiTrigger";
+import { useCurrentUser } from "@/hooks/use-auth";
+import { getAccessToken } from "@/lib/auth-store";
+import { canSeeRoute, defaultRouteForRole } from "@/lib/role-access";
 
 import appCss from "../styles.css?url";
-
 
 function NotFoundComponent() {
   return (
@@ -77,21 +81,44 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Sheet Sherlock — Intelligent Financial Predictions" },
-      { name: "description", content: "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting." },
+      {
+        name: "description",
+        content:
+          "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
+      },
       { property: "og:title", content: "Sheet Sherlock — Intelligent Financial Predictions" },
-      { property: "og:description", content: "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting." },
+      {
+        property: "og:description",
+        content:
+          "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:title", content: "Sheet Sherlock — Intelligent Financial Predictions" },
-      { name: "twitter:description", content: "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/41130c4b-ff95-494b-839d-9ae062472119/id-preview-48ea5185--b0fa8bfc-8135-4e19-b6b6-2b9beab7f185.lovable.app-1779285571019.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/41130c4b-ff95-494b-839d-9ae062472119/id-preview-48ea5185--b0fa8bfc-8135-4e19-b6b6-2b9beab7f185.lovable.app-1779285571019.png" },
+      {
+        name: "twitter:description",
+        content:
+          "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/41130c4b-ff95-494b-839d-9ae062472119/id-preview-48ea5185--b0fa8bfc-8135-4e19-b6b6-2b9beab7f185.lovable.app-1779285571019.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/41130c4b-ff95-494b-839d-9ae062472119/id-preview-48ea5185--b0fa8bfc-8135-4e19-b6b6-2b9beab7f185.lovable.app-1779285571019.png",
+      },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -128,8 +155,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <AskAiTrigger />
+      <AuthenticatedApp />
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -144,3 +170,36 @@ function RootComponent() {
   );
 }
 
+function AuthenticatedApp() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const token = getAccessToken();
+  const isLogin = pathname === "/login";
+  const { data: user, isLoading, isError } = useCurrentUser();
+
+  useEffect(() => {
+    if (isLogin) return;
+    if (!token || isError) {
+      navigate({ to: "/login" });
+      return;
+    }
+    if (user && !canSeeRoute(user.role, pathname)) {
+      navigate({ to: defaultRouteForRole(user.role) as never });
+    }
+  }, [isLogin, isError, navigate, pathname, token, user]);
+
+  if (isLogin) return <Outlet />;
+  if (!token || isLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-page)] text-[13px] text-[var(--color-text-secondary)]">
+        Loading Sheet Sherlock...
+      </div>
+    );
+  }
+  return (
+    <>
+      <Outlet />
+      <AskAiTrigger />
+    </>
+  );
+}

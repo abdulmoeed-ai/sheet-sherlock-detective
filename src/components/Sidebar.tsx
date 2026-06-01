@@ -18,29 +18,65 @@ import {
   Lock,
   Bell,
 } from "lucide-react";
-import { sidebarStore, useSidebarCollapsed, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "@/lib/sidebar-store";
+import type { BackendRole } from "@/lib/api/types";
+import { getAccessToken } from "@/lib/auth-store";
+import { useCurrentUser, useLogout } from "@/hooks/use-auth";
+import { initialsFor, roleLabel } from "@/lib/role-access";
+import {
+  sidebarStore,
+  useSidebarCollapsed,
+  SIDEBAR_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
+} from "@/lib/sidebar-store";
 
 const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/registry", label: "Model Registry", icon: GitBranch },
-  { to: "/ingestion", label: "Ingestion", icon: Download },
-  { to: "/diff-review", label: "Diff Review", icon: GitCompare },
-  { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope },
-  { to: "/forecast", label: "Forecast", icon: TrendingUp },
-  { to: "/assumptions", label: "Assumptions", icon: FileText },
-  { to: "/review", label: "Manager Review", icon: ClipboardCheck },
-  { to: "/sign-off", label: "CFO Sign-Off", icon: Lock },
-  { to: "/protection", label: "Protection", icon: ShieldCheck },
-  { to: "/notifications", label: "Notifications", icon: Bell },
-  { to: "/audit", label: "Audit Trail", icon: ShieldCheck },
-  { to: "/sources", label: "Sources (Admin)", icon: KeyRound },
+  {
+    to: "/",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
+  { to: "/inbox", label: "Inbox", icon: Inbox, roles: ["finance_analyst"] },
+  {
+    to: "/registry",
+    label: "Model Registry",
+    icon: GitBranch,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
+  { to: "/ingestion", label: "Ingestion", icon: Download, roles: ["finance_analyst"] },
+  { to: "/diff-review", label: "Diff Review", icon: GitCompare, roles: ["finance_analyst"] },
+  { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope, roles: ["finance_analyst"] },
+  { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
+  { to: "/assumptions", label: "Assumptions", icon: FileText, roles: ["finance_analyst"] },
+  { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
+  { to: "/sign-off", label: "CFO Sign-Off", icon: Lock, roles: ["cfo"] },
+  { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
+  {
+    to: "/notifications",
+    label: "Notifications",
+    icon: Bell,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
+  {
+    to: "/audit",
+    label: "Audit Trail",
+    icon: ShieldCheck,
+    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
+  },
+  { to: "/sources", label: "Sources Admin", icon: KeyRound, roles: ["admin"] },
 ] as const;
 
 export function Sidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const collapsed = useSidebarCollapsed();
+  const { data: user } = useCurrentUser();
+  const logout = useLogout();
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+  const currentRole: BackendRole = user?.role ?? "finance_analyst";
+  const visibleNav = getAccessToken()
+    ? nav.filter((item) => (item.roles as readonly BackendRole[]).includes(currentRole))
+    : [];
+  const initials = user ? initialsFor(user.name, user.email) : "SS";
 
   return (
     <aside
@@ -51,17 +87,24 @@ export function Sidebar() {
         borderRight: "1px solid var(--color-sidebar-border)",
       }}
     >
-      <div className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"} pt-5 pb-4`}>
+      <div
+        className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"} pt-5 pb-4`}
+      >
         <div
           className={`flex items-center justify-center rounded-md ${collapsed ? "h-10 w-10" : "h-8 w-8"}`}
           style={{ background: "var(--color-brand)" }}
         >
-          <Search className={collapsed ? "h-[22px] w-[22px] text-white" : "h-[18px] w-[18px] text-white"} />
+          <Search
+            className={collapsed ? "h-[22px] w-[22px] text-white" : "h-[18px] w-[18px] text-white"}
+          />
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight">
             <span className="text-[15px] font-semibold text-white">Sheet Sherlock</span>
-            <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--color-sidebar-icon)" }}>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{ color: "var(--color-sidebar-icon)" }}
+            >
               FP&amp;A · v1
             </span>
           </div>
@@ -85,13 +128,16 @@ export function Sidebar() {
       )}
 
       {!collapsed && (
-        <div className="mt-3 px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: "#5C6478" }}>
+        <div
+          className="mt-3 px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: "#5C6478" }}
+        >
           Workspace
         </div>
       )}
 
       <nav className={`flex-1 py-1 ${collapsed ? "px-2" : "px-1"}`}>
-        {nav.map(({ to, label, icon: Icon }) => {
+        {visibleNav.map(({ to, label, icon: Icon }) => {
           const active = pathname === to;
           if (collapsed) {
             return (
@@ -106,7 +152,9 @@ export function Sidebar() {
               >
                 <Icon
                   className="h-[22px] w-[22px]"
-                  style={{ color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)" }}
+                  style={{
+                    color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                  }}
                 />
               </Link>
             );
@@ -123,7 +171,9 @@ export function Sidebar() {
             >
               <Icon
                 className="h-[18px] w-[18px]"
-                style={{ color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)" }}
+                style={{
+                  color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                }}
               />
               <span className="text-[13px] font-medium">{label}</span>
             </Link>
@@ -134,13 +184,19 @@ export function Sidebar() {
       {!collapsed && (
         <div
           className="mx-3 mb-4 rounded-lg p-3"
-          style={{ background: "var(--color-sidebar-active)", border: "1px solid rgba(158,149,245,0.2)" }}
+          style={{
+            background: "var(--color-sidebar-active)",
+            border: "1px solid rgba(158,149,245,0.2)",
+          }}
         >
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" style={{ color: "var(--color-sidebar-icon)" }} />
             <span className="text-[12px] font-semibold text-white">Ask AI</span>
           </div>
-          <p className="mt-1.5 text-[11px] leading-snug" style={{ color: "var(--color-sidebar-text)" }}>
+          <p
+            className="mt-1.5 text-[11px] leading-snug"
+            style={{ color: "var(--color-sidebar-text)" }}
+          >
             Cell-level Q&amp;A with full source citation.
           </p>
         </div>
@@ -167,17 +223,28 @@ export function Sidebar() {
             collapsed ? "h-10 w-10 text-[13px]" : "h-8 w-8 text-[12px]"
           }`}
           style={{ background: "var(--color-brand)" }}
-          title="Ayesha S."
+          title={user?.name ?? "Sheet Sherlock"}
         >
-          AS
+          {initials}
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight">
-            <span className="text-[12px] font-semibold text-white">Ayesha S.</span>
+            <span className="text-[12px] font-semibold text-white">
+              {user?.name ?? "Not signed in"}
+            </span>
             <span className="text-[10px]" style={{ color: "var(--color-sidebar-text)" }}>
-              Finance Analyst
+              {user ? roleLabel(user.role) : "Guest"}
             </span>
           </div>
+        )}
+        {!collapsed && user && (
+          <button
+            onClick={logout}
+            className="ml-auto rounded px-2 py-1 text-[10px] font-semibold hover:bg-white/5"
+            style={{ color: "var(--color-sidebar-text)" }}
+          >
+            Sign out
+          </button>
         )}
       </div>
     </aside>

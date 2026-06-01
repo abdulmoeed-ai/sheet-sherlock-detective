@@ -1,175 +1,630 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
-import { CheckCircle2, MessageSquare, Send, RotateCcw, FileCheck } from "lucide-react";
+import { queryKeys } from "@/lib/api/query-keys";
+import { listComments } from "@/lib/api/projects";
+import type { WorkspaceResponse } from "@/lib/api/types";
+import { auditRows, dashboardMetrics } from "@/lib/mappers/workspace";
+import { useCreateComment, useManagerDecision } from "@/hooks/use-project-actions";
+import { useWorkspace } from "@/hooks/use-projects";
+import { useSelectedProjectId } from "@/lib/project-store";
+import { CheckCircle2, MessageSquare, Send, RotateCcw, FileCheck, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/review")({
   head: () => ({
     meta: [
-      { title: "Manager Review — Sheet Sherlock" },
-      { name: "description", content: "Structured Finance Manager review pack: KPI summary, diff log, override log, inline comments." },
+      { title: "Manager Review - Sheet Sherlock" },
+      {
+        name: "description",
+        content:
+          "Structured Finance Manager review pack: KPI summary, diff log, override log, inline comments.",
+      },
     ],
   }),
   component: Review,
 });
 
-const KPIS = [
-  ["Revenue (FY25)",     "PKR 54,800M", "+8.4% YoY"],
-  ["EBITDA Margin",      "23.6%",       "+120 bps"],
-  ["Gross Margin",       "31.2%",       "+90 bps"],
-  ["Operating CF",       "PKR 11,420M", "+4.1% YoY"],
-  ["Net Debt / EBITDA",  "0.42x",       "-0.08x"],
-  ["Free Cash Flow",     "PKR 7,650M",  "+6.0% YoY"],
+const FALLBACK_KPIS = [
+  { label: "Revenue (FY25)", value: "PKR 54,800M", delta: "+8.4% YoY" },
+  { label: "EBITDA Margin", value: "23.6%", delta: "+120 bps" },
+  { label: "Gross Margin", value: "31.2%", delta: "+90 bps" },
+  { label: "Operating CF", value: "PKR 11,420M", delta: "+4.1% YoY" },
+  { label: "Net Debt / EBITDA", value: "0.42x", delta: "-0.08x" },
+  { label: "Free Cash Flow", value: "PKR 7,650M", delta: "+6.0% YoY" },
 ];
 
-const DIFFS = [
-  { cell: "BS!D42", field: "Inventory", before: "6,040M", after: "1,840M", tier: "blocked", reason: "OCR digit transposition (p.74)" },
-  { cell: "IS!C18", field: "EBITDA",    before: "12,400M", after: "12,900M", tier: "flagged", reason: "Restated prior-year confirmed" },
-  { cell: "IS!C24", field: "Net Profit", before: "8,190M", after: "8,210M", tier: "auto",    reason: "Within 2% tolerance" },
+const FALLBACK_DIFFS = [
+  {
+    id: "fallback-bs-d42",
+    cell: "BS!D42",
+    field: "Inventory",
+    before: "6,040M",
+    after: "1,840M",
+    tier: "blocked",
+    reason: "OCR digit transposition (p.74)",
+  },
+  {
+    id: "fallback-is-c18",
+    cell: "IS!C18",
+    field: "EBITDA",
+    before: "12,400M",
+    after: "12,900M",
+    tier: "flagged",
+    reason: "Restated prior-year confirmed",
+  },
+  {
+    id: "fallback-is-c24",
+    cell: "IS!C24",
+    field: "Net Profit",
+    before: "8,190M",
+    after: "8,210M",
+    tier: "auto",
+    reason: "Within 2% tolerance",
+  },
 ];
 
-const OVERRIDES = [
-  { who: "Ayesha S.", cell: "BS!D42", action: "Accepted AI correction 6,040M → 1,840M", reason: "OCR p.74 confirmed", at: "10:14" },
-  { who: "Ayesha S.", cell: "IS!C18", action: "Confirmed flagged diff",                     reason: "Tied to Note 21 restatement", at: "10:18" },
+const FALLBACK_OVERRIDES = [
+  {
+    id: "fallback-override-1",
+    who: "Ayesha S.",
+    cell: "BS!D42",
+    action: "Accepted AI correction 6,040M -> 1,840M",
+    reason: "OCR p.74 confirmed",
+    at: "10:14",
+  },
+  {
+    id: "fallback-override-2",
+    who: "Ayesha S.",
+    cell: "IS!C18",
+    action: "Confirmed flagged diff",
+    reason: "Tied to Note 21 restatement",
+    at: "10:18",
+  },
 ];
+
+type KpiCard = { label: string; value: string; delta?: string };
+type DiffRow = {
+  id: string;
+  cell: string;
+  field: string;
+  before: string;
+  after: string;
+  tier: string;
+  reason: string;
+};
+type OverrideRow = {
+  id: string;
+  who: string;
+  cell: string;
+  action: string;
+  reason: string;
+  at: string;
+};
+type CommentRow = {
+  id: string;
+  author: string;
+  text: string;
+  at: string;
+  status: string;
+  target?: string;
+};
+type LooseRecord = Record<string, unknown>;
 
 function Review() {
   const cycle = useCycle();
   const navigate = useNavigate();
-  const [comments, setComments] = useState<{ author: string; text: string; at: string }[]>([
-    { author: "Faisal K. (Manager)", text: "Inventory correction looks right — please add a footnote in Assumptions.", at: "11:02" },
-  ]);
+  const projectId = useSelectedProjectId();
+  const workspace = useWorkspace(projectId);
+  const managerDecision = useManagerDecision(projectId ?? "");
+  const createComment = useCreateComment(projectId ?? "");
   const [draft, setDraft] = useState("");
 
-  const submit = () => {
-    if (!draft.trim()) return;
-    setComments((xs) => [...xs, { author: "Faisal K. (Manager)", text: draft.trim(), at: "now" }]);
+  const commentsQuery = useQuery({
+    queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
+    queryFn: () => listComments(projectId as string),
+    enabled: !!projectId,
+    retry: false,
+  });
+
+  const kpis = useMemo(() => metricCards(workspace.data), [workspace.data]);
+  const diffs = useMemo(() => diffRows(workspace.data), [workspace.data]);
+  const overrides = useMemo(() => overrideRows(workspace.data), [workspace.data]);
+  const comments = useMemo(() => commentRows(commentsQuery.data), [commentsQuery.data]);
+  const commentsSummary = isRecord(workspace.data?.review?.comments)
+    ? workspace.data.review.comments
+    : null;
+  const project = workspace.data?.project;
+  const decisionPending = managerDecision.isPending;
+  const commentPending = createComment.isPending;
+  const actionDisabled = !projectId || workspace.isLoading || decisionPending;
+  const pageError =
+    workspace.error instanceof Error
+      ? workspace.error.message
+      : "Unable to load manager review workspace.";
+  const commentsError =
+    commentsQuery.error instanceof Error ? commentsQuery.error.message : "Unable to load comments.";
+  const mutationError =
+    managerDecision.error instanceof Error
+      ? managerDecision.error.message
+      : createComment.error instanceof Error
+        ? createComment.error.message
+        : null;
+
+  const submit = async () => {
+    if (!projectId || !draft.trim()) return;
+    await createComment.mutateAsync({ body: draft.trim() });
     setDraft("");
   };
 
-  const approve = () => {
+  const sendBack = async () => {
+    if (!projectId) return;
+    await managerDecision.mutateAsync({
+      action: "send_back",
+      note: draft.trim() || "Returned for analyst updates.",
+    });
     cycleStore.setStatus("review");
-    setTimeout(() => {
-      cycleStore.setStatus("approved");
-      navigate({ to: "/sign-off" });
-    }, 400);
+  };
+
+  const approve = async () => {
+    if (!projectId) return;
+    cycleStore.setStatus("review");
+    await managerDecision.mutateAsync({ action: "approve", note: draft.trim() || null });
+    cycleStore.setStatus("approved");
+    navigate({ to: "/sign-off" });
   };
 
   return (
     <PageShell
-      title={`Manager Review · ${cycle.company || "MTL"} ${cycle.period || "FY2025"}`}
-      subtitle="Structured review pack — no email. Approve to forward to CFO sign-off; or send back with comments."
+      title={`Manager Review · ${project?.companyName || cycle.company || "MTL"} ${project?.fiscalYear || cycle.period || "FY2025"}`}
+      subtitle={
+        projectId
+          ? "Structured review pack from the backend workspace. Approve to forward to CFO sign-off, or send back with comments."
+          : "Select a project before reviewing the manager pack."
+      }
       hideProgress
       actions={
         <>
-          <Button variant="secondary"><RotateCcw className="h-4 w-4" /> Send back</Button>
-          <Button onClick={approve}>
-            <CheckCircle2 className="h-4 w-4" /> Approve & forward to CFO
+          <Button variant="secondary" onClick={sendBack} disabled={actionDisabled}>
+            {decisionPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}{" "}
+            Send back
+          </Button>
+          <Button onClick={approve} disabled={actionDisabled}>
+            {decisionPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" />
+            )}{" "}
+            Approve & forward to CFO
           </Button>
         </>
       }
     >
-      {/* KPI summary */}
-      <Card className="mb-5">
-        <h3 className="mb-3 text-[15px] font-semibold">KPI Summary</h3>
-        <div className="grid grid-cols-3 gap-4">
-          {KPIS.map(([k, v, d]) => (
-            <div key={k} className="rounded-lg border p-4" style={{ borderColor: "var(--color-border-default)" }}>
-              <div className="text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">{k}</div>
-              <div className="mt-1 text-[20px] font-bold tnum">{v}</div>
-              <div className="text-[11px] text-[var(--color-success-fg)]">{d}</div>
+      {!projectId ? (
+        <Card>
+          <div className="text-[13px] text-[var(--color-text-secondary)]">
+            No project selected. Open the registry and choose a project to review.
+          </div>
+        </Card>
+      ) : workspace.isLoading ? (
+        <Card>
+          <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-muted)]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading manager review pack...
+          </div>
+        </Card>
+      ) : workspace.isError ? (
+        <Card>
+          <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[13px] text-[var(--color-danger-fg)]">
+            {pageError}
+          </div>
+        </Card>
+      ) : (
+        <>
+          {mutationError ? (
+            <div className="mb-5 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+              {mutationError}
             </div>
-          ))}
-        </div>
-      </Card>
+          ) : null}
 
-      <div className="grid grid-cols-2 gap-5">
-        {/* Diff log */}
-        <Card>
-          <h3 className="mb-3 text-[15px] font-semibold">Diff log (3)</h3>
-          <table className="w-full text-[12px]">
-            <thead className="border-b text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">
-              <tr>
-                <th className="py-2 text-left">Cell</th>
-                <th className="text-left">Field</th>
-                <th className="text-right">Before</th>
-                <th className="text-right">After</th>
-                <th className="text-left">Tier</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DIFFS.map((d) => (
-                <tr key={d.cell} className="border-b last:border-0">
-                  <td className="py-2 font-mono">{d.cell}</td>
-                  <td>{d.field}</td>
-                  <td className="text-right tnum">{d.before}</td>
-                  <td className="text-right tnum font-semibold">{d.after}</td>
-                  <td>
-                    <Badge tone={d.tier === "auto" ? "success" : d.tier === "flagged" ? "warning" : "danger"}>
-                      {d.tier.toUpperCase()}
-                    </Badge>
-                  </td>
-                </tr>
+          <Card className="mb-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[15px] font-semibold">KPI Summary</h3>
+              <Badge tone={workspace.data?.dashboard ? "info" : "neutral"}>
+                {workspace.data?.dashboard ? "Workspace" : "Fallback"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {kpis.map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="rounded-lg border p-4"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  <div className="text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
+                    {kpi.label}
+                  </div>
+                  <div className="mt-1 text-[20px] font-bold tnum">{kpi.value}</div>
+                  {kpi.delta ? (
+                    <div className="text-[11px] text-[var(--color-success-fg)]">{kpi.delta}</div>
+                  ) : null}
+                </div>
               ))}
-            </tbody>
-          </table>
-        </Card>
+            </div>
+          </Card>
 
-        {/* Override log */}
-        <Card>
-          <h3 className="mb-3 text-[15px] font-semibold">Analyst override log</h3>
-          <ol className="space-y-3">
-            {OVERRIDES.map((o, i) => (
-              <li key={i} className="rounded-md border p-3" style={{ borderColor: "var(--color-border-default)" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold">{o.who}</span>
-                  <span className="text-[11px] text-[var(--color-text-muted)]">{o.at}</span>
-                </div>
-                <div className="mt-1 text-[12px]">
-                  <span className="font-mono font-semibold">{o.cell}</span> · {o.action}
-                </div>
-                <div className="text-[11px] text-[var(--color-text-muted)]">Reason: {o.reason}</div>
-              </li>
-            ))}
-          </ol>
-        </Card>
-      </div>
-
-      {/* Comments */}
-      <Card className="mt-5">
-        <div className="mb-3 flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-[var(--color-brand)]" />
-          <h3 className="text-[15px] font-semibold">Inline comments</h3>
-        </div>
-        <ol className="space-y-2">
-          {comments.map((c, i) => (
-            <li key={i} className="rounded-md border bg-[var(--color-table-row-alt)] p-3" style={{ borderColor: "var(--color-border-default)" }}>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold">{c.author}</span>
-                <span className="text-[11px] text-[var(--color-text-muted)]">{c.at}</span>
+          <div className="grid grid-cols-2 gap-5">
+            <Card>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-[15px] font-semibold">Diff log ({diffs.length})</h3>
+                <Badge tone={hasReviewRows(workspace.data) ? "info" : "neutral"}>
+                  {hasReviewRows(workspace.data) ? "Review" : "Fallback"}
+                </Badge>
               </div>
-              <div className="mt-1 text-[13px]">{c.text}</div>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add a comment…"
-            className="h-9 flex-1 rounded-md border px-3 text-[13px]"
-            style={{ borderColor: "var(--color-border-strong)" }}
-          />
-          <Button onClick={submit}><Send className="h-4 w-4" /> Post</Button>
-        </div>
-      </Card>
+              <table className="w-full text-[12px]">
+                <thead className="border-b text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">
+                  <tr>
+                    <th className="py-2 text-left">Cell</th>
+                    <th className="text-left">Field</th>
+                    <th className="text-right">Before</th>
+                    <th className="text-right">After</th>
+                    <th className="text-left">Tier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffs.map((diff) => (
+                    <tr key={diff.id} className="border-b last:border-0">
+                      <td className="py-2 font-mono">{diff.cell}</td>
+                      <td>
+                        <div>{diff.field}</div>
+                        <div className="text-[10px] text-[var(--color-text-muted)]">
+                          {diff.reason}
+                        </div>
+                      </td>
+                      <td className="text-right tnum">{diff.before}</td>
+                      <td className="text-right tnum font-semibold">{diff.after}</td>
+                      <td>
+                        <Badge tone={tierTone(diff.tier)}>{diff.tier.toUpperCase()}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
 
-      <div className="mt-5 flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
-        <FileCheck className="h-4 w-4" />
-        This pack is version-locked. CFO will sign off on the exact version you approve.
-      </div>
+            <Card>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-[15px] font-semibold">Analyst override log</h3>
+                <Badge tone={overrides === FALLBACK_OVERRIDES ? "neutral" : "info"}>
+                  {overrides === FALLBACK_OVERRIDES ? "Fallback" : "Audit"}
+                </Badge>
+              </div>
+              <ol className="space-y-3">
+                {overrides.map((override) => (
+                  <li
+                    key={override.id}
+                    className="rounded-md border p-3"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-semibold">{override.who}</span>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">
+                        {override.at}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[12px]">
+                      <span className="font-mono font-semibold">{override.cell}</span> ·{" "}
+                      {override.action}
+                    </div>
+                    <div className="text-[11px] text-[var(--color-text-muted)]">
+                      Reason: {override.reason}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          </div>
+
+          <Card className="mt-5">
+            <div className="mb-3 flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-[var(--color-brand)]" />
+              <h3 className="text-[15px] font-semibold">Inline comments</h3>
+              {commentsSummary?.open !== undefined ? (
+                <Badge tone="info">{String(commentsSummary.open)} open</Badge>
+              ) : null}
+            </div>
+            {commentsQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-muted)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading comments...
+              </div>
+            ) : commentsQuery.isError ? (
+              <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+                {commentsError}
+              </div>
+            ) : comments.length === 0 ? (
+              <div
+                className="rounded-md border bg-[var(--color-table-row-alt)] p-3 text-[13px] text-[var(--color-text-secondary)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                No comments have been added to this review pack yet.
+              </div>
+            ) : (
+              <ol className="space-y-2">
+                {comments.map((comment) => (
+                  <li
+                    key={comment.id}
+                    className="rounded-md border bg-[var(--color-table-row-alt)] p-3"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-semibold">{comment.author}</span>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">
+                        {comment.at}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[13px]">{comment.text}</div>
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
+                      <Badge tone={comment.status === "resolved" ? "success" : "warning"}>
+                        {comment.status}
+                      </Badge>
+                      {comment.target ? <span>{comment.target}</span> : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <div className="mt-3 flex gap-2">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Add a manager comment..."
+                className="h-9 flex-1 rounded-md border px-3 text-[13px]"
+                style={{ borderColor: "var(--color-border-strong)" }}
+              />
+              <Button onClick={submit} disabled={!draft.trim() || commentPending}>
+                {commentPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}{" "}
+                Post
+              </Button>
+            </div>
+          </Card>
+
+          <div className="mt-5 flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
+            <FileCheck className="h-4 w-4" />
+            This pack is version-locked. CFO will sign off on the exact version you approve.
+          </div>
+        </>
+      )}
     </PageShell>
   );
+}
+
+function metricCards(workspace?: WorkspaceResponse): KpiCard[] {
+  const metrics = dashboardMetrics(workspace);
+  if (metrics.length === 0) return FALLBACK_KPIS;
+
+  const rawMetrics = firstArray(
+    workspace?.dashboard?.metrics,
+    workspace?.dashboard?.kpis,
+    workspace?.dashboard?.cards,
+    workspace?.dashboard?.summary,
+  );
+  return metrics.map((metric, index) => ({
+    label: metric.label,
+    value: metric.value,
+    delta:
+      metric.delta ??
+      stringValue(
+        rawMetrics[index]?.period ?? rawMetrics[index]?.subtitle ?? rawMetrics[index]?.description,
+        undefined,
+      ),
+  }));
+}
+
+function diffRows(workspace?: WorkspaceResponse): DiffRow[] {
+  const rows = firstArray(
+    workspace?.review?.rows,
+    workspace?.review?.diffRows,
+    workspace?.review?.changes,
+    workspace?.review?.items,
+  );
+  const diffs = rows.flatMap((row, rowIndex) => flattenReviewRow(row, rowIndex)).slice(0, 8);
+  return diffs.length > 0 ? diffs : FALLBACK_DIFFS;
+}
+
+function flattenReviewRow(row: LooseRecord, rowIndex: number): DiffRow[] {
+  if (isRecord(row.cells)) {
+    return Object.entries(row.cells).map(([period, cell], cellIndex) =>
+      diffFromCell(row, isRecord(cell) ? cell : {}, `${rowIndex}-${period}-${cellIndex}`, period),
+    );
+  }
+  return [diffFromCell(row, row, String(rowIndex), stringValue(row.period ?? row.year, ""))];
+}
+
+function diffFromCell(row: LooseRecord, cell: LooseRecord, id: string, period: string): DiffRow {
+  const history = records(cell.history);
+  const latestChange = [...history]
+    .reverse()
+    .find((entry) => stringValue(entry.action, "") !== "" && entry.action !== "source");
+  const field = stringValue(row.label ?? row.field ?? row.name ?? cell.label, "Field");
+  const sheet = stringValue(
+    row.sheetName ?? row.sheet ?? cell.sheetName ?? cell.templateSheet,
+    "Model",
+  );
+  const cellRef = stringValue(
+    cell.templateCell ?? row.templateCell ?? row.cell ?? row.address,
+    sheet,
+  );
+  const reason = firstString(
+    latestChange?.note,
+    firstArrayValue(cell.reasons),
+    cell.source,
+    row.reason,
+    "Backend review row",
+  );
+
+  return {
+    id: stringValue(cell.fieldId ?? row.fieldId ?? row.id, `diff-${id}`),
+    cell: cellRef.includes("!") ? cellRef : `${sheet}!${cellRef}`,
+    field: period ? `${field} (${period})` : field,
+    before: firstString(latestChange?.oldValue, cell.oldValue, row.oldValue, "Source"),
+    after: firstString(
+      latestChange?.newValue,
+      cell.newValue,
+      cell.value,
+      row.newValue,
+      row.value,
+      "-",
+    ),
+    tier: statusTier(
+      stringValue(cell.status ?? row.status, "pending"),
+      Number(cell.confidence ?? row.confidence ?? 0),
+    ),
+    reason,
+  };
+}
+
+function overrideRows(workspace?: WorkspaceResponse): OverrideRow[] {
+  const revisionOverrides = reviewRevisionOverrides(workspace);
+  if (revisionOverrides.length > 0) return revisionOverrides.slice(0, 5);
+
+  const events = auditRows(workspace)
+    .filter((event) => /review|override|edit|decision|comment/i.test(event.action))
+    .slice(-5)
+    .reverse()
+    .map((event) => ({
+      id: event.id,
+      who: event.actor,
+      cell: firstString(event.payload?.templateCell, event.payload?.fieldId, "Project"),
+      action: event.action.replaceAll("_", " "),
+      reason: firstString(event.payload?.note, event.payload?.status, "Audit event"),
+      at: formatDate(event.timestamp),
+    }));
+
+  return events.length > 0 ? events : FALLBACK_OVERRIDES;
+}
+
+function reviewRevisionOverrides(workspace?: WorkspaceResponse): OverrideRow[] {
+  const rows = firstArray(workspace?.review?.rows);
+  return rows.flatMap((row, rowIndex) => {
+    if (!isRecord(row.cells)) return [];
+    return Object.entries(row.cells).flatMap(([period, cell], cellIndex) => {
+      const currentCell = isRecord(cell) ? cell : {};
+      const history = records(currentCell.history);
+      return history
+        .filter((entry) => stringValue(entry.action, "") !== "" && entry.action !== "source")
+        .map((entry, historyIndex) => {
+          const sheet = stringValue(row.sheetName ?? currentCell.templateSheet, "Model");
+          const cellRef = stringValue(currentCell.templateCell, sheet);
+          return {
+            id: stringValue(entry.id, `override-${rowIndex}-${cellIndex}-${historyIndex}`),
+            who: stringValue(entry.actor, "Analyst"),
+            cell: cellRef.includes("!") ? cellRef : `${sheet}!${cellRef}`,
+            action: `${stringValue(entry.action, "updated")} ${stringValue(row.label, "field")} ${period}`,
+            reason: firstString(
+              entry.note,
+              firstArrayValue(currentCell.reasons),
+              "Review cell history",
+            ),
+            at: formatDate(stringValue(entry.createdAt, "")),
+          };
+        });
+    });
+  });
+}
+
+function commentRows(rawComments?: LooseRecord[]): CommentRow[] {
+  return (rawComments ?? []).map((comment, index) => {
+    const target = firstString(comment.templateCell, comment.sheetName, comment.fieldId, "");
+    return {
+      id: stringValue(comment.id, `comment-${index}`),
+      author: stringValue(comment.actor ?? comment.author ?? comment.user, "Reviewer"),
+      text: stringValue(comment.body ?? comment.text ?? comment.comment, ""),
+      at: formatDate(stringValue(comment.createdAt ?? comment.updatedAt, "")),
+      status: stringValue(comment.status, "open"),
+      target: target || undefined,
+    };
+  });
+}
+
+function hasReviewRows(workspace?: WorkspaceResponse): boolean {
+  return (
+    firstArray(
+      workspace?.review?.rows,
+      workspace?.review?.diffRows,
+      workspace?.review?.changes,
+      workspace?.review?.items,
+    ).length > 0
+  );
+}
+
+function tierTone(tier: string): "success" | "warning" | "danger" | "info" {
+  if (["auto", "accepted", "approved", "closed"].includes(tier)) return "success";
+  if (["flagged", "pending", "open", "review"].includes(tier)) return "warning";
+  if (["blocked", "rejected", "error", "failed"].includes(tier)) return "danger";
+  return "info";
+}
+
+function statusTier(status: string, confidence: number): string {
+  const normalized = status.toLowerCase();
+  if (["accepted", "approved", "edited", "auto"].includes(normalized))
+    return normalized === "edited" ? "flagged" : "auto";
+  if (["rejected", "blocked", "failed", "error"].includes(normalized)) return "blocked";
+  if (confidence > 0 && confidence < 70) return "flagged";
+  return normalized || "pending";
+}
+
+function formatDate(value: string): string {
+  if (!value) return "n/a";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function firstArray(...values: unknown[]): LooseRecord[] {
+  for (const value of values) {
+    if (Array.isArray(value)) return value.filter(isRecord);
+  }
+  return [];
+}
+
+function firstArrayValue(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : undefined;
+}
+
+function records(value: unknown): LooseRecord[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function isRecord(value: unknown): value is LooseRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return String(value);
+  }
+  return "";
+}
+
+function stringValue(value: unknown, fallback: string): string;
+function stringValue(value: unknown, fallback: undefined): string | undefined;
+function stringValue(value: unknown, fallback: string | undefined): string | undefined {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value);
 }
