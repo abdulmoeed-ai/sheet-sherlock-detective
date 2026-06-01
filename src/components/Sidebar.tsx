@@ -12,8 +12,16 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ClipboardList,
+  LogOut,
 } from "lucide-react";
-import { sidebarStore, useSidebarCollapsed, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "@/lib/sidebar-store";
+import { useAuth } from "@/lib/auth-context";
+import {
+  sidebarStore,
+  useSidebarCollapsed,
+  SIDEBAR_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
+} from "@/lib/sidebar-store";
+import { getRoleLabel, getUserInitials } from "@/lib/sidebar-user";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +37,10 @@ const nav = [
 export function Sidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const collapsed = useSidebarCollapsed();
+  const { session, signOut } = useAuth();
+  const userName = session.user.name;
+  const roleLabel = getRoleLabel(session.user.role);
+  const initials = getUserInitials(userName);
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
 
   return (
@@ -40,17 +52,24 @@ export function Sidebar() {
         borderRight: "1px solid var(--color-sidebar-border)",
       }}
     >
-      <div className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"} pt-5 pb-4`}>
+      <div
+        className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"} pt-5 pb-4`}
+      >
         <div
           className={`flex items-center justify-center rounded-md ${collapsed ? "h-10 w-10" : "h-8 w-8"}`}
           style={{ background: "var(--color-brand)" }}
         >
-          <Search className={collapsed ? "h-[22px] w-[22px] text-white" : "h-[18px] w-[18px] text-white"} />
+          <Search
+            className={collapsed ? "h-[22px] w-[22px] text-white" : "h-[18px] w-[18px] text-white"}
+          />
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight">
             <span className="text-[15px] font-semibold text-white">Sheet Sherlock</span>
-            <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--color-sidebar-icon)" }}>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{ color: "var(--color-sidebar-icon)" }}
+            >
               FP&amp;A · v1
             </span>
           </div>
@@ -74,7 +93,10 @@ export function Sidebar() {
       )}
 
       {!collapsed && (
-        <div className="mt-3 px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: "#5C6478" }}>
+        <div
+          className="mt-3 px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: "#5C6478" }}
+        >
           Workspace
         </div>
       )}
@@ -95,7 +117,9 @@ export function Sidebar() {
               >
                 <Icon
                   className="h-[22px] w-[22px]"
-                  style={{ color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)" }}
+                  style={{
+                    color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                  }}
                 />
               </Link>
             );
@@ -112,7 +136,9 @@ export function Sidebar() {
             >
               <Icon
                 className="h-[18px] w-[18px]"
-                style={{ color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)" }}
+                style={{
+                  color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                }}
               />
               <span className="text-[13px] font-medium">{label}</span>
             </Link>
@@ -123,13 +149,19 @@ export function Sidebar() {
       {!collapsed && (
         <div
           className="mx-3 mb-4 rounded-lg p-3"
-          style={{ background: "var(--color-sidebar-active)", border: "1px solid rgba(158,149,245,0.2)" }}
+          style={{
+            background: "var(--color-sidebar-active)",
+            border: "1px solid rgba(158,149,245,0.2)",
+          }}
         >
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" style={{ color: "var(--color-sidebar-icon)" }} />
             <span className="text-[12px] font-semibold text-white">Ask AI</span>
           </div>
-          <p className="mt-1.5 text-[11px] leading-snug" style={{ color: "var(--color-sidebar-text)" }}>
+          <p
+            className="mt-1.5 text-[11px] leading-snug"
+            style={{ color: "var(--color-sidebar-text)" }}
+          >
             Cell-level Q&amp;A with full source citation.
           </p>
         </div>
@@ -151,22 +183,48 @@ export function Sidebar() {
         className={`flex items-center border-t py-3 ${collapsed ? "justify-center px-0" : "gap-2.5 px-4"}`}
         style={{ borderColor: "var(--color-sidebar-border)" }}
       >
-        <div
-          className={`flex items-center justify-center rounded-full font-semibold text-white ${
-            collapsed ? "h-10 w-10 text-[13px]" : "h-8 w-8 text-[12px]"
-          }`}
-          style={{ background: "var(--color-brand)" }}
-          title="Ayesha S."
-        >
-          AS
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col leading-tight">
-            <span className="text-[12px] font-semibold text-white">Ayesha S.</span>
-            <span className="text-[10px]" style={{ color: "var(--color-sidebar-text)" }}>
-              Finance Analyst
-            </span>
-          </div>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={signOut}
+            title={`${userName} · ${roleLabel}. Sign out`}
+            aria-label="Sign out"
+            className="flex h-10 w-10 items-center justify-center rounded-full font-semibold text-white transition-opacity hover:opacity-85"
+            style={{ background: "var(--color-brand)" }}
+          >
+            {initials}
+          </button>
+        ) : (
+          <>
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white"
+              style={{ background: "var(--color-brand)" }}
+              title={userName}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1 flex-col leading-tight">
+              <span className="block truncate text-[12px] font-semibold text-white">
+                {userName}
+              </span>
+              <span
+                className="block truncate text-[10px]"
+                style={{ color: "var(--color-sidebar-text)" }}
+              >
+                {roleLabel}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              title="Sign out"
+              aria-label="Sign out"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/5"
+              style={{ color: "var(--color-sidebar-text)" }}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </>
         )}
       </div>
     </aside>

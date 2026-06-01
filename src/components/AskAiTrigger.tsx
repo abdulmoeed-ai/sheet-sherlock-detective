@@ -10,11 +10,30 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
-import { askProjectAi } from "@/lib/api/projects";
+import {
+  streamProjectAi,
+  type AskAiFinalResponse,
+  type AskAiSourceEvent,
+  type AskAiStatusEvent,
+} from "@/lib/api/projects";
+
+type StreamActivity =
+  | { type: "status"; message: string; stage: string; percent: number }
+  | { type: "source"; message: string; kind: string; count: number };
 
 type Msg =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "ai"; kind: "text"; text: string }
+  | {
+      id: string;
+      role: "ai";
+      kind: "stream";
+      text: string;
+      activity: StreamActivity[];
+      approaches: string[];
+      final?: AskAiFinalResponse;
+      done: boolean;
+    }
   | { id: string; role: "ai"; kind: "clarify" }
   | { id: string; role: "ai"; kind: "status"; steps: string[] }
   | { id: string; role: "ai"; kind: "prediction" };
@@ -32,14 +51,26 @@ export function AskAiTrigger() {
   const [asking, setAsking] = useState(false);
   const cycle = useCycle();
   const navigate = useNavigate();
+  const routePath = useRouterState({ select: (s) => s.location.pathname });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const chatSessionIdRef = useRef(`chat-${Date.now()}`);
+
+  const abortStream = () => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    setAsking(false);
+  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
+  useEffect(() => () => abortStream(), []);
+
   const send = async (text: string) => {
     if (!text.trim()) return;
+    abortStream();
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -54,29 +85,41 @@ export function AskAiTrigger() {
 
     if (cycle.projectId) {
       setAsking(true);
+      const aiId = `a-${Date.now()}`;
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      setMessages((m) => [
+        ...m,
+        { id: aiId, role: "ai", kind: "stream", text: "", activity: [], approaches: [], done: false },
+      ]);
       try {
-        const response = await askProjectAi(cycle.projectId, text);
-        setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "ai",
-            kind: "text",
-            text: response.answer,
-          },
-        ]);
+        await streamProjectAi(cycle.projectId, text, {
+          sessionId: chatSessionIdRef.current,
+          routePath,
+          screenName: screenNameForPath(routePath),
+          filters: { cycleStatus: cycle.status, period: cycle.period, company: cycle.company },
+          includeExternalSources: false,
+          signal: controller.signal,
+          onStatus: (event) => updateStreamMessage(aiId, { type: "status", event }),
+          onSource: (event) => updateStreamMessage(aiId, { type: "source", event }),
+          onApproach: (event) => updateStreamMessage(aiId, { type: "approach", summary: event.summary }),
+          onToken: (event) => updateStreamMessage(aiId, { type: "token", delta: event.delta }),
+          onFinal: (event) => updateStreamMessage(aiId, { type: "final", final: event }),
+          onError: (event) => updateStreamMessage(aiId, { type: "token", delta: event.message }),
+        });
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "ai",
-            kind: "text",
-            text: error instanceof Error ? error.message : "Ask AI is unavailable for this project.",
-          },
+          ...m.filter((message) => message.id !== aiId),
+          { id: aiId, role: "ai", kind: "text", text: error instanceof Error ? error.message : "Ask AI is unavailable for this project." },
         ]);
       } finally {
-        setAsking(false);
+        if (streamAbortRef.current === controller) {
+          streamAbortRef.current = null;
+          setAsking(false);
+        }
       }
       return;
     }
@@ -96,6 +139,59 @@ export function AskAiTrigger() {
         },
       ]);
     }, 800);
+  };
+
+  const updateStreamMessage = (
+    id: string,
+    update:
+      | { type: "status"; event: AskAiStatusEvent }
+      | { type: "source"; event: AskAiSourceEvent }
+      | { type: "approach"; summary: string }
+      | { type: "token"; delta: string }
+      | { type: "final"; final: AskAiFinalResponse },
+  ) => {
+    setMessages((messages) =>
+      messages.map((message) => {
+        if (message.id !== id || message.role !== "ai" || message.kind !== "stream") {
+          return message;
+        }
+        if (update.type === "status") {
+          return {
+            ...message,
+            activity: [
+              ...message.activity,
+              {
+                type: "status",
+                stage: update.event.stage,
+                message: update.event.message,
+                percent: update.event.percent,
+              },
+            ],
+          };
+        }
+        if (update.type === "source") {
+          return {
+            ...message,
+            activity: [
+              ...message.activity,
+              {
+                type: "source",
+                kind: update.event.kind,
+                message: update.event.message,
+                count: update.event.count,
+              },
+            ],
+          };
+        }
+        if (update.type === "approach") {
+          return { ...message, approaches: [...message.approaches, update.summary] };
+        }
+        if (update.type === "token") {
+          return { ...message, text: `${message.text}${update.delta}` };
+        }
+        return { ...message, text: update.final.answer, final: update.final, done: true };
+      }),
+    );
   };
 
   const runPrediction = () => {
@@ -156,7 +252,10 @@ export function AskAiTrigger() {
               </span>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                abortStream();
+                setOpen(false);
+              }}
               className="rounded-md p-1 hover:bg-[var(--color-tag-bg)]"
               aria-label="Close"
             >
@@ -218,6 +317,9 @@ export function AskAiTrigger() {
               }
               if (m.kind === "text") {
                 return <AiBubble key={m.id}>{m.text}</AiBubble>;
+              }
+              if (m.kind === "stream") {
+                return <StreamingAiBubble key={m.id} message={m} />;
               }
               if (m.kind === "clarify") {
                 return (
@@ -378,6 +480,85 @@ function AiBubble({ children }: { children: React.ReactNode }) {
   );
 }
 
+function StreamingAiBubble({ message }: { message: Extract<Msg, { kind: "stream" }> }) {
+  const citations = message.final?.sourcesUsed ?? [];
+  return (
+    <AiBubble>
+      <div className="space-y-3">
+        {message.activity.length > 0 && (
+          <div className="space-y-1.5">
+            {message.activity.slice(-6).map((activity, index) => (
+              <div
+                key={`${activity.type}-${index}`}
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5"
+                style={{ background: "var(--color-tag-bg)", color: "var(--color-text-secondary)" }}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-success)" }} />
+                  <span className="truncate text-[12px]">{activity.message}</span>
+                </div>
+                <span className="shrink-0 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                  {activity.type === "source" ? activity.count : `${activity.percent}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {message.approaches.length > 0 && (
+          <details className="rounded-md border px-2.5 py-2" style={{ borderColor: "var(--color-border-default)" }}>
+            <summary className="cursor-pointer text-[12px] font-semibold" style={{ color: "var(--color-text-secondary)" }}>
+              Approach
+            </summary>
+            <div className="mt-1.5 space-y-1 text-[12px] leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+              {message.approaches.map((summary) => (
+                <p key={summary}>{summary}</p>
+              ))}
+            </div>
+          </details>
+        )}
+
+        <p className="whitespace-pre-wrap text-[13px] leading-relaxed" style={{ color: "var(--color-text-primary)" }}>
+          {message.text || (message.done ? "" : "Preparing answer...")}
+        </p>
+
+        {citations.length > 0 && (
+          <div className="border-t pt-2" style={{ borderColor: "var(--color-border-default)" }}>
+            <div className="mb-1 text-[11px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
+              Sources used ({citations.length})
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {citations.slice(0, 4).map((citation, index) => (
+                <div
+                  key={index}
+                  className="min-w-[180px] rounded-md border bg-white px-2.5 py-1.5 text-[11px]"
+                  style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+                >
+                  <div className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                    {citation.kind === "model"
+                      ? `${String(citation.sheetName ?? "Model")} ${String(citation.cellReference ?? "")}`.trim()
+                      : String(citation.sourceName ?? citation.kind ?? "Source")}
+                  </div>
+                  <div className="mt-1 line-clamp-2">{String(citation.excerpt ?? citation.currentValue ?? "")}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(message.final?.warnings?.length ?? 0) > 0 && (
+          <div
+            className="rounded-md px-2.5 py-1.5 text-[12px]"
+            style={{ background: "#FFFBEB", color: "var(--color-warning-fg)" }}
+          >
+            {message.final!.warnings.join(" · ")}
+          </div>
+        )}
+      </div>
+    </AiBubble>
+  );
+}
+
 function StatusStream({ steps }: { steps: string[] }) {
   const [done, setDone] = useState(0);
   useEffect(() => {
@@ -454,6 +635,14 @@ function MiniChart() {
       </div>
     </div>
   );
+}
+
+function screenNameForPath(path: string): string {
+  const clean = path.replace(/^\/+/, "") || "Dashboard";
+  return clean
+    .split("-")
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 // Listen for cross-component toasts triggered from any page

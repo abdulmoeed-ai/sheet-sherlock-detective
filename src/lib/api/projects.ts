@@ -12,6 +12,65 @@ export class ProjectApiError extends Error {
   }
 }
 
+export type AskAiFinalResponse = {
+  answer: string;
+  sourcesUsed: Array<Record<string, unknown>>;
+  modelCitations: Array<Record<string, unknown>>;
+  sourceCitations: Array<Record<string, unknown>>;
+  warnings: string[];
+  usage: Record<string, unknown>;
+  activityLog?: Array<Record<string, unknown>>;
+};
+
+export type AskAiStatusEvent = {
+  stage: "context" | "retrieval" | "web" | "llm" | "finalizing";
+  message: string;
+  percent: number;
+};
+
+export type AskAiSourceEvent = {
+  kind: "model" | "uploaded_pdf" | "uploaded_sheet" | "source_registry" | "web";
+  message: string;
+  count: number;
+  items: Array<Record<string, unknown>>;
+};
+
+export type AskAiApproachEvent = {
+  summary: string;
+};
+
+export type AskAiTokenEvent = {
+  delta: string;
+};
+
+export type AskAiErrorEvent = {
+  message: string;
+  code: string;
+};
+
+export type ParsedSseEvent = {
+  type: string;
+  payload: Record<string, unknown>;
+};
+
+export type StreamProjectAiOptions = {
+  sessionId?: string;
+  routePath?: string;
+  screenName?: string;
+  documentIds?: string[];
+  filters?: Record<string, unknown>;
+  includeExternalSources?: boolean;
+  sourceIds?: string[];
+  sourceGroup?: string;
+  signal?: AbortSignal;
+  onStatus?: (event: AskAiStatusEvent) => void;
+  onSource?: (event: AskAiSourceEvent) => void;
+  onApproach?: (event: AskAiApproachEvent) => void;
+  onToken?: (event: AskAiTokenEvent) => void;
+  onFinal?: (event: AskAiFinalResponse) => void;
+  onError?: (event: AskAiErrorEvent) => void;
+};
+
 export type MappingRule = {
   code: string;
   title: string;
@@ -118,21 +177,87 @@ export async function submitProjectForManagerReview(projectId: string, note: str
   });
 }
 
-export async function askProjectAi(projectId: string, question: string): Promise<{
-  answer: string;
-  sourcesUsed: Array<Record<string, unknown>>;
-  modelCitations: Array<Record<string, unknown>>;
-  sourceCitations: Array<Record<string, unknown>>;
-  warnings: string[];
-  usage: Record<string, unknown>;
-}> {
-  return apiRequest(`/api/projects/${projectId}/ask-ai`, {
-    method: "POST",
-    json: {
-      question,
-      includeExternalSources: false,
+export async function askProjectAi(projectId: string, question: string): Promise<AskAiFinalResponse> {
+  let final: AskAiFinalResponse | null = null;
+  await streamProjectAi(projectId, question, {
+    includeExternalSources: false,
+    onFinal: (event) => {
+      final = event;
     },
   });
+  if (!final) {
+    throw new ProjectApiError("Ask AI did not return a final answer.", 502);
+  }
+  return final;
+}
+
+export async function streamProjectAi(
+  projectId: string,
+  question: string,
+  options: StreamProjectAiOptions = {},
+): Promise<void> {
+  const session = loadSession();
+  if (!session) {
+    throw new ProjectApiError("Sign in before starting ingestion.", 401);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/ask-ai`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      question,
+      ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+      includeExternalSources: options.includeExternalSources ?? false,
+      ...(options.routePath ? { routePath: options.routePath } : {}),
+      ...(options.screenName ? { screenName: options.screenName } : {}),
+      ...(options.documentIds?.length ? { documentIds: options.documentIds } : {}),
+      ...(options.filters && Object.keys(options.filters).length ? { filters: options.filters } : {}),
+      ...(options.sourceIds ? { sourceIds: options.sourceIds } : {}),
+      ...(options.sourceGroup ? { sourceGroup: options.sourceGroup } : {}),
+    }),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw new ProjectApiError(await readErrorMessage(response), response.status);
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (contentType.includes("application/json")) {
+    options.onFinal?.((await response.json()) as AskAiFinalResponse);
+    return;
+  }
+
+  if (!response.body) {
+    throw new ProjectApiError("Ask AI stream did not return a response body.", 502);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    dispatchSseEvents(parts, options);
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    dispatchSseEvents([buffer], options);
+  }
+}
+
+export function parseSseEvents(chunks: string[]): ParsedSseEvent[] {
+  const buffer = chunks.join("");
+  return buffer
+    .split("\n\n")
+    .map((block) => parseSseBlock(block))
+    .filter((event): event is ParsedSseEvent => event !== null);
 }
 
 export async function runBalanceSheetDiagnosis(projectId: string): Promise<{
@@ -350,6 +475,42 @@ export async function toggleProjectMappingRule(projectId: string, ruleCode: stri
     method: "PATCH",
     json: { enabled },
   });
+}
+
+function dispatchSseEvents(blocks: string[], options: StreamProjectAiOptions) {
+  for (const event of blocks.map((block) => parseSseBlock(block))) {
+    if (!event) continue;
+    if (event.type === "status") {
+      options.onStatus?.(event.payload as AskAiStatusEvent);
+    } else if (event.type === "source") {
+      options.onSource?.(event.payload as AskAiSourceEvent);
+    } else if (event.type === "approach") {
+      options.onApproach?.(event.payload as AskAiApproachEvent);
+    } else if (event.type === "token") {
+      options.onToken?.(event.payload as AskAiTokenEvent);
+    } else if (event.type === "final") {
+      options.onFinal?.(event.payload as AskAiFinalResponse);
+    } else if (event.type === "error") {
+      options.onError?.(event.payload as AskAiErrorEvent);
+    }
+  }
+}
+
+function parseSseBlock(block: string): ParsedSseEvent | null {
+  const lines = block.split(/\r?\n/);
+  let type = "message";
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      type = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+  if (dataLines.length === 0) {
+    return null;
+  }
+  return { type, payload: JSON.parse(dataLines.join("\n")) as Record<string, unknown> };
 }
 
 async function apiRequest<T>(

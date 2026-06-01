@@ -19,6 +19,8 @@ import {
   runBalanceSheetDiagnosis,
   runProjectForecast,
   startProjectExtraction,
+  streamProjectAi,
+  parseSseEvents,
   submitProjectForManagerReview,
   toggleProjectMappingRule,
   uploadProjectDocument,
@@ -136,6 +138,81 @@ describe("project ingestion api client", () => {
     expect(JSON.parse(String(requests[0].init?.body))).toEqual({
       question: "What is revenue?",
       includeExternalSources: false,
+    });
+  });
+
+  it("parses split SSE chunks and multiple events per chunk", () => {
+    const events = parseSseEvents([
+      'event: status\ndata: {"stage":"context","message":"Preparing',
+      ' project context","percent":10}\n\n',
+      'event: token\ndata: {"delta":"Revenue "}\n\nevent: final\ndata: {"answer":"Revenue [1]."}\n\n',
+    ]);
+
+    expect(events).toEqual([
+      { type: "status", payload: { stage: "context", message: "Preparing project context", percent: 10 } },
+      { type: "token", payload: { delta: "Revenue " } },
+      { type: "final", payload: { answer: "Revenue [1]." } },
+    ]);
+  });
+
+  it("streams Ask AI activity, tokens, and final payload with abort support", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(encodeChunk('event: status\ndata: {"stage":"context","message":"Preparing project context","percent":10}\n\n'));
+              controller.enqueue(encodeChunk('event: source\ndata: {"kind":"model","message":"Found accepted model fields","count":1,"items":[]}\n\n'));
+              controller.enqueue(encodeChunk('event: approach\ndata: {"summary":"Use accepted model fields first."}\n\n'));
+              controller.enqueue(encodeChunk('event: token\ndata: {"delta":"Revenue "}\n\nevent: token\ndata: {"delta":"is cited [1]."}\n\n'));
+              controller.enqueue(encodeChunk('event: final\ndata: {"answer":"Revenue is cited [1].","sourcesUsed":[],"modelCitations":[],"sourceCitations":[],"warnings":[],"usage":{},"activityLog":[]}\n\n'));
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        ),
+      );
+    }) as typeof fetch;
+
+    const seen: string[] = [];
+    const abortController = new AbortController();
+    await streamProjectAi("project-1", "What is revenue?", {
+      sessionId: "chat-session-1",
+      routePath: "/diff-review",
+      screenName: "Diff Review",
+      documentIds: ["document-1"],
+      filters: { basis: "unconsolidated", period: "2025" },
+      includeExternalSources: false,
+      signal: abortController.signal,
+      onStatus: (event) => seen.push(`status:${event.message}`),
+      onSource: (event) => seen.push(`source:${event.kind}:${event.count}`),
+      onApproach: (event) => seen.push(`approach:${event.summary}`),
+      onToken: (event) => seen.push(`token:${event.delta}`),
+      onFinal: (event) => seen.push(`final:${event.answer}`),
+    });
+
+    expect(seen).toEqual([
+      "status:Preparing project context",
+      "source:model:1",
+      "approach:Use accepted model fields first.",
+      "token:Revenue ",
+      "token:is cited [1].",
+      "final:Revenue is cited [1].",
+    ]);
+    expect(requests[0].url).toEndWith("/api/projects/project-1/ask-ai");
+    expect((requests[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer access-token");
+    expect(requests[0].init?.signal).toBe(abortController.signal);
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({
+      question: "What is revenue?",
+      sessionId: "chat-session-1",
+      includeExternalSources: false,
+      routePath: "/diff-review",
+      screenName: "Diff Review",
+      documentIds: ["document-1"],
+      filters: { basis: "unconsolidated", period: "2025" },
     });
   });
 
@@ -438,4 +515,8 @@ function jsonResponse(body: unknown, status = 200): Promise<Response> {
       headers: { "Content-Type": "application/json" },
     }),
   );
+}
+
+function encodeChunk(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
 }
