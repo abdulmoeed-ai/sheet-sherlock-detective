@@ -55,6 +55,7 @@ export function SourcePreview({
 
   return (
     <div
+      data-testid={compact ? "source-preview-compact" : "source-preview-panel"}
       className="overflow-hidden rounded-lg border bg-white"
       style={{ borderColor: "var(--color-border-default)" }}
     >

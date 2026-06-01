@@ -11,11 +11,13 @@ import {
   Sparkles,
   ChevronsLeft,
   ChevronsRight,
+  ClipboardList,
 } from "lucide-react";
 import { sidebarStore, useSidebarCollapsed, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "@/lib/sidebar-store";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/requests", label: "Requests", icon: ClipboardList },
   { to: "/ingestion", label: "Ingestion", icon: Download },
   { to: "/diff-review", label: "Diff Review", icon: GitCompare },
   { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope },

@@ -165,7 +165,7 @@ function Diagnosis() {
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [corrected, setCorrected] = useState<Record<string, boolean>>({});
   const [panelTab, setPanelTab] = useState<"diagnosis" | "comments">("diagnosis");
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [commentScope, setCommentScope] = useState<"cell" | "sheet">("cell");
   const [commentText, setCommentText] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -291,7 +291,7 @@ function Diagnosis() {
     }
     setTimeout(() => {
       setOverrides((o) => ({ ...o, "BS!D42": 15600 }));
-      setCorrected((c) => ({ ...c, "BS!D42": true }));
+      setCorrected((c) => ({ ...c, "BS!D42": true, "BS!F18": true }));
       setRechecking(false);
       setResolved(true);
     }, 1500);
@@ -300,7 +300,7 @@ function Diagnosis() {
   const formulaBarValue = currentRow?.kind === "section" ? "" : isFormula ? formulaDisplay : String(currentValue ?? "");
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#F7F8FA" }}>
+    <div data-testid="diagnosis-page" className="flex h-screen overflow-hidden" style={{ background: "#F7F8FA" }}>
       <Sidebar />
       <div
         className="grid h-screen min-w-0 flex-1"
@@ -332,6 +332,7 @@ function Diagnosis() {
             </div>
             <div className="mx-3 h-5 w-px" style={{ background: "#E3E6EA" }} />
             <div
+              data-testid="diagnosis-status"
               className="flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-[3px] text-[11px] font-semibold"
               style={{
                 background: locked ? "#D1FAE5" : allClear ? "#D1FAE5" : "#FEF3C7",
@@ -789,6 +790,7 @@ function Diagnosis() {
                 {/* Diagnosis card (only if Inventory active or showing default) */}
                 {(currentRow?.label === "Inventory" || sel.r === 28) && (
                   <div
+                    data-testid="diagnosis-candidate"
                     className="mx-4 mt-3 rounded-[10px] p-3.5"
                     style={{ background: resolved ? "#F0FDF4" : "#FFF5F5", border: `1px solid ${resolved ? "#A7F3D0" : "#FECACA"}` }}
                   >
@@ -814,12 +816,18 @@ function Diagnosis() {
                         <div className="mt-3">
                           {[
                             ["Causal cell", "BS!D42"],
-                            ["Classification", "Possible double-count"],
+                            ["Classification", "structured corrective journal entry"],
                             ["Imbalance amount", "PKR 4,200,000"],
                           ].map(([k, v]) => (
                             <div key={k} className="flex items-center justify-between py-[7px]" style={{ borderBottom: "1px solid #F3F4F6" }}>
                               <span className="text-[11px]" style={{ color: "#818EA0" }}>{k}</span>
-                              <span className="text-[12px] font-semibold" style={{ color: "#292D34" }}>{v}</span>
+                              <span
+                                data-testid={k === "Classification" ? "diagnosis-classification" : undefined}
+                                className="text-[12px] font-semibold"
+                                style={{ color: "#292D34" }}
+                              >
+                                {v}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -881,6 +889,7 @@ function Diagnosis() {
                             )}
                           </div>
                           <button
+                            data-testid="diagnosis-accept"
                             onClick={() => void applyCorrection()}
                             disabled={rechecking}
                             className="h-8 rounded-md px-3.5 text-[12px] font-semibold text-white"

@@ -302,7 +302,7 @@ function Ingestion() {
       title={`Ingestion — ${cycle.period} · ${cycle.company}`}
       subtitle="Upload source PDFs and trigger ingestion across 13 live data registries"
     >
-      <div className="pb-24">
+      <div className="pb-24" data-testid="ingestion-page">
         {/* Active sector rule pack chip */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <button
@@ -346,6 +346,7 @@ function Ingestion() {
                 PDF, XLSX (max. 50MB)
               </div>
               <input
+                data-testid="upload-input"
                 type="file"
                 className="hidden"
                 accept=".pdf,.xlsx"
@@ -358,7 +359,7 @@ function Ingestion() {
               />
             </label>
           ) : (
-            <div className="flex items-center gap-3 rounded-lg border px-4 py-3" style={{ borderColor: "var(--color-border-default)" }}>
+            <div data-testid="uploaded-file" className="flex items-center gap-3 rounded-lg border px-4 py-3" style={{ borderColor: "var(--color-border-default)" }}>
               <FileText className="h-8 w-8 rounded-md p-1.5" style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }} />
               <div className="flex-1">
                 <div className="text-[14px] font-medium" style={{ color: "var(--color-text-primary)" }}>{file.name}</div>
@@ -469,6 +470,7 @@ function RulePackModal({
 
   return (
     <div
+      data-testid="mapping-rules-modal"
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6"
       onClick={onClose}
     >
@@ -497,7 +499,7 @@ function RulePackModal({
 
         <div className="overflow-y-auto px-5 py-3">
           {summary && (
-            <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div data-testid="mapping-rules-summary" className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
               {[
                 ["Rules", summary.rulesCount],
                 ["Enabled", summary.enabledRulesCount],
@@ -584,6 +586,7 @@ function RulePackModal({
               Acknowledgement is required before extraction can start.
             </div>
             <button
+              data-testid="mapping-rules-acknowledge"
               onClick={onAcknowledge}
               disabled={pending}
               className="h-9 rounded-md px-4 text-[12px] font-semibold text-white disabled:opacity-60"
@@ -622,7 +625,7 @@ function SourceCard({ s, threshold }: { s: Source; threshold: number }) {
   const lowConf = s.manifest.filter((f) => f.confidence < threshold);
 
   return (
-    <div className="rounded-lg border bg-white" style={{ borderColor: "var(--color-border-default)" }}>
+    <div data-testid="source-preview-card" className="rounded-lg border bg-white" style={{ borderColor: "var(--color-border-default)" }}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
@@ -677,6 +680,7 @@ function SourceCard({ s, threshold }: { s: Source; threshold: number }) {
                   const low = f.confidence < threshold;
                   return (
                     <tr
+                      data-testid="extracted-field-breakdown"
                       key={i}
                       className="border-b"
                       style={{
@@ -758,7 +762,7 @@ function SourceRegistry({
   threshold: number;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-6" style={{ borderColor: "var(--color-border-default)" }}>
+    <div data-testid="ingestion-live-feed" className="rounded-xl border bg-white p-6" style={{ borderColor: "var(--color-border-default)" }}>
       <div className="mb-4 flex items-center justify-between">
         <div className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>Live Data Sources</div>
         <span
@@ -952,6 +956,7 @@ function StickyFooter({
             13 sources ready ({liveCount} live, {staleCount} stale, {downCount} error)
           </div>
           <button
+            data-testid="start-ingestion"
             onClick={onStart}
             disabled={!file || pending}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
@@ -975,6 +980,7 @@ function StickyFooter({
             </div>
           </div>
           <button
+            data-testid="review-diffs"
             onClick={onReviewDiffs}
             disabled={!allResolved}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"

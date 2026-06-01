@@ -190,6 +190,84 @@ export async function generateExecutiveBrief(projectId: string): Promise<{
   });
 }
 
+export async function recordManagerDecision(projectId: string, input: {
+  action: "approve" | "send_back";
+  note?: string;
+}): Promise<{
+  projectId: string;
+  status: string;
+  locked: boolean;
+  message: string;
+}> {
+  return apiRequest(`/api/projects/${projectId}/review/manager-decision`, {
+    method: "POST",
+    json: input,
+  });
+}
+
+export async function recordCfoSignoff(projectId: string, input: {
+  approved: boolean;
+  note?: string;
+  briefId?: string;
+}): Promise<{
+  projectId: string;
+  status: string;
+  locked: boolean;
+  message: string;
+}> {
+  return apiRequest(`/api/projects/${projectId}/review/cfo-signoff`, {
+    method: "POST",
+    json: input,
+  });
+}
+
+export async function runProjectForecast(projectId: string, input: {
+  query?: string;
+  sourceIds?: string[];
+  sourceGroup?: string;
+  projectionYears?: number;
+} = {}): Promise<{
+  status: string;
+  projectId: string;
+  companyName: string;
+  sector: string | null;
+  projectionYears: number;
+  sourceStatus: string;
+  sourceReason: string | null;
+  steps: Array<Record<string, unknown>>;
+  scenarios: Array<Record<string, unknown>>;
+  assumptions: Array<Record<string, unknown>>;
+  citations: Array<Record<string, unknown>>;
+  warnings: string[];
+}> {
+  return apiRequest(`/api/projects/${projectId}/forecast/run`, {
+    method: "POST",
+    json: {
+      sourceGroup: "forecast",
+      projectionYears: 5,
+      ...input,
+    },
+  });
+}
+
+export async function generateProjectAssumptions(projectId: string, forecast?: Record<string, unknown>): Promise<{
+  status: string;
+  projectId: string;
+  sheetName: string;
+  generatedAt: string;
+  writePolicy: Record<string, unknown>;
+  rows: Array<Record<string, unknown>>;
+  summary: Record<string, number>;
+}> {
+  return apiRequest(`/api/projects/${projectId}/assumptions/generate`, {
+    method: "POST",
+    json: {
+      includeForecastDrivers: true,
+      forecast,
+    },
+  });
+}
+
 export async function getLatestModelArchive(projectId: string): Promise<{
   id: string;
   projectId: string;
@@ -264,6 +342,13 @@ export async function acknowledgeAnalysisRequest(requestId: string): Promise<Ana
 export async function convertAnalysisRequestToProject(requestId: string): Promise<AnalysisRequestResponse> {
   return apiRequest(`/api/analysis-requests/${requestId}/convert-to-project`, {
     method: "POST",
+  });
+}
+
+export async function toggleProjectMappingRule(projectId: string, ruleCode: string, enabled: boolean): Promise<MappingRulesSummary> {
+  return apiRequest(`/api/projects/${projectId}/mapping-rules/${ruleCode}`, {
+    method: "PATCH",
+    json: { enabled },
   });
 }
 

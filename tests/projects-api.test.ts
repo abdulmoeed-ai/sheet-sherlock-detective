@@ -10,12 +10,17 @@ import {
   createProjectForCycle,
   downloadArchiveAuditJson,
   generateExecutiveBrief,
+  generateProjectAssumptions,
   getLatestModelArchive,
   listAnalysisRequests,
   getMappingRules,
+  recordCfoSignoff,
+  recordManagerDecision,
   runBalanceSheetDiagnosis,
+  runProjectForecast,
   startProjectExtraction,
   submitProjectForManagerReview,
+  toggleProjectMappingRule,
   uploadProjectDocument,
 } from "../src/lib/api/projects";
 
@@ -218,6 +223,82 @@ describe("project ingestion api client", () => {
     expect(response.status).toBe("generated");
     expect(requests[0].url).toEndWith("/api/projects/project-1/briefs/generate");
     expect(requests[0].init?.method).toBe("POST");
+  });
+
+  it("records manager and CFO review decisions", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse({ projectId: "project-1", status: "cfo_review", locked: true, message: "ok" });
+    }) as typeof fetch;
+
+    await recordManagerDecision("project-1", { action: "approve", note: "Manager approved" });
+    await recordCfoSignoff("project-1", { approved: true, note: "CFO approved", briefId: "brief-1" });
+
+    expect(requests[0].url).toEndWith("/api/projects/project-1/review/manager-decision");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({ action: "approve", note: "Manager approved" });
+    expect(requests[1].url).toEndWith("/api/projects/project-1/review/cfo-signoff");
+    expect(JSON.parse(String(requests[1].init?.body))).toEqual({ approved: true, note: "CFO approved", briefId: "brief-1" });
+  });
+
+  it("runs forecast and generates assumptions through project APIs", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      if (String(url).endsWith("/forecast/run")) {
+        return jsonResponse({
+          status: "completed",
+          projectId: "project-1",
+          companyName: "Millat Tractors Limited",
+          sector: "Industrial Engineering",
+          projectionYears: 5,
+          sourceStatus: "available",
+          sourceReason: null,
+          steps: [],
+          scenarios: [],
+          assumptions: [],
+          citations: [],
+          warnings: [],
+        });
+      }
+      return jsonResponse({
+        status: "generated",
+        projectId: "project-1",
+        sheetName: "Assumptions",
+        generatedAt: "2026-06-01T00:00:00Z",
+        writePolicy: {},
+        rows: [],
+        summary: { total: 0 },
+      });
+    }) as typeof fetch;
+
+    await runProjectForecast("project-1", { query: "Analyse Millat" });
+    await generateProjectAssumptions("project-1", { scenarios: [] });
+
+    expect(requests[0].url).toEndWith("/api/projects/project-1/forecast/run");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({
+      sourceGroup: "forecast",
+      projectionYears: 5,
+      query: "Analyse Millat",
+    });
+    expect(requests[1].url).toEndWith("/api/projects/project-1/assumptions/generate");
+  });
+
+  it("toggles admin mapping rules through the governance endpoint", async () => {
+    installSession();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: String(url), init });
+      return jsonResponse(mappingSummary());
+    }) as typeof fetch;
+
+    await toggleProjectMappingRule("project-1", "A1", false);
+
+    expect(requests[0].url).toEndWith("/api/projects/project-1/mapping-rules/A1");
+    expect(requests[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(String(requests[0].init?.body))).toEqual({ enabled: false });
   });
 
   it("reads archive metadata and downloads audit json", async () => {
