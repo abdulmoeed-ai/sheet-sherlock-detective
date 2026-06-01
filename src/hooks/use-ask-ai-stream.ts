@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 import { askAi } from "@/lib/api/projects";
-
-interface SendQuestionOptions {
-  onChunk?: (answer: string) => void;
-}
+import {
+  readAskAiSseStream,
+  type AskAiFinalResponse,
+  type AskAiStreamCallbacks,
+} from "@/lib/api/ask-ai-stream";
 
 export function useAskAiStream(projectId: string | null) {
   const [answer, setAnswer] = useState("");
@@ -11,33 +12,39 @@ export function useAskAiStream(projectId: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   const sendQuestion = useCallback(
-    async (input: Record<string, unknown>, options: SendQuestionOptions = {}) => {
+    async (
+      input: Record<string, unknown>,
+      options: AskAiStreamCallbacks = {},
+      requestOptions: { signal?: AbortSignal } = {},
+    ): Promise<AskAiFinalResponse | null> => {
       if (!projectId) {
         setError("Select a project before using Ask AI.");
-        return "";
+        return null;
       }
       setLoading(true);
       setError(null);
       setAnswer("");
       try {
-        const response = await askAi(projectId, input);
-        const reader = response.body?.getReader();
-        if (!reader) return "";
-        const decoder = new TextDecoder();
-        let full = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          full += chunk;
-          setAnswer(full);
-          options.onChunk?.(full);
-        }
-        return full;
+        const response = await askAi(projectId, input, requestOptions);
+        return await readAskAiSseStream(response, {
+          ...options,
+          onChunk: (nextAnswer) => {
+            setAnswer(nextAnswer);
+            options.onChunk?.(nextAnswer);
+          },
+          onError: (event) => {
+            setError(event.message);
+            options.onError?.(event);
+          },
+        });
       } catch (err) {
+        if (requestOptions.signal?.aborted) {
+          return null;
+        }
         const message = err instanceof Error ? err.message : "Ask AI request failed.";
         setError(message);
-        return "";
+        options.onError?.({ message, code: "request_failed" });
+        return null;
       } finally {
         setLoading(false);
       }

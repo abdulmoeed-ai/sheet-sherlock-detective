@@ -15,6 +15,7 @@ export interface CycleState {
   period: string;
   status: CycleStatus;
   startedAt: string | null;
+  documentIds: string[];
 }
 
 const initial: CycleState = {
@@ -23,6 +24,7 @@ const initial: CycleState = {
   period: "FY2025",
   status: "idle",
   startedAt: null,
+  documentIds: [],
 };
 
 let state: CycleState = { ...initial };
@@ -41,7 +43,19 @@ export const cycleStore = {
       ...input,
       status: "ingestion",
       startedAt: new Date().toISOString(),
+      documentIds: [],
     };
+    emit();
+  },
+  addDocumentId: (documentId: string) => {
+    const normalized = documentId.trim();
+    if (!normalized || state.documentIds.includes(normalized)) return;
+    state = { ...state, documentIds: [...state.documentIds, normalized] };
+    emit();
+  },
+  setDocumentIds: (documentIds: string[]) => {
+    const normalized = Array.from(new Set(documentIds.map((id) => id.trim()).filter(Boolean)));
+    state = { ...state, documentIds: normalized };
     emit();
   },
   setStatus: (status: CycleStatus) => {

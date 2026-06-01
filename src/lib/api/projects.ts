@@ -145,8 +145,12 @@ export function searchSources(
   });
 }
 
-export function askAi(projectId: string, input: Record<string, unknown>) {
-  return apiStream(`/api/projects/${projectId}/ask-ai`, { method: "POST", body: input });
+export function askAi(projectId: string, input: Record<string, unknown>, options: { signal?: AbortSignal } = {}) {
+  return apiStream(`/api/projects/${projectId}/ask-ai`, {
+    method: "POST",
+    body: input,
+    signal: options.signal,
+  });
 }
 
 export function runBalanceSheetDiagnosis(projectId: string) {

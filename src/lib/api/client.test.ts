@@ -20,7 +20,9 @@ describe("apiFetch", () => {
 
     await apiFetch<{ ok: boolean }>("/api/projects");
 
-    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer access-1");
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Authorization")).toBe(
+      "Bearer access-1",
+    );
   });
 
   it("throws the backend detail string when the backend returns an error", async () => {
