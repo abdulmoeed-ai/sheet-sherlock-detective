@@ -9,7 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SourcesRouteImport } from './routes/sources'
+import { Route as SignOffRouteImport } from './routes/sign-off'
+import { Route as ReviewRouteImport } from './routes/review'
+import { Route as RegistryRouteImport } from './routes/registry'
 import { Route as IngestionRouteImport } from './routes/ingestion'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as ForecastRouteImport } from './routes/forecast'
 import { Route as DiffReviewRouteImport } from './routes/diff-review'
 import { Route as DiagnosisRouteImport } from './routes/diagnosis'
@@ -17,9 +22,34 @@ import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AssumptionsRouteImport } from './routes/assumptions'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SourcesRoute = SourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignOffRoute = SignOffRouteImport.update({
+  id: '/sign-off',
+  path: '/sign-off',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegistryRoute = RegistryRouteImport.update({
+  id: '/registry',
+  path: '/registry',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngestionRoute = IngestionRouteImport.update({
   id: '/ingestion',
   path: '/ingestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForecastRoute = ForecastRouteImport.update({
@@ -60,7 +90,12 @@ export interface FileRoutesByFullPath {
   '/diagnosis': typeof DiagnosisRoute
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
+  '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/registry': typeof RegistryRoute
+  '/review': typeof ReviewRoute
+  '/sign-off': typeof SignOffRoute
+  '/sources': typeof SourcesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,7 +104,12 @@ export interface FileRoutesByTo {
   '/diagnosis': typeof DiagnosisRoute
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
+  '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/registry': typeof RegistryRoute
+  '/review': typeof ReviewRoute
+  '/sign-off': typeof SignOffRoute
+  '/sources': typeof SourcesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,7 +119,12 @@ export interface FileRoutesById {
   '/diagnosis': typeof DiagnosisRoute
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
+  '/inbox': typeof InboxRoute
   '/ingestion': typeof IngestionRoute
+  '/registry': typeof RegistryRoute
+  '/review': typeof ReviewRoute
+  '/sign-off': typeof SignOffRoute
+  '/sources': typeof SourcesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,7 +135,12 @@ export interface FileRouteTypes {
     | '/diagnosis'
     | '/diff-review'
     | '/forecast'
+    | '/inbox'
     | '/ingestion'
+    | '/registry'
+    | '/review'
+    | '/sign-off'
+    | '/sources'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -99,7 +149,12 @@ export interface FileRouteTypes {
     | '/diagnosis'
     | '/diff-review'
     | '/forecast'
+    | '/inbox'
     | '/ingestion'
+    | '/registry'
+    | '/review'
+    | '/sign-off'
+    | '/sources'
   id:
     | '__root__'
     | '/'
@@ -108,7 +163,12 @@ export interface FileRouteTypes {
     | '/diagnosis'
     | '/diff-review'
     | '/forecast'
+    | '/inbox'
     | '/ingestion'
+    | '/registry'
+    | '/review'
+    | '/sign-off'
+    | '/sources'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -118,16 +178,56 @@ export interface RootRouteChildren {
   DiagnosisRoute: typeof DiagnosisRoute
   DiffReviewRoute: typeof DiffReviewRoute
   ForecastRoute: typeof ForecastRoute
+  InboxRoute: typeof InboxRoute
   IngestionRoute: typeof IngestionRoute
+  RegistryRoute: typeof RegistryRoute
+  ReviewRoute: typeof ReviewRoute
+  SignOffRoute: typeof SignOffRoute
+  SourcesRoute: typeof SourcesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sources': {
+      id: '/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-off': {
+      id: '/sign-off'
+      path: '/sign-off'
+      fullPath: '/sign-off'
+      preLoaderRoute: typeof SignOffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/registry': {
+      id: '/registry'
+      path: '/registry'
+      fullPath: '/registry'
+      preLoaderRoute: typeof RegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingestion': {
       id: '/ingestion'
       path: '/ingestion'
       fullPath: '/ingestion'
       preLoaderRoute: typeof IngestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forecast': {
@@ -182,18 +282,13 @@ const rootRouteChildren: RootRouteChildren = {
   DiagnosisRoute: DiagnosisRoute,
   DiffReviewRoute: DiffReviewRoute,
   ForecastRoute: ForecastRoute,
+  InboxRoute: InboxRoute,
   IngestionRoute: IngestionRoute,
+  RegistryRoute: RegistryRoute,
+  ReviewRoute: ReviewRoute,
+  SignOffRoute: SignOffRoute,
+  SourcesRoute: SourcesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

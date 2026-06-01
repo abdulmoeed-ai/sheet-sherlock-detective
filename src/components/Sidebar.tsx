@@ -11,17 +11,27 @@ import {
   Sparkles,
   ChevronsLeft,
   ChevronsRight,
+  Inbox,
+  GitBranch,
+  KeyRound,
+  ClipboardCheck,
+  Lock,
 } from "lucide-react";
 import { sidebarStore, useSidebarCollapsed, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "@/lib/sidebar-store";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/inbox", label: "Inbox", icon: Inbox },
+  { to: "/registry", label: "Model Registry", icon: GitBranch },
   { to: "/ingestion", label: "Ingestion", icon: Download },
   { to: "/diff-review", label: "Diff Review", icon: GitCompare },
   { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope },
   { to: "/forecast", label: "Forecast", icon: TrendingUp },
   { to: "/assumptions", label: "Assumptions", icon: FileText },
+  { to: "/review", label: "Manager Review", icon: ClipboardCheck },
+  { to: "/sign-off", label: "CFO Sign-Off", icon: Lock },
   { to: "/audit", label: "Audit Trail", icon: ShieldCheck },
+  { to: "/sources", label: "Sources (Admin)", icon: KeyRound },
 ] as const;
 
 export function Sidebar() {
