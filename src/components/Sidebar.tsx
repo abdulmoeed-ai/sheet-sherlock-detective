@@ -16,6 +16,7 @@ import {
   KeyRound,
   ClipboardCheck,
   Lock,
+  Bell,
 } from "lucide-react";
 import { sidebarStore, useSidebarCollapsed, SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "@/lib/sidebar-store";
 
@@ -30,6 +31,8 @@ const nav = [
   { to: "/assumptions", label: "Assumptions", icon: FileText },
   { to: "/review", label: "Manager Review", icon: ClipboardCheck },
   { to: "/sign-off", label: "CFO Sign-Off", icon: Lock },
+  { to: "/protection", label: "Protection", icon: ShieldCheck },
+  { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/audit", label: "Audit Trail", icon: ShieldCheck },
   { to: "/sources", label: "Sources (Admin)", icon: KeyRound },
 ] as const;
