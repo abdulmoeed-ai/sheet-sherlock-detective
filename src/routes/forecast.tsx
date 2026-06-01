@@ -49,7 +49,7 @@ function Forecast() {
 
   return (
     <PageShell title={`5-Year Forecast — ${cycle.sector} · ${cycle.company}`} subtitle="Scenario-based revenue projection driven by PSX historicals + ADB macro">
-      <div className="pb-24">
+      <div data-testid="forecast-page" className="pb-24">
         {/* Diagnosis lock status banner */}
         <div
           className="mb-4 flex items-center justify-between rounded-lg border px-4 py-3"
@@ -101,6 +101,7 @@ function Forecast() {
               {(["Base", "Bull", "Bear"] as const).map((s) => (
                 <button
                   key={s}
+                  data-testid={`forecast-scenario-${s.toLowerCase()}`}
                   onClick={() => setScenario(s)}
                   className="h-7 rounded-full px-4 text-[12px] font-semibold"
                   style={
@@ -121,7 +122,7 @@ function Forecast() {
 
           {/* What-if sliders */}
           <div className="mt-5 grid grid-cols-3 gap-5 border-t pt-4" style={{ borderColor: "var(--color-border-default)" }}>
-            <Slider label="KIBOR" value={kibor} min={15} max={25} step={0.1} onChange={setKibor} fmt={(v) => `${v.toFixed(1)}%`} />
+            <Slider testId="forecast-driver-kibor" label="KIBOR" value={kibor} min={15} max={25} step={0.1} onChange={setKibor} fmt={(v) => `${v.toFixed(1)}%`} />
             <Slider label="CPI (YoY)" value={cpi} min={8} max={18} step={0.1} onChange={setCpi} fmt={(v) => `${v.toFixed(1)}%`} />
             <Slider label="PKR/USD" value={fx} min={260} max={320} step={1} onChange={setFx} fmt={(v) => v.toFixed(0)} />
           </div>
@@ -129,7 +130,7 @@ function Forecast() {
 
         {/* Bottom — two cards */}
         <div className="mt-5 grid grid-cols-2 gap-4">
-          <div className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "var(--color-border-default)" }}>
+          <div data-testid="forecast-scenario-summary" className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "var(--color-border-default)" }}>
             <div className="border-b px-5 py-3 text-[13px] font-semibold" style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}>
               Scenario summary
             </div>
@@ -215,6 +216,7 @@ function Forecast() {
         style={{ borderColor: "var(--color-border-default)" }}
       >
         <button
+          data-testid="review-assumptions"
           onClick={() => {
             cycleStore.setStatus("assumptions");
             navigate({ to: "/assumptions" });
@@ -231,6 +233,7 @@ function Forecast() {
 
 function Slider({
   label,
+  testId,
   value,
   min,
   max,
@@ -239,6 +242,7 @@ function Slider({
   fmt,
 }: {
   label: string;
+  testId?: string;
   value: number;
   min: number;
   max: number;
@@ -247,7 +251,7 @@ function Slider({
   fmt: (v: number) => string;
 }) {
   return (
-    <div className="flex items-center gap-3">
+    <div data-testid={testId} className="flex items-center gap-3">
       <span className="w-[80px] text-[12px]" style={{ color: "var(--color-text-muted)" }}>
         {label}
       </span>

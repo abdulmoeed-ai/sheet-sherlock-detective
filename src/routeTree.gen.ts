@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as IngestionRouteImport } from './routes/ingestion'
 import { Route as ForecastRouteImport } from './routes/forecast'
 import { Route as DiffReviewRouteImport } from './routes/diff-review'
@@ -16,7 +17,13 @@ import { Route as DiagnosisRouteImport } from './routes/diagnosis'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AssumptionsRouteImport } from './routes/assumptions'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RequestsRequestIdRouteImport } from './routes/requests.$requestId'
 
+const RequestsRoute = RequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngestionRoute = IngestionRouteImport.update({
   id: '/ingestion',
   path: '/ingestion',
@@ -52,6 +59,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RequestsRequestIdRoute = RequestsRequestIdRouteImport.update({
+  id: '/$requestId',
+  path: '/$requestId',
+  getParentRoute: () => RequestsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/ingestion': typeof IngestionRoute
+  '/requests': typeof RequestsRouteWithChildren
+  '/requests/$requestId': typeof RequestsRequestIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +84,8 @@ export interface FileRoutesByTo {
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/ingestion': typeof IngestionRoute
+  '/requests': typeof RequestsRouteWithChildren
+  '/requests/$requestId': typeof RequestsRequestIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +96,8 @@ export interface FileRoutesById {
   '/diff-review': typeof DiffReviewRoute
   '/forecast': typeof ForecastRoute
   '/ingestion': typeof IngestionRoute
+  '/requests': typeof RequestsRouteWithChildren
+  '/requests/$requestId': typeof RequestsRequestIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +109,8 @@ export interface FileRouteTypes {
     | '/diff-review'
     | '/forecast'
     | '/ingestion'
+    | '/requests'
+    | '/requests/$requestId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +120,8 @@ export interface FileRouteTypes {
     | '/diff-review'
     | '/forecast'
     | '/ingestion'
+    | '/requests'
+    | '/requests/$requestId'
   id:
     | '__root__'
     | '/'
@@ -109,6 +131,8 @@ export interface FileRouteTypes {
     | '/diff-review'
     | '/forecast'
     | '/ingestion'
+    | '/requests'
+    | '/requests/$requestId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,10 +143,18 @@ export interface RootRouteChildren {
   DiffReviewRoute: typeof DiffReviewRoute
   ForecastRoute: typeof ForecastRoute
   IngestionRoute: typeof IngestionRoute
+  RequestsRoute: typeof RequestsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/requests': {
+      id: '/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof RequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingestion': {
       id: '/ingestion'
       path: '/ingestion'
@@ -172,8 +204,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/requests/$requestId': {
+      id: '/requests/$requestId'
+      path: '/$requestId'
+      fullPath: '/requests/$requestId'
+      preLoaderRoute: typeof RequestsRequestIdRouteImport
+      parentRoute: typeof RequestsRoute
+    }
   }
 }
+
+interface RequestsRouteChildren {
+  RequestsRequestIdRoute: typeof RequestsRequestIdRoute
+}
+
+const RequestsRouteChildren: RequestsRouteChildren = {
+  RequestsRequestIdRoute: RequestsRequestIdRoute,
+}
+
+const RequestsRouteWithChildren = RequestsRoute._addFileChildren(
+  RequestsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -183,6 +234,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiffReviewRoute: DiffReviewRoute,
   ForecastRoute: ForecastRoute,
   IngestionRoute: IngestionRoute,
+  RequestsRoute: RequestsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

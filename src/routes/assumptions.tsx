@@ -71,7 +71,7 @@ function Assumptions() {
         </button>
       }
     >
-      <div className="pb-24">
+      <div data-testid="assumptions-page" className="pb-24">
         <div className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
           47 assumption rows · 0 unresolved flags
         </div>
@@ -100,7 +100,7 @@ function Assumptions() {
                     ? { bg: "#F3F4F6", fg: "#374151" }
                     : { bg: "#F9FAFB", fg: "#818EA0" };
                 return (
-                  <tr key={r.name} className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                  <tr key={r.name} data-testid="assumption-row" className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
                     <td className="px-3 py-2.5 text-[var(--color-text-muted)]">{i + 1}</td>
                     <td className="px-3 py-2.5 font-medium">{r.name}</td>
                     <td className="px-3 py-2.5">

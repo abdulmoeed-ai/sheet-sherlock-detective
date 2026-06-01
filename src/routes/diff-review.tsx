@@ -72,7 +72,7 @@ function DiffReview() {
       title={`Diff Review — ${cycle.period} · ${cycle.company}`}
       subtitle="Approve cell-level changes before they apply to your live model"
     >
-      <div className="grid grid-cols-[55fr_45fr] gap-5">
+      <div data-testid="diff-review-page" className="grid grid-cols-[55fr_45fr] gap-5">
         {/* LEFT — diff queue */}
         <div
           className="overflow-hidden rounded-xl border bg-white"
@@ -113,6 +113,7 @@ function DiffReview() {
                 return (
                   <Row key={i}>
                     <tr
+                      data-testid={`diff-row-${d.sheet}-${d.cell}`}
                       className="border-b"
                       style={{
                         borderColor: "var(--color-border-default)",
@@ -139,6 +140,7 @@ function DiffReview() {
                       </td>
                       <td className="px-2 py-2.5 text-[10px]">
                         <button
+                          data-testid={`source-chip-${d.sheet}-${d.cell}`}
                           onClick={() => setPreviewRef(d.ref)}
                           className="rounded border px-1.5 py-0.5 font-medium hover:bg-[var(--color-tag-bg)]"
                           style={{ borderColor: "var(--color-border-default)", color: "var(--color-brand)" }}
@@ -166,6 +168,7 @@ function DiffReview() {
                         ) : d.tier === "confirm" ? (
                           <div className="flex items-center gap-1">
                             <button
+                              data-testid={`diff-approve-${d.cell}`}
                               onClick={() => approveRow(i)}
                               className="flex h-6 items-center gap-1 rounded border px-1.5 text-[10px] font-semibold"
                               style={{ borderColor: "var(--color-success)", color: "var(--color-success-fg)" }}
@@ -178,6 +181,7 @@ function DiffReview() {
                           </div>
                         ) : (
                           <button
+                            data-testid={`diff-justify-${d.cell}`}
                             onClick={() => setJustifying(i)}
                             className="h-6 rounded px-2 text-[10px] font-semibold text-white"
                             style={{ background: "var(--color-brand)" }}
@@ -202,6 +206,7 @@ function DiffReview() {
                               ))}
                             </select>
                             <input
+                              data-testid={`diff-justification-${d.cell}`}
                               value={reason}
                               onChange={(e) => setReason(e.target.value)}
                               placeholder="Justification (e.g. matches signed audited statement, p.71)"
@@ -209,6 +214,7 @@ function DiffReview() {
                               style={{ borderColor: "var(--color-border-strong)" }}
                             />
                             <button
+                              data-testid={`diff-submit-${d.cell}`}
                               disabled={!reason.trim()}
                               onClick={() => {
                                 approveRow(i);
@@ -239,6 +245,7 @@ function DiffReview() {
 
           <div className="border-t p-4" style={{ borderColor: "var(--color-border-default)" }}>
             <button
+              data-testid="apply-to-model"
               disabled={!allDone}
               onClick={() => {
                 cycleStore.setStatus("diagnosis");

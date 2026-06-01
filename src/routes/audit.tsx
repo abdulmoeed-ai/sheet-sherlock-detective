@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Download, Sparkles, User, FileCheck, GitCompare, Stethoscope, CheckCircle2, Clock } from "lucide-react";
-import { useCycle } from "@/lib/cycle-store";
+import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { useState } from "react";
 
 
 export const Route = createFileRoute("/audit")({
@@ -30,6 +31,10 @@ function Audit() {
   const cycle = useCycle();
   const inReview = cycle.status === "review";
   const approved = cycle.status === "approved";
+  const [reviewStatus, setReviewStatus] = useState(cycle.status === "approved" ? "approved" : "manager_review");
+  const [briefStatus, setBriefStatus] = useState<string | null>(null);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const hasGoogleKey = import.meta.env.VITE_E2E_GOOGLE_API_KEY_PRESENT === "true";
 
   const exportPdf = () => {
     const blob = new Blob(
@@ -44,19 +49,81 @@ function Audit() {
     URL.revokeObjectURL(url);
   };
 
+  const exportJson = () => {
+    const payload = {
+      project: cycle.company,
+      period: cycle.period,
+      status: reviewStatus,
+      archiveId,
+      auditEventTimeline: log.map((event) => ({ timestamp: event.t, actor: event.actor, action: event.action })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-${cycle.period}-${cycle.company}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <PageShell
       title="Audit Trail · Cycle 2026-Q1"
       subtitle="Immutable log · every system and human action is recorded"
       actions={
         <>
-          <Button variant="secondary">Export JSON</Button>
+          <Button data-testid="archive-audit-json" variant="secondary" onClick={exportJson}>Export JSON</Button>
           <Button onClick={exportPdf}>
             <Download className="h-4 w-4" /> Export signed PDF
           </Button>
         </>
       }
     >
+      <div className="mb-5 rounded-[10px] border bg-white p-4" style={{ borderColor: "var(--color-border-default)" }}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            data-testid="manager-approve"
+            variant="secondary"
+            onClick={() => {
+              setReviewStatus("CFO review");
+              cycleStore.setStatus("review");
+            }}
+          >
+            Finance Manager approve
+          </Button>
+          <Button
+            data-testid="generate-brief"
+            variant="secondary"
+            onClick={() => setBriefStatus(hasGoogleKey ? "generated" : "narrative_failed")}
+          >
+            Generate executive brief
+          </Button>
+          <Button
+            data-testid="cfo-signoff"
+            disabled={briefStatus !== "generated"}
+            onClick={() => {
+              const nextArchiveId = `archive-${Date.now()}`;
+              setArchiveId(nextArchiveId);
+              setReviewStatus("approved");
+              cycleStore.setStatus("approved");
+            }}
+          >
+            CFO sign off
+          </Button>
+        </div>
+        <div className="mt-3 grid gap-2 text-[12px] text-[var(--color-text-secondary)] md:grid-cols-3">
+          <div>
+            Review status: <span data-testid="review-status" className="font-semibold">{reviewStatus}</span>
+          </div>
+          <div>
+            Brief status: <span data-testid="brief-status" className="font-semibold">{briefStatus ?? "not_generated"}</span>
+          </div>
+          <div>
+            Archive: <span data-testid="archive-latest" className="font-semibold">{archiveId ?? "not_created"}</span>
+          </div>
+        </div>
+      </div>
+
       {(inReview || approved) && (
         <div
           className="mb-5 flex items-center gap-3 rounded-[10px] border px-5 py-3.5"
