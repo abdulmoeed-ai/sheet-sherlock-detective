@@ -8,6 +8,8 @@ import {
   Loader2,
   TrendingUp,
   AlertTriangle,
+  Paperclip,
+  FileText as FileIcon,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
 
