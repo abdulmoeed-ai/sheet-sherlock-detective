@@ -119,11 +119,16 @@ function Forecast() {
             <ForecastSvg series={series} active={scenario} />
           </div>
 
-          {/* What-if sliders */}
-          <div className="mt-5 grid grid-cols-3 gap-5 border-t pt-4" style={{ borderColor: "var(--color-border-default)" }}>
-            <Slider label="KIBOR" value={kibor} min={15} max={25} step={0.1} onChange={setKibor} fmt={(v) => `${v.toFixed(1)}%`} />
-            <Slider label="CPI (YoY)" value={cpi} min={8} max={18} step={0.1} onChange={setCpi} fmt={(v) => `${v.toFixed(1)}%`} />
-            <Slider label="PKR/USD" value={fx} min={260} max={320} step={1} onChange={setFx} fmt={(v) => v.toFixed(0)} />
+          {/* What-if macro assumptions */}
+          <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--color-border-default)" }}>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+              What-if macro assumptions
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <MacroInput label="KIBOR" value={kibor} baseline={18.5} step={0.1} unit="%" onChange={setKibor} />
+              <MacroInput label="CPI (YoY)" value={cpi} baseline={11.2} step={0.1} unit="%" onChange={setCpi} />
+              <MacroInput label="PKR/USD" value={fx} baseline={287} step={1} unit="" onChange={setFx} />
+            </div>
           </div>
         </div>
 
@@ -229,41 +234,108 @@ function Forecast() {
   );
 }
 
-function Slider({
+function MacroInput({
   label,
   value,
-  min,
-  max,
+  baseline,
   step,
+  unit,
   onChange,
-  fmt,
 }: {
   label: string;
   value: number;
-  min: number;
-  max: number;
+  baseline: number;
   step: number;
+  unit: string;
   onChange: (v: number) => void;
-  fmt: (v: number) => string;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const diff = value - baseline;
+  const changed = Math.abs(diff) > 0.001;
+
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (!Number.isNaN(n)) onChange(n);
+    setEditing(false);
+  };
+
+  const nudge = (dir: number) => {
+    const next = Number((value + dir * step).toFixed(step < 1 ? 1 : 0));
+    onChange(next);
+    setDraft(String(next));
+  };
+
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-[80px] text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-        {label}
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="flex-1"
-        style={{ accentColor: "var(--color-brand)" }}
-      />
-      <span className="w-[60px] text-right text-[13px] font-semibold tnum" style={{ color: "var(--color-brand)" }}>
-        {fmt(value)}
-      </span>
+    <div
+      className="relative flex items-center gap-3 rounded-lg border bg-white px-3 py-2.5"
+      style={{ borderColor: changed ? "var(--color-brand)" : "var(--color-border-default)" }}
+    >
+      <div className="flex-1">
+        <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+          {label}
+          {changed && (
+            <span
+              className="inline-flex h-1.5 w-1.5 rounded-full"
+              style={{ background: diff > 0 ? "var(--color-success)" : "var(--color-danger)" }}
+            />
+          )}
+        </div>
+        {editing ? (
+          <input
+            autoFocus
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") {
+                setDraft(String(value));
+                setEditing(false);
+              }
+            }}
+            className="w-full bg-transparent text-[18px] font-semibold tnum focus:outline-none"
+            style={{ color: "var(--color-text-primary)" }}
+          />
+        ) : (
+          <button
+            onClick={() => {
+              setDraft(String(value));
+              setEditing(true);
+            }}
+            className="w-full text-left text-[18px] font-semibold tnum"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            {value.toFixed(step < 1 ? 1 : 0)}
+            {unit && <span className="ml-0.5 text-[13px] font-normal" style={{ color: "var(--color-text-muted)" }}>{unit}</span>}
+          </button>
+        )}
+        {changed && (
+          <div className="text-[11px] tnum" style={{ color: diff > 0 ? "var(--color-success-fg)" : "var(--color-danger-fg)" }}>
+            {diff > 0 ? "+" : ""}{diff.toFixed(step < 1 ? 1 : 0)}{unit} vs baseline
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <button
+          onClick={() => nudge(1)}
+          className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
+          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+          aria-label={`Increase ${label}`}
+        >
+          +
+        </button>
+        <button
+          onClick={() => nudge(-1)}
+          className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
+          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+          aria-label={`Decrease ${label}`}
+        >
+          −
+        </button>
+      </div>
     </div>
   );
 }
