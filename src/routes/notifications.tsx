@@ -15,7 +15,7 @@ export const Route = createFileRoute("/notifications")({
       },
     ],
   }),
-  component: Notifications;
+  component: Notifications,
 });
 
 interface Rule {
