@@ -14,10 +14,11 @@ import {
 import { useCycle } from "@/lib/cycle-store";
 
 type Msg =
-  | { id: string; role: "user"; text: string }
+  | { id: string; role: "user"; text: string; attachment?: { name: string; size: string } }
   | { id: string; role: "ai"; kind: "text"; text: string }
   | { id: string; role: "ai"; kind: "clarify" }
   | { id: string; role: "ai"; kind: "status"; steps: string[] }
+  | { id: string; role: "ai"; kind: "pdf-parsed"; name: string; pages: number; entities: string[] }
   | { id: string; role: "ai"; kind: "prediction" };
 
 const SUGGESTIONS = [
