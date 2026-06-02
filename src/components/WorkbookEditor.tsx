@@ -6,6 +6,7 @@ import {
   shouldCommitCellDraftOnKey,
   type DiagnosisTone,
 } from "@/lib/diagnosis-cell";
+import { CalculationMode } from "@univerjs/sheets-formula";
 import "@univerjs/preset-sheets-core/lib/index.css";
 
 export type WorkbookCellMeta = {
@@ -138,6 +139,9 @@ export function WorkbookEditor({
           presets: [
             UniverSheetsCorePreset({
               container: containerRef.current,
+              formula: {
+                initialFormulaComputing: CalculationMode.FORCED,
+              },
             }),
           ],
         });
@@ -154,7 +158,7 @@ export function WorkbookEditor({
           };
           addEvent?: (event: unknown, callback: (params: Record<string, unknown>) => void) => void;
         };
-        eventApi.getFormula?.().setInitialFormulaComputing?.("forced");
+        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.FORCED);
         eventApi.createWorkbook(preparedWorkbook, { makeCurrent: true });
         if (activeSheetId) {
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
@@ -461,7 +465,7 @@ export function workbookEditEventFromUniverEnd(
 ): WorkbookEditEvent | null {
   const resolved = workbookCellFromUniverPosition(workbook, position);
   if (!resolved?.meta?.fieldId || !isEditableInput(resolved.cell)) return null;
-  const nextValue = typeof newValue === "string" ? newValue.trim() : String(newValue ?? "").trim();
+  const nextValue = workbookEditValueToString(newValue);
   return {
     sheetName: resolved.sheetName,
     address: resolved.address,
@@ -613,6 +617,40 @@ function displayValue(cell?: WorkbookCellPayload) {
   if (value === null || value === undefined) return cell.f ? `=${cell.f}` : "";
   if (typeof value === "number") return value.toLocaleString();
   return String(value);
+}
+
+function workbookEditValueToString(value: unknown): string {
+  const scalar = scalarWorkbookEditValue(value);
+  const text = typeof scalar === "string" ? scalar : String(scalar ?? "");
+  return stripUniverDocumentMarkers(text).trim();
+}
+
+function scalarWorkbookEditValue(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  if (typeof value.toPlainText === "function") {
+    return value.toPlainText();
+  }
+  if (typeof value.getData === "function") {
+    return dataStreamFromDocumentData(value.getData());
+  }
+  const dataStream = dataStreamFromDocumentData(value);
+  if (dataStream !== null) return dataStream;
+  if ("v" in value) return value.v;
+  if ("value" in value) return value.value;
+  if ("rawValue" in value) return value.rawValue;
+  if ("text" in value) return value.text;
+  return "";
+}
+
+function dataStreamFromDocumentData(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  const body = value.body;
+  if (!isRecord(body)) return null;
+  return typeof body.dataStream === "string" ? body.dataStream : null;
+}
+
+function stripUniverDocumentMarkers(value: string) {
+  return value.replace(/[\r\n\0]+$/g, "");
 }
 
 function columnName(index: number) {

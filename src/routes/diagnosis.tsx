@@ -137,7 +137,7 @@ function Diagnosis() {
   const projectId = useSelectedProjectId();
   const currentUser = useCurrentUser();
   const workspace = useWorkspace(projectId);
-  const reviewCell = useReviewCell(projectId ?? "__no_project__");
+  const reviewCell = useReviewCell(projectId ?? "__no_project__", { invalidateOnSuccess: false });
   const revertCell = useRevertReviewCell(projectId ?? "__no_project__");
   const runAssistant = useRunBalanceSheetAssistant(projectId ?? "__no_project__");
   const acceptDiagnosis = useAcceptDiagnosis(projectId ?? "__no_project__");
@@ -162,7 +162,8 @@ function Diagnosis() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedSheetId =
     selection?.sheetId && sheetIds.includes(selection.sheetId) ? selection.sheetId : null;
-  const resolvedActiveSheetId = selectedSheetId ?? firstSheetWithDiagnosis(workbook, sheetIds) ?? sheetIds[0];
+  const resolvedActiveSheetId =
+    selectedSheetId ?? firstSheetWithDiagnosis(workbook, sheetIds) ?? sheetIds[0];
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -174,7 +175,10 @@ function Diagnosis() {
   const [commentText, setCommentText] = useState("");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, OptimisticCellUpdate>>({});
   const selectedCell = activeSheet
-    ? optimisticCell(getCell(activeSheet, resolvedSelection.row, resolvedSelection.col), optimisticCells)
+    ? optimisticCell(
+        getCell(activeSheet, resolvedSelection.row, resolvedSelection.col),
+        optimisticCells,
+      )
     : undefined;
   const selectedMeta = selectedCell?.diagnosis;
   const selectedAddress = `${activeSheet?.name ?? "Sheet"}!${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
@@ -196,7 +200,9 @@ function Diagnosis() {
   const rulesByCode = useMemo(() => {
     return Object.fromEntries(
       (mappingRules.data?.rules ?? [])
-        .filter((rule): rule is RuleTooltipMetadata & { code: string } => typeof rule.code === "string")
+        .filter(
+          (rule): rule is RuleTooltipMetadata & { code: string } => typeof rule.code === "string",
+        )
         .map((rule) => [rule.code, rule]),
     );
   }, [mappingRules.data?.rules]);
@@ -294,8 +300,6 @@ function Diagnosis() {
         fieldId: event.fieldId,
         input: { action: "edit", value: event.newValue, note: event.note },
       });
-      await workspace.refetch();
-      setOptimisticCells((updates) => removeOptimisticCell(updates, event.fieldId));
       toast.success(`${event.sheetName}!${event.address} saved`);
     } catch (error) {
       setOptimisticCells((updates) => removeOptimisticCell(updates, event.fieldId));

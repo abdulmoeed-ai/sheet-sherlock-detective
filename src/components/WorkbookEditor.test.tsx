@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { CalculationMode } from "@univerjs/sheets-formula";
 import {
   buildWorkbookCellIndex,
   cellKey,
@@ -40,7 +41,12 @@ const workbook: WorkbookPayload = {
   },
 };
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.doUnmock("@univerjs/presets");
+  vi.doUnmock("@univerjs/preset-sheets-core");
+  vi.doUnmock("@univerjs/preset-sheets-core/locales/en-US");
+});
 
 describe("WorkbookEditor bridge", () => {
   it("indexes workbook cells by sheet and address", () => {
@@ -108,6 +114,58 @@ describe("WorkbookEditor bridge", () => {
     expect(sheet?.columnData?.["1"]?.w).toBeGreaterThanOrEqual(112);
   });
 
+  it("configures Univer to force formula calculation when loading the workbook", async () => {
+    vi.resetModules();
+    const presetSpy = vi.fn((config: unknown) => ({ config }));
+    const setInitialFormulaComputing = vi.fn();
+    const createWorkbook = vi.fn();
+    const dispose = vi.fn();
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing }),
+          createWorkbook,
+          getActiveWorkbook: () => ({ setActiveSheet: vi.fn() }),
+          dispose,
+          Event: {},
+          addEvent: vi.fn(),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: presetSpy,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        candidateCells={new Set()}
+        commitPending={false}
+        onSelect={vi.fn()}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+    expect(presetSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        formula: { initialFormulaComputing: CalculationMode.FORCED },
+      }),
+    );
+    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.FORCED);
+  });
+
   it("converts Univer edit-end events into review-cell save events for editable inputs only", () => {
     expect(
       workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, "300"),
@@ -121,6 +179,46 @@ describe("WorkbookEditor bridge", () => {
     });
 
     expect(workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 1 }, "300")).toBeNull();
+  });
+
+  it("extracts scalar values from Univer cell objects before saving", () => {
+    expect(
+      workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, { v: -11 }),
+    ).toMatchObject({
+      fieldId: "field-a1",
+      newValue: "-11",
+    });
+
+    expect(
+      workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, { v: "−11" }),
+    ).toMatchObject({
+      fieldId: "field-a1",
+      newValue: "−11",
+    });
+  });
+
+  it("extracts plain text from Univer rich text edit values before saving", () => {
+    expect(
+      workbookEditEventFromUniverEnd(
+        workbook,
+        { sheetId: "sheet-1", row: 0, column: 0 },
+        { toPlainText: () => "-11\r\n" },
+      ),
+    ).toMatchObject({
+      fieldId: "field-a1",
+      newValue: "-11",
+    });
+
+    expect(
+      workbookEditEventFromUniverEnd(
+        workbook,
+        { sheetId: "sheet-1", row: 0, column: 0 },
+        { getData: () => ({ body: { dataStream: "-12\r\n\0" } }) },
+      ),
+    ).toMatchObject({
+      fieldId: "field-a1",
+      newValue: "-12",
+    });
   });
 
   it("renders a spreadsheet editor surface and forwards editable cell changes", async () => {

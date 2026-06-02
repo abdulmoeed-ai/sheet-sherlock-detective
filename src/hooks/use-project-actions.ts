@@ -127,8 +127,12 @@ export function useDeleteComment(projectId: string) {
   });
 }
 
-export function useReviewCell(projectId: string) {
+export function useReviewCell(
+  projectId: string,
+  options: { invalidateOnSuccess?: boolean } = {},
+) {
   const queryClient = useQueryClient();
+  const invalidateOnSuccess = options.invalidateOnSuccess ?? true;
   return useMutation({
     mutationFn: ({
       fieldId,
@@ -137,7 +141,11 @@ export function useReviewCell(projectId: string) {
       fieldId: string;
       input: { action: string; value?: string | null; note?: string | null };
     }) => updateReviewCell(projectId, fieldId, input),
-    onSuccess: () => invalidateProject(queryClient, projectId),
+    onSuccess: () => {
+      if (invalidateOnSuccess) {
+        invalidateProject(queryClient, projectId);
+      }
+    },
   });
 }
 
