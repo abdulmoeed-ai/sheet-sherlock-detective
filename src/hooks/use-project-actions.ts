@@ -25,7 +25,8 @@ import {
   uploadDocument,
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { ExtractionJobResponse, ReviewCommentInput } from "@/lib/api/types";
+import type { DocumentResponse, ExtractionJobResponse, ReviewCommentInput } from "@/lib/api/types";
+import { uploadDocumentsSequential } from "@/lib/upload-documents";
 
 function invalidateProject(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.workspace(projectId) });
@@ -40,6 +41,17 @@ export function useUploadDocument(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => uploadDocument(projectId, file),
+    onSuccess: () => invalidateProject(queryClient, projectId),
+  });
+}
+
+export function useUploadDocuments(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      files: File[];
+      onStatus?: Parameters<typeof uploadDocumentsSequential<DocumentResponse>>[2];
+    }) => uploadDocumentsSequential(input.files, (file) => uploadDocument(projectId, file), input.onStatus),
     onSuccess: () => invalidateProject(queryClient, projectId),
   });
 }

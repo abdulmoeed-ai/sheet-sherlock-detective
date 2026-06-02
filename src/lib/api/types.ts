@@ -95,6 +95,7 @@ export interface ExtractionJobResponse {
   status: string;
   percent: number;
   message: string;
+  documentIds: string[];
   error: string | null;
   createdAt: string | null;
   updatedAt: string | null;
