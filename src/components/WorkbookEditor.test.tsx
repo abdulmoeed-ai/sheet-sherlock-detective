@@ -276,4 +276,22 @@ describe("WorkbookEditor bridge", () => {
     expect(screen.queryByDisplayValue("250")).toBeNull();
     expect(onCommitEdit).not.toHaveBeenCalled();
   });
+
+  it("marks cells that have open comments", async () => {
+    render(
+      <WorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        candidateCells={new Set()}
+        commentIndicators={new Set(["Inputs!A1"])}
+        commitPending={false}
+        onSelect={vi.fn()}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByLabelText("A1 has open comments")).toBeTruthy();
+  });
 });

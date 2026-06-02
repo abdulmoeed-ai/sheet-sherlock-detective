@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -12,8 +12,10 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
+  Reply,
   RotateCcw,
   Save,
+  Send,
   Sparkles,
   Stethoscope,
   X,
@@ -28,7 +30,24 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
 import { listComments, readMappingRules } from "@/lib/api/projects";
-import type { BalanceSheetAssistantResponse, ReviewCommentResponse } from "@/lib/api/types";
+import type {
+  BalanceSheetAssistantResponse,
+  ReviewCommentResponse,
+} from "@/lib/api/types";
+import {
+  activeMentionQuery,
+  buildCellCommentIndicators,
+  cellSelectionFromComment,
+  commentsForCell,
+  commentsForSheet,
+  filterMentionMembers,
+  insertMention,
+  mentionCandidates,
+  normalizeCommentThreads,
+  targetLabel,
+  type CommentTarget,
+  type MentionUser,
+} from "@/lib/comments";
 import {
   diagnosisCellTone,
   formatHistoryEntry,
@@ -47,7 +66,9 @@ import {
   useCreateComment,
   useCreateExcelExport,
   useDownloadExcelExport,
+  useReopenComment,
   useRevertReviewCell,
+  useResolveComment,
   useRunBalanceSheetAssistant,
   useReviewCell,
 } from "@/hooks/use-project-actions";
@@ -142,6 +163,8 @@ function Diagnosis() {
   const runAssistant = useRunBalanceSheetAssistant(projectId ?? "__no_project__");
   const acceptDiagnosis = useAcceptDiagnosis(projectId ?? "__no_project__");
   const createComment = useCreateComment(projectId ?? "__no_project__");
+  const resolveComment = useResolveComment(projectId ?? "__no_project__");
+  const reopenComment = useReopenComment(projectId ?? "__no_project__");
   const createExport = useCreateExcelExport(projectId ?? "__no_project__");
   const downloadExport = useDownloadExcelExport(projectId ?? "__no_project__");
   const comments = useQuery({
@@ -172,7 +195,6 @@ function Diagnosis() {
     null,
   );
   const [draftValue, setDraftValue] = useState("");
-  const [commentText, setCommentText] = useState("");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, OptimisticCellUpdate>>({});
   const selectedCell = activeSheet
     ? optimisticCell(
@@ -181,13 +203,35 @@ function Diagnosis() {
       )
     : undefined;
   const selectedMeta = selectedCell?.diagnosis;
-  const selectedAddress = `${activeSheet?.name ?? "Sheet"}!${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
-
-  const sheetComments = useMemo(
-    () => filterComments(comments.data ?? [], selectedMeta, activeSheet?.name, selectedAddress),
-    [comments.data, selectedMeta, activeSheet?.name, selectedAddress],
+  const selectedCellAddress = `${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
+  const selectedAddress = `${activeSheet?.name ?? "Sheet"}!${selectedCellAddress}`;
+  const commentTarget = useMemo(
+    () =>
+      buildCommentTarget({
+        meta: selectedMeta,
+        sheetName: activeSheet?.name,
+        selectedCellAddress,
+      }),
+    [activeSheet?.name, selectedCellAddress, selectedMeta],
   );
-  const dirty = draftValue.trim() !== "" || commentText.trim() !== "";
+
+  const cellComments = useMemo(
+    () => commentsForCell(comments.data ?? [], commentTarget),
+    [comments.data, commentTarget],
+  );
+  const sheetComments = useMemo(
+    () => commentsForSheet(comments.data ?? [], activeSheet?.name),
+    [comments.data, activeSheet?.name],
+  );
+  const commentIndicators = useMemo(
+    () => buildCellCommentIndicators(comments.data ?? []),
+    [comments.data],
+  );
+  const commentMentionCandidates = useMemo(
+    () => mentionCandidates(workspace.data?.project.teamMembers ?? [], currentUser.data),
+    [currentUser.data, workspace.data?.project.teamMembers],
+  );
+  const dirty = draftValue.trim() !== "";
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
   const assistantCandidates = balanceAssistant?.assistant?.candidates ?? EMPTY_ASSISTANT_CANDIDATES;
   const candidateCells = useMemo(() => {
@@ -262,18 +306,8 @@ function Diagnosis() {
           input: { action: "edit", value: draftValue.trim(), note: "Saved from Diagnosis draft." },
         });
       }
-      if (commentText.trim()) {
-        await createComment.mutateAsync({
-          body: commentText.trim(),
-          fieldId: selectedMeta?.fieldId ?? null,
-          templateCell: selectedMeta?.templateCell ?? selectedAddress,
-          sheetName: activeSheet?.name ?? null,
-        });
-        setCommentText("");
-      }
       setDraftValue("");
       await workspace.refetch();
-      await comments.refetch();
       if (fieldId) {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }
@@ -283,6 +317,54 @@ function Diagnosis() {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }
       toast.error(error instanceof Error ? error.message : "Unable to save draft");
+    }
+  };
+
+  const sendComment = async (
+    body: string,
+    parentCommentId?: string | null,
+    targetOverride?: CommentTarget,
+  ) => {
+    if (!projectId || !body.trim()) return;
+    try {
+      await createComment.mutateAsync({
+        body: body.trim(),
+        ...(targetOverride ?? commentTarget),
+        parentCommentId: parentCommentId ?? null,
+      });
+      await comments.refetch();
+      toast.success(parentCommentId ? "Reply posted" : "Comment posted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to post comment");
+      throw error;
+    }
+  };
+
+  const setCommentStatus = async (comment: ReviewCommentResponse) => {
+    if (!projectId) return;
+    try {
+      if (comment.status === "resolved") {
+        await reopenComment.mutateAsync(comment.id);
+        toast.success("Comment reopened");
+      } else {
+        await resolveComment.mutateAsync(comment.id);
+        toast.success("Comment resolved");
+      }
+      await comments.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update comment");
+    }
+  };
+
+  const selectCommentTarget = (comment: ReviewCommentResponse) => {
+    if (!comment.sheetName) return;
+    const targetSheetId = sheetIds.find((sheetId) => workbook?.sheets?.[sheetId]?.name === comment.sheetName);
+    if (!targetSheetId) return;
+    const nextSelection = cellSelectionFromComment(comment, targetSheetId);
+    if (nextSelection) {
+      setSelection(nextSelection);
+      setPanelOpen(true);
+      setPanelTab("comments");
     }
   };
 
@@ -456,6 +538,7 @@ function Diagnosis() {
               activeSheetId={resolvedActiveSheetId}
               selected={resolvedSelection}
               candidateCells={candidateCells}
+              commentIndicators={commentIndicators}
               draftValue={draftValue}
               onSelect={({ sheetId, row, col }) => {
                 setSelection({ sheetId, row, col });
@@ -518,12 +601,16 @@ function Diagnosis() {
               />
             ) : (
               <CommentsPanel
-                comments={sheetComments}
-                text={commentText}
-                onText={setCommentText}
-                target={
-                  selectedMeta?.fieldId ? (selectedMeta.label ?? selectedAddress) : selectedAddress
-                }
+                cellComments={cellComments}
+                sheetComments={sheetComments}
+                teamMembers={commentMentionCandidates}
+                target={commentTarget}
+                targetName={targetLabel(commentTarget, selectedMeta?.label ?? selectedAddress)}
+                pending={createComment.isPending || resolveComment.isPending || reopenComment.isPending}
+                onSend={(body) => sendComment(body)}
+                onReply={(comment, body) => sendComment(body, comment.id, commentTargetFromComment(comment))}
+                onToggleStatus={setCommentStatus}
+                onSelectTarget={selectCommentTarget}
               />
             )}
           </aside>
@@ -1143,57 +1230,445 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 function CommentsPanel({
-  comments,
-  text,
-  onText,
+  cellComments,
+  sheetComments,
+  teamMembers,
   target,
+  targetName,
+  pending,
+  onSend,
+  onReply,
+  onToggleStatus,
+  onSelectTarget,
 }: {
-  comments: ReviewCommentResponse[];
-  text: string;
-  onText: (value: string) => void;
-  target: string;
+  cellComments: ReviewCommentResponse[];
+  sheetComments: ReviewCommentResponse[];
+  teamMembers: MentionUser[];
+  target: CommentTarget;
+  targetName: string;
+  pending: boolean;
+  onSend: (body: string) => Promise<void>;
+  onReply: (comment: ReviewCommentResponse, body: string) => Promise<void>;
+  onToggleStatus: (comment: ReviewCommentResponse) => Promise<void>;
+  onSelectTarget: (comment: ReviewCommentResponse) => void;
 }) {
+  const [view, setView] = useState<"cell" | "sheet">("cell");
+  const [text, setText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const displayedComments = view === "cell" ? cellComments : sheetComments;
+  const threads = normalizeCommentThreads(displayedComments);
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    await onSend(text);
+    setText("");
+  };
+
+  const submitReply = async (comment: ReviewCommentResponse) => {
+    if (!replyText.trim()) return;
+    await onReply(comment, replyText);
+    setReplyText("");
+    setReplyingTo(null);
+  };
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="border-b p-4" style={{ borderColor: "#E3E6EA" }}>
-        <div className="mb-2 text-[12px] font-bold" style={{ color: "#292D34" }}>
-          {target}
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-bold" style={{ color: "#292D34" }}>
+              {targetName}
+            </div>
+            <div className="mt-1 text-[11px]" style={{ color: "#818EA0" }}>
+              {target.sheetName ?? "Current sheet"}
+              {target.templateCell ? ` / ${target.templateCell}` : ""}
+            </div>
+          </div>
+          <div className="flex rounded-md p-0.5" style={{ background: "#F7F8FA" }}>
+            {(["cell", "sheet"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setView(tab)}
+                className="h-7 rounded-md px-2.5 text-[11px] font-semibold capitalize"
+                style={{
+                  background: view === tab ? "#7B68EE" : "transparent",
+                  color: view === tab ? "#fff" : "#818EA0",
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
-        <textarea
+        <MentionComposer
           value={text}
-          onChange={(event) => onText(event.target.value)}
-          rows={4}
-          className="w-full resize-none rounded-lg border p-2 text-[13px] outline-none"
-          style={{ borderColor: "#E3E6EA", color: "#292D34" }}
+          onChange={setText}
+          teamMembers={teamMembers}
           placeholder="Add a review comment"
+          rows={4}
         />
+        <div className="mt-2 flex justify-end">
+          <button
+            onClick={submit}
+            disabled={!text.trim() || pending}
+            className="flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold text-white disabled:opacity-50"
+            style={{ background: "#7B68EE" }}
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            Send
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
-        {comments.length === 0 ? (
+        {threads.length === 0 ? (
           <PanelEmpty
             icon={MessageSquare}
             title="No comments"
-            detail="Saved comments for this cell will appear here."
+            detail={
+              view === "cell"
+                ? "Saved comments for this cell will appear here."
+                : "Saved comments for this sheet will appear here."
+            }
           />
         ) : (
-          comments.map((comment) => (
-            <div
-              key={comment.id}
-              className="mb-2 rounded-lg border p-3"
-              style={{ borderColor: "#E3E6EA" }}
-            >
-              <div className="mb-1 text-[11px] font-semibold" style={{ color: "#818EA0" }}>
-                {comment.actor} / {comment.status}
-              </div>
-              <div className="text-[13px]" style={{ color: "#292D34" }}>
-                {comment.body}
-              </div>
-            </div>
-          ))
+          <ol className="space-y-3">
+            {threads.map((comment) => (
+              <CommentThreadItem
+                key={comment.id}
+                comment={comment}
+                view={view}
+                teamMembers={teamMembers}
+                pending={pending}
+                replying={replyingTo === comment.id}
+                replyText={replyText}
+                onReplyText={setReplyText}
+                onStartReply={() => {
+                  setReplyingTo(comment.id);
+                  setReplyText("");
+                }}
+                onCancelReply={() => {
+                  setReplyingTo(null);
+                  setReplyText("");
+                }}
+                onSubmitReply={() => submitReply(comment)}
+                onToggleStatus={() => onToggleStatus(comment)}
+                onSelectTarget={() => onSelectTarget(comment)}
+              />
+            ))}
+          </ol>
         )}
       </div>
     </div>
   );
+}
+
+function CommentThreadItem({
+  comment,
+  view,
+  teamMembers,
+  pending,
+  replying,
+  replyText,
+  onReplyText,
+  onStartReply,
+  onCancelReply,
+  onSubmitReply,
+  onToggleStatus,
+  onSelectTarget,
+}: {
+  comment: ReviewCommentResponse & { replies?: ReviewCommentResponse[] };
+  view: "cell" | "sheet";
+  teamMembers: MentionUser[];
+  pending: boolean;
+  replying: boolean;
+  replyText: string;
+  onReplyText: (value: string) => void;
+  onStartReply: () => void;
+  onCancelReply: () => void;
+  onSubmitReply: () => void;
+  onToggleStatus: () => void;
+  onSelectTarget: () => void;
+}) {
+  return (
+    <li className="rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+      <CommentBody comment={comment} view={view} onSelectTarget={onSelectTarget} />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={onStartReply}
+          disabled={pending}
+          className="flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold disabled:opacity-50"
+          style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+        >
+          <Reply className="h-3.5 w-3.5" />
+          Reply
+        </button>
+        <button
+          onClick={onToggleStatus}
+          disabled={pending}
+          className="h-7 rounded-md border px-2 text-[11px] font-semibold disabled:opacity-50"
+          style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+        >
+          {comment.status === "resolved" ? "Reopen" : "Resolve"}
+        </button>
+      </div>
+      {replying ? (
+        <div className="mt-3 rounded-md bg-[#F7F8FA] p-2">
+          <MentionComposer
+            value={replyText}
+            onChange={onReplyText}
+            teamMembers={teamMembers}
+            placeholder="Reply to this comment"
+            rows={3}
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              onClick={onCancelReply}
+              disabled={pending}
+              className="h-7 rounded-md border px-2 text-[11px] font-semibold disabled:opacity-50"
+              style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSubmitReply}
+              disabled={!replyText.trim() || pending}
+              className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-white disabled:opacity-50"
+              style={{ background: "#7B68EE" }}
+            >
+              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Send
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {!!comment.replies?.length && (
+        <ol className="mt-3 space-y-2 border-l pl-3" style={{ borderColor: "#E3E6EA" }}>
+          {comment.replies.map((replyComment) => (
+            <li key={replyComment.id} className="rounded-md bg-[#F7F8FA] p-2">
+              <CommentBody comment={replyComment} view={view} compact onSelectTarget={onSelectTarget} />
+            </li>
+          ))}
+        </ol>
+      )}
+    </li>
+  );
+}
+
+function CommentBody({
+  comment,
+  view,
+  compact = false,
+  onSelectTarget,
+}: {
+  comment: ReviewCommentResponse;
+  view: "cell" | "sheet";
+  compact?: boolean;
+  onSelectTarget: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold" style={{ color: "#818EA0" }}>
+            {commentActorLabel(comment)} / {comment.status} / {formatCommentDate(comment.createdAt)}
+          </div>
+          {view === "sheet" && comment.templateCell ? (
+            <button
+              onClick={onSelectTarget}
+              className="mt-1 max-w-full truncate text-left font-mono text-[11px] font-semibold"
+              style={{ color: "#7B68EE" }}
+            >
+              {comment.sheetName}!{comment.templateCell}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className={compact ? "mt-1 text-[12px]" : "mt-2 text-[13px]"} style={{ color: "#292D34" }}>
+        {comment.body}
+      </div>
+      <MentionChips comment={comment} />
+    </>
+  );
+}
+
+function commentActorLabel(comment: ReviewCommentResponse) {
+  return stringValue(comment.actorName, stringValue(comment.actor, "Commenter"));
+}
+
+function MentionChips({ comment }: { comment: ReviewCommentResponse }) {
+  const resolved = Array.isArray(comment.mentions?.resolved)
+    ? (comment.mentions.resolved as Array<Record<string, unknown>>)
+    : [];
+  const unresolved = Array.isArray(comment.mentions?.unresolved)
+    ? (comment.mentions.unresolved as unknown[])
+    : [];
+  if (!resolved.length && !unresolved.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {resolved.map((mention) => (
+        <span
+          key={String(mention.email ?? mention.name)}
+          className="rounded bg-[#EDE9FE] px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ color: "#7B68EE" }}
+        >
+          @{String(mention.name ?? mention.email)}
+        </span>
+      ))}
+      {unresolved.map((mention) => (
+        <span
+          key={String(mention)}
+          className="rounded bg-[#FFF7ED] px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ color: "#B45309" }}
+        >
+          @{String(mention)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MentionComposer({
+  value,
+  onChange,
+  teamMembers,
+  placeholder,
+  rows,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  teamMembers: MentionUser[];
+  placeholder: string;
+  rows: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [cursor, setCursor] = useState(value.length);
+  const [popupPosition, setPopupPosition] = useState({ left: 8, top: 32 });
+  const mention = activeMentionQuery(value, cursor);
+  const matches = mention ? filterMentionMembers(teamMembers, mention.query) : [];
+
+  useEffect(() => {
+    if (!mention || !ref.current) return;
+    const nextPosition = measureTextareaCaret(ref.current, cursor);
+    setPopupPosition((current) =>
+      current.left === nextPosition.left && current.top === nextPosition.top
+        ? current
+        : nextPosition,
+    );
+  }, [cursor, mention?.start, mention?.end, value]);
+
+  const syncCursor = () => {
+    const textarea = ref.current;
+    if (!textarea) return;
+    setCursor(textarea.selectionStart ?? value.length);
+  };
+
+  const chooseMention = (member: MentionUser) => {
+    if (!mention) return;
+    const nextValue = insertMention(value, mention, member);
+    onChange(nextValue);
+    window.setTimeout(() => {
+      ref.current?.focus();
+      const nextCursor = mention.start + nextValue.slice(mention.start).indexOf(" ") + 1;
+      ref.current?.setSelectionRange(nextCursor, nextCursor);
+      setCursor(nextCursor);
+    }, 0);
+  };
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setCursor(event.target.selectionStart ?? event.target.value.length);
+        }}
+        onClick={syncCursor}
+        onKeyUp={syncCursor}
+        onSelect={syncCursor}
+        rows={rows}
+        className="w-full resize-none rounded-lg border p-2 text-[13px] outline-none"
+        style={{ borderColor: "#E3E6EA", color: "#292D34" }}
+        placeholder={placeholder}
+      />
+      {mention ? (
+        <div
+          className="absolute z-50 mt-1 max-h-56 overflow-y-auto rounded-md border bg-white shadow-lg"
+          style={{
+            borderColor: "#E3E6EA",
+            left: popupPosition.left,
+            top: popupPosition.top,
+            width: "min(320px, calc(100% - 16px))",
+          }}
+        >
+          {matches.length > 0 ? (
+            matches.map((member) => (
+              <button
+                key={member.email}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  chooseMention(member);
+                }}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[12px] hover:bg-[#F7F8FA]"
+              >
+                <span className="font-semibold" style={{ color: "#292D34" }}>
+                  {member.name}
+                </span>
+                <span className="truncate text-[11px]" style={{ color: "#818EA0" }}>
+                  {member.email}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-[12px]" style={{ color: "#818EA0" }}>
+              No matching users
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function measureTextareaCaret(textarea: HTMLTextAreaElement, cursor: number) {
+  const style = window.getComputedStyle(textarea);
+  const mirror = document.createElement("div");
+  const marker = document.createElement("span");
+  const containerWidth = textarea.clientWidth || 320;
+
+  mirror.style.position = "absolute";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.whiteSpace = "pre-wrap";
+  mirror.style.overflowWrap = "break-word";
+  mirror.style.boxSizing = style.boxSizing;
+  mirror.style.width = `${containerWidth}px`;
+  mirror.style.font = style.font;
+  mirror.style.letterSpacing = style.letterSpacing;
+  mirror.style.lineHeight = style.lineHeight;
+  mirror.style.padding = style.padding;
+  mirror.style.border = style.border;
+  mirror.style.top = "0";
+  mirror.style.left = "-9999px";
+
+  mirror.textContent = textarea.value.slice(0, cursor);
+  marker.textContent = "\u200b";
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+
+  const left = Math.min(
+    Math.max(marker.offsetLeft - textarea.scrollLeft, 8),
+    Math.max(containerWidth - 328, 8),
+  );
+  const top = Math.max(marker.offsetTop - textarea.scrollTop + marker.offsetHeight, 28);
+  document.body.removeChild(mirror);
+
+  return {
+    left: Number.isFinite(left) ? left : 8,
+    top: Number.isFinite(top) ? top : 32,
+  };
 }
 
 function EmptyState({
@@ -1416,17 +1891,38 @@ function cellToneStyle(
   };
 }
 
-function filterComments(
-  comments: ReviewCommentResponse[],
-  meta?: DiagnosisMeta,
-  sheetName?: string,
-  selectedAddress?: string,
-) {
-  const templateCell = meta?.templateCell ?? selectedAddress;
-  return comments.filter((comment) => {
-    if (meta?.fieldId && comment.fieldId === meta.fieldId) return true;
-    if (templateCell && comment.templateCell === templateCell) return true;
-    return !comment.fieldId && !!sheetName && comment.sheetName === sheetName;
+function buildCommentTarget({
+  meta,
+  sheetName,
+  selectedCellAddress,
+}: {
+  meta?: DiagnosisMeta;
+  sheetName?: string;
+  selectedCellAddress: string;
+}): CommentTarget {
+  return {
+    fieldId: meta?.fieldId ?? null,
+    sheetName: sheetName ?? meta?.sheetName ?? null,
+    templateCell: meta?.templateCell ?? meta?.address ?? selectedCellAddress,
+  };
+}
+
+function commentTargetFromComment(comment: ReviewCommentResponse): CommentTarget {
+  return {
+    fieldId: comment.fieldId,
+    sheetName: comment.sheetName,
+    templateCell: comment.templateCell,
+  };
+}
+
+function formatCommentDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 

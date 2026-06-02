@@ -125,6 +125,7 @@ export interface ReviewCommentInput {
   fieldId?: string | null;
   templateCell?: string | null;
   sheetName?: string | null;
+  parentCommentId?: string | null;
 }
 
 export interface ReviewCommentResponse {
@@ -133,10 +134,14 @@ export interface ReviewCommentResponse {
   fieldId: string | null;
   templateCell: string | null;
   sheetName: string | null;
+  parentCommentId?: string | null;
   actor: string;
+  actorName?: string | null;
   body: string;
   mentions: Record<string, unknown>;
   status: string;
+  replyCount?: number;
+  replies?: ReviewCommentResponse[];
   createdAt: string;
   updatedAt: string | null;
   editedAt: string | null;

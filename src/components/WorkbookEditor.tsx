@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 import {
   diagnosisCellTone,
   isActionableWarningSet,
@@ -81,6 +81,7 @@ export function WorkbookEditor({
   selected,
   draftValue,
   candidateCells,
+  commentIndicators = new Set(),
   commitPending,
   onSelect,
   onCommitEdit,
@@ -90,6 +91,7 @@ export function WorkbookEditor({
   selected: WorkbookSelection;
   draftValue: string;
   candidateCells: Set<string>;
+  commentIndicators?: Set<string>;
   commitPending: boolean;
   onSelect: (selection: WorkbookSelection) => void;
   onCommitEdit: (event: WorkbookEditEvent) => Promise<void> | void;
@@ -311,6 +313,8 @@ export function WorkbookEditor({
                   const cell = getCell(activeSheet, row, col);
                   const address = `${columnName(col)}${row + 1}`;
                   const active = selected.sheetId === activeSheetId && selected.row === row && selected.col === col;
+                  const commentKey = `${activeSheet.name}!${address}`;
+                  const hasOpenComment = commentIndicators.has(commentKey);
                   const editingCell = editing?.sheetId === activeSheetId && editing.row === row && editing.col === col;
                   const formula = !!cell?.f || !!cell?.diagnosis?.formula;
                   const hasDiagnosis = !!cell?.diagnosis;
@@ -340,6 +344,14 @@ export function WorkbookEditor({
                         fontVariantNumeric: "tabular-nums",
                       }}
                     >
+                      {hasOpenComment ? (
+                        <span
+                          aria-label={`${address} has open comments`}
+                          className="absolute right-1 top-1 flex h-3 w-3 items-center justify-center rounded-full bg-[#7B68EE] text-white"
+                        >
+                          <MessageSquare className="h-2 w-2" aria-hidden="true" />
+                        </span>
+                      ) : null}
                       {editingCell ? (
                         <input
                           value={editValue}

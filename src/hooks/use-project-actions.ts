@@ -32,9 +32,8 @@ function invalidateProject(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.projects });
 }
 
-function invalidateComments(queryClient: QueryClient, projectId: string) {
+export function invalidateComments(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.comments(projectId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.workspace(projectId) });
 }
 
 export function useUploadDocument(projectId: string) {
