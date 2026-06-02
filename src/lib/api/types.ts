@@ -153,6 +153,26 @@ export interface ExcelExportResponse {
   downloadUrl: string;
 }
 
+export interface BalanceSheetAssistantResponse {
+  runId: string | null;
+  projectId: string;
+  checkRunId: string | null;
+  status: string;
+  imbalanceAmount: string | null;
+  createdAt: string | null;
+  candidates: Array<Record<string, unknown>>;
+  threeStatementCheck?: Record<string, unknown> | null;
+  assistant: {
+    summary?: string;
+    assumptions?: string[];
+    warnings?: string[];
+    activity?: Array<Record<string, unknown>>;
+    citations?: Array<Record<string, unknown>>;
+    retrievalResults?: Array<Record<string, unknown>>;
+    candidates?: Array<Record<string, unknown>>;
+  };
+}
+
 export interface ForecastRunResponse {
   status: string;
   projectId: string;

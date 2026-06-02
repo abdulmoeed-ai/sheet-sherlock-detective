@@ -13,6 +13,7 @@ import {
   recordManagerDecision,
   reopenComment,
   resolveComment,
+  runBalanceSheetAssistant,
   revertReviewCell,
   runBalanceSheetDiagnosis,
   runForecast,
@@ -153,6 +154,14 @@ export function useRunDiagnosis(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => runBalanceSheetDiagnosis(projectId),
+    onSuccess: () => invalidateProject(queryClient, projectId),
+  });
+}
+
+export function useRunBalanceSheetAssistant(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => runBalanceSheetAssistant(projectId),
     onSuccess: () => invalidateProject(queryClient, projectId),
   });
 }
