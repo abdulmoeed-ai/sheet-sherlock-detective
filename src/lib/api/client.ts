@@ -8,20 +8,15 @@ type RequestOptions = Omit<RequestInit, "body"> & {
   skipAuthRetry?: boolean;
 };
 
+let refreshPromise: Promise<boolean> | null = null;
+
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetchWithAuth(path, options);
-  if (!response.ok && response.status === 401 && !options.skipAuthRetry) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      const retry = await fetchWithAuth(path, { ...options, skipAuthRetry: true });
-      return parseResponse<T>(retry);
-    }
-  }
+  const response = await fetchWithAuthRetry(path, options);
   return parseResponse<T>(response);
 }
 
 export async function apiBlob(path: string): Promise<Blob> {
-  const response = await fetchWithAuth(path);
+  const response = await fetchWithAuthRetry(path);
   if (!response.ok) {
     const payload = await safeJson(response);
     throw new ApiError(response.status, backendMessage(payload, response.status), payload);
@@ -30,12 +25,20 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 export async function apiStream(path: string, options: RequestOptions = {}): Promise<Response> {
-  const response = await fetchWithAuth(path, options);
+  const response = await fetchWithAuthRetry(path, options);
   if (!response.ok) {
     const payload = await safeJson(response);
     throw new ApiError(response.status, backendMessage(payload, response.status), payload);
   }
   return response;
+}
+
+async function fetchWithAuthRetry(path: string, options: RequestOptions = {}): Promise<Response> {
+  const response = await fetchWithAuth(path, options);
+  if (!shouldRetryAuth(path, options, response)) return response;
+  const refreshed = await refreshAccessTokenOnce();
+  if (!refreshed) return response;
+  return fetchWithAuth(path, { ...options, skipAuthRetry: true });
 }
 
 async function fetchWithAuth(path: string, options: RequestOptions = {}): Promise<Response> {
@@ -61,6 +64,17 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+function shouldRetryAuth(path: string, options: RequestOptions, response: Response) {
+  return response.status === 401 && !options.skipAuthRetry && !path.startsWith("/api/auth/");
+}
+
+async function refreshAccessTokenOnce(): Promise<boolean> {
+  refreshPromise ??= refreshAccessToken().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
 }
 
 async function refreshAccessToken(): Promise<boolean> {

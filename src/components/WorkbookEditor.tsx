@@ -512,11 +512,16 @@ function styledCellData(
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
       next[rowKey][colKey] = {
         ...cell,
+        ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
     }
   }
   return next;
+}
+
+function normalizeFormula(formula: string) {
+  return formula.startsWith("=") ? formula : `=${formula}`;
 }
 
 function readableDefaultColumnWidth(width: unknown) {

@@ -30,10 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
 import { listComments, readMappingRules } from "@/lib/api/projects";
-import type {
-  BalanceSheetAssistantResponse,
-  ReviewCommentResponse,
-} from "@/lib/api/types";
+import type { BalanceSheetAssistantResponse, ReviewCommentResponse } from "@/lib/api/types";
 import {
   activeMentionQuery,
   buildCellCommentIndicators,
@@ -358,7 +355,9 @@ function Diagnosis() {
 
   const selectCommentTarget = (comment: ReviewCommentResponse) => {
     if (!comment.sheetName) return;
-    const targetSheetId = sheetIds.find((sheetId) => workbook?.sheets?.[sheetId]?.name === comment.sheetName);
+    const targetSheetId = sheetIds.find(
+      (sheetId) => workbook?.sheets?.[sheetId]?.name === comment.sheetName,
+    );
     if (!targetSheetId) return;
     const nextSelection = cellSelectionFromComment(comment, targetSheetId);
     if (nextSelection) {
@@ -606,9 +605,13 @@ function Diagnosis() {
                 teamMembers={commentMentionCandidates}
                 target={commentTarget}
                 targetName={targetLabel(commentTarget, selectedMeta?.label ?? selectedAddress)}
-                pending={createComment.isPending || resolveComment.isPending || reopenComment.isPending}
+                pending={
+                  createComment.isPending || resolveComment.isPending || reopenComment.isPending
+                }
                 onSend={(body) => sendComment(body)}
-                onReply={(comment, body) => sendComment(body, comment.id, commentTargetFromComment(comment))}
+                onReply={(comment, body) =>
+                  sendComment(body, comment.id, commentTargetFromComment(comment))
+                }
                 onToggleStatus={setCommentStatus}
                 onSelectTarget={selectCommentTarget}
               />
@@ -1315,7 +1318,11 @@ function CommentsPanel({
             className="flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold text-white disabled:opacity-50"
             style={{ background: "#7B68EE" }}
           >
-            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
             Send
           </button>
         </div>
@@ -1436,7 +1443,11 @@ function CommentThreadItem({
               className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-white disabled:opacity-50"
               style={{ background: "#7B68EE" }}
             >
-              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {pending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
               Send
             </button>
           </div>
@@ -1446,7 +1457,12 @@ function CommentThreadItem({
         <ol className="mt-3 space-y-2 border-l pl-3" style={{ borderColor: "#E3E6EA" }}>
           {comment.replies.map((replyComment) => (
             <li key={replyComment.id} className="rounded-md bg-[#F7F8FA] p-2">
-              <CommentBody comment={replyComment} view={view} compact onSelectTarget={onSelectTarget} />
+              <CommentBody
+                comment={replyComment}
+                view={view}
+                compact
+                onSelectTarget={onSelectTarget}
+              />
             </li>
           ))}
         </ol>
@@ -1484,7 +1500,10 @@ function CommentBody({
           ) : null}
         </div>
       </div>
-      <div className={compact ? "mt-1 text-[12px]" : "mt-2 text-[13px]"} style={{ color: "#292D34" }}>
+      <div
+        className={compact ? "mt-1 text-[12px]" : "mt-2 text-[13px]"}
+        style={{ color: "#292D34" }}
+      >
         {comment.body}
       </div>
       <MentionChips comment={comment} />
@@ -1856,10 +1875,7 @@ function workbookValueFromDraft(value: string) {
   return trimmed;
 }
 
-function removeOptimisticCell(
-  updates: Record<string, OptimisticCellUpdate>,
-  fieldId: string,
-) {
+function removeOptimisticCell(updates: Record<string, OptimisticCellUpdate>, fieldId: string) {
   const next = { ...updates };
   delete next[fieldId];
   return next;

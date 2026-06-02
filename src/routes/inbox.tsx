@@ -87,22 +87,16 @@ function Inbox() {
       title="Inbox · Teams Requests"
       subtitle="Requests forwarded by your Finance Manager via Microsoft Teams. Accept, then begin or continue the cycle."
       hideProgress
-      actions={
-        <Badge tone="info">
-          <MessagesSquare className="mr-1 inline h-3 w-3" />
-          Teams integration live
-        </Badge>
-      }
     >
       {visibleError ? (
-        <Card className="mb-5 border-[var(--color-danger)] bg-[var(--color-danger-bg)]">
+        <Card className="mb-5 border-(--color-danger) bg-(--color-danger-bg)">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 text-[var(--color-danger)]" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 text-(--color-danger)" />
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold text-[var(--color-danger)]">
+              <div className="text-[13px] font-semibold text-(--color-danger)">
                 Inbox request failed
               </div>
-              <div className="mt-1 text-[13px] text-[var(--color-danger-fg)]">{visibleError}</div>
+              <div className="mt-1 text-[13px] text-(--color-danger-fg)">{visibleError}</div>
             </div>
             {requests.error ? (
               <Button variant="secondary" onClick={() => requests.refetch()}>
@@ -120,7 +114,7 @@ function Inbox() {
           ["Converted", convertedCount.toString()],
         ].map(([k, v]) => (
           <Card key={k}>
-            <div className="text-[12px] uppercase tracking-wider text-[var(--color-text-secondary)]">
+            <div className="text-[12px] uppercase tracking-wider text-(--color-text-secondary)">
               {k}
             </div>
             <div className="mt-2 text-[24px] font-bold tnum">{v}</div>
@@ -131,7 +125,7 @@ function Inbox() {
       <div className="space-y-3">
         {requests.isLoading ? (
           <Card>
-            <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+            <div className="flex items-center gap-2 text-[13px] text-(--color-text-secondary)">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading manager requests...
             </div>
@@ -140,10 +134,10 @@ function Inbox() {
 
         {!requests.isLoading && items.length === 0 ? (
           <Card>
-            <div className="text-[15px] font-semibold text-[var(--color-text-primary)]">
+            <div className="text-[15px] font-semibold text-(--color-text-primary)">
               No manager requests
             </div>
-            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+            <p className="mt-1 text-[13px] text-(--color-text-secondary)">
               New analysis requests assigned to you will appear here.
             </p>
           </Card>
@@ -157,19 +151,19 @@ function Inbox() {
                   <Badge tone={statusTone(requestStatus(r))}>{statusLabel(requestStatus(r))}</Badge>
                   <Badge tone={priorityTone(r.priority)}>{r.priority}</Badge>
                   <Badge tone="neutral">Teams</Badge>
-                  <span className="text-[12px] text-[var(--color-text-muted)]">
+                  <span className="text-[12px] text-(--color-text-muted)">
                     {shortId(r.id)} · {formatDate(r.createdAt)}
                   </span>
                 </div>
-                <div className="mt-2 text-[15px] font-semibold text-[var(--color-text-primary)]">
+                <div className="mt-2 text-[15px] font-semibold text-(--color-text-primary)">
                   {r.companyName} {r.companySymbol ? `(${r.companySymbol})` : ""} ·{" "}
                   {r.fiscalYear ?? "Current FY"}
                 </div>
-                <div className="text-[12px] text-[var(--color-text-muted)]">
+                <div className="text-[12px] text-(--color-text-muted)">
                   {r.sector ?? "Sector not specified"} · from Finance Manager
                   {r.dueDate ? ` · due ${formatDate(r.dueDate)}` : ""}
                 </div>
-                <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+                <p className="mt-2 text-[13px] text-(--color-text-secondary)">
                   "
                   {r.note ||
                     `Please run the ${r.fiscalYear ?? "current"} cycle for ${r.companyName}.`}
