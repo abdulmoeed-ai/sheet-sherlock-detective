@@ -1,5 +1,22 @@
-import { Sparkles, Pencil, X, Send, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Sparkles,
+  Pencil,
+  X,
+  Send,
+  ExternalLink,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Check,
+  Radio,
+} from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { MarkdownContent } from "@/components/MarkdownContent";
+import type {
+  AskAiFinalResponse,
+  AskAiSourceEvent,
+  AskAiStatusEvent,
+} from "@/lib/api/ask-ai-stream";
 
 export type Citation =
   | { kind: "web"; name: string; date: string; url: string; excerpt: string }
@@ -11,6 +28,9 @@ interface Message {
   content: ReactNode;
   citations?: Citation[];
   expandCitations?: boolean;
+  liveEvents?: Array<AskAiStatusEvent | AskAiSourceEvent | { summary: string }>;
+  final?: AskAiFinalResponse;
+  isStreaming?: boolean;
 }
 
 function CitationCard({ c }: { c: Citation }) {
@@ -74,7 +94,7 @@ function MessageBubble({ m }: { m: Message }) {
               : { background: "#fff", color: "var(--color-text-primary)", border: "1px solid var(--color-border-default)", borderRadius: "12px 12px 12px 2px" }
           }
         >
-          {m.content}
+          {typeof m.content === "string" ? <MarkdownContent markdown={m.content} /> : m.content}
         </div>
         {hasCitations && (
           <div className="mt-1.5">
@@ -95,7 +115,71 @@ function MessageBubble({ m }: { m: Message }) {
             )}
           </div>
         )}
+        {m.role === "ai" && (m.liveEvents?.length || m.isStreaming) ? (
+          <LiveEventTrail events={m.liveEvents ?? []} done={!m.isStreaming} />
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function LiveEventTrail({
+  events,
+  done,
+}: {
+  events: Array<AskAiStatusEvent | AskAiSourceEvent | { summary: string }>;
+  done: boolean;
+}) {
+  return (
+    <div
+      className="mt-2 rounded-lg border px-3 py-2"
+      style={{ borderColor: "rgba(123,104,238,0.18)", background: "#FAFBFF" }}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {done ? (
+            <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
+          ) : events.length === 0 ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-brand)]" />
+          ) : (
+            <Radio className="h-3.5 w-3.5 animate-pulse text-[var(--color-brand)]" />
+          )}
+          <span className="text-[12px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            Live backend events
+          </span>
+        </div>
+        <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+          {done ? "complete" : "streaming"}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {events.length === 0 ? (
+          <div className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+            Waiting for SSE events...
+          </div>
+        ) : (
+          events.slice(-5).map((event, index) => <LiveEventRow key={index} event={event} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LiveEventRow({ event }: { event: AskAiStatusEvent | AskAiSourceEvent | { summary: string } }) {
+  const label = "stage" in event ? event.stage : "kind" in event ? `${event.kind} · ${event.count}` : "approach";
+  const message = "summary" in event ? event.summary : event.message;
+
+  return (
+    <div className="grid grid-cols-[84px_1fr] gap-2 text-[11px] leading-relaxed">
+      <span
+        className="truncate rounded-full px-2 py-0.5 text-center font-semibold"
+        style={{ background: "var(--color-tag-bg)", color: "var(--color-brand)" }}
+      >
+        {label}
+      </span>
+      <span className="min-w-0" style={{ color: "var(--color-text-secondary)" }}>
+        {message}
+      </span>
     </div>
   );
 }

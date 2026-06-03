@@ -1,6 +1,11 @@
+import { useEffect, useState } from "react";
 import { ExternalLink, X } from "lucide-react";
+import { readDocumentPageImage } from "@/lib/api/projects";
 
 export interface SourceRef {
+  projectId?: string | null;
+  documentId?: string | null;
+  pdfPageIndex?: number | null;
   doc: string;
   page: number;
   field: string;
@@ -10,13 +15,7 @@ export interface SourceRef {
   bbox?: [number, number, number, number];
 }
 
-export function SourceChip({
-  source,
-  onClick,
-}: {
-  source: SourceRef;
-  onClick?: () => void;
-}) {
+export function SourceChip({ source, onClick }: { source: SourceRef; onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -35,11 +34,6 @@ function tierColor(conf: number) {
   return { stroke: "#EF4444", bg: "rgba(239,68,68,0.14)", label: "#C62828" };
 }
 
-/**
- * Renders a synthetic PDF-page preview with a coloured bounding box around
- * the field. No real PDFs are loaded — this is a fidelity mock that mimics
- * page paper, line-fill text and the highlight overlay.
- */
 export function SourcePreview({
   source,
   compact = false,
@@ -52,6 +46,38 @@ export function SourcePreview({
   const tc = tierColor(source.conf);
   const bbox = source.bbox ?? [22, 48, 56, 6];
   const height = compact ? 180 : 520;
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const pageIndex = source.pdfPageIndex ?? Math.max(source.page - 1, 0);
+  const canLoadImage = !!source.projectId && !!source.documentId;
+
+  useEffect(() => {
+    if (!canLoadImage) {
+      setImageUrl(null);
+      setImageError(null);
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setImageError(null);
+    readDocumentPageImage(source.projectId as string, source.documentId as string, pageIndex)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setImageUrl(null);
+        setImageError(error instanceof Error ? error.message : "Source image unavailable");
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [canLoadImage, pageIndex, source.documentId, source.projectId]);
 
   return (
     <div
@@ -60,10 +86,16 @@ export function SourcePreview({
     >
       <div
         className="flex items-center justify-between border-b px-3 py-2"
-        style={{ borderColor: "var(--color-border-default)", background: "var(--color-table-header)" }}
+        style={{
+          borderColor: "var(--color-border-default)",
+          background: "var(--color-table-header)",
+        }}
       >
         <div className="min-w-0">
-          <div className="truncate text-[11px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          <div
+            className="truncate text-[11px] font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             {source.doc}
           </div>
           <div className="truncate text-[10px]" style={{ color: "var(--color-text-muted)" }}>
@@ -72,10 +104,14 @@ export function SourcePreview({
         </div>
         <div className="flex items-center gap-1.5">
           <a
-            href="#"
+            href={imageUrl ?? "#"}
+            target={imageUrl ? "_blank" : undefined}
+            rel={imageUrl ? "noreferrer" : undefined}
             className="rounded p-1 hover:bg-white"
             title="Open full page in new tab"
-            onClick={(e) => e.preventDefault()}
+            onClick={(e) => {
+              if (!imageUrl) e.preventDefault();
+            }}
           >
             <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
           </a>
@@ -88,32 +124,35 @@ export function SourcePreview({
       </div>
 
       <div className="relative" style={{ height, background: "#FAFAF7" }}>
-        {/* synthetic page lines */}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={`${source.doc} page ${source.page}`}
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        ) : (
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full"
+          >
+            {Array.from({ length: 28 }).map((_, i) => {
+              const y = 6 + i * 3.2;
+              const w = 60 + ((i * 7) % 30);
+              return (
+                <rect key={i} x={6} y={y} width={w} height={1.2} fill="#D8D5CC" opacity={0.55} />
+              );
+            })}
+            <rect x={6} y={bbox[1] - 4} width={88} height={0.6} fill="#A8A496" />
+            <rect x={6} y={bbox[1] + bbox[3] + 2} width={88} height={0.6} fill="#A8A496" />
+          </svg>
+        )}
+
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           className="absolute inset-0 h-full w-full"
         >
-          {Array.from({ length: 28 }).map((_, i) => {
-            const y = 6 + i * 3.2;
-            const w = 60 + ((i * 7) % 30);
-            return (
-              <rect
-                key={i}
-                x={6}
-                y={y}
-                width={w}
-                height={1.2}
-                fill="#D8D5CC"
-                opacity={0.55}
-              />
-            );
-          })}
-          {/* table-ish row right before bbox */}
-          <rect x={6} y={bbox[1] - 4} width={88} height={0.6} fill="#A8A496" />
-          <rect x={6} y={bbox[1] + bbox[3] + 2} width={88} height={0.6} fill="#A8A496" />
-
-          {/* highlight bbox */}
           <rect
             x={bbox[0]}
             y={bbox[1]}
@@ -125,7 +164,15 @@ export function SourcePreview({
           />
         </svg>
 
-        {/* label callout */}
+        {imageError && (
+          <div
+            className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px]"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {imageError}
+          </div>
+        )}
+
         <div
           className="absolute rounded px-1.5 py-0.5 text-[10px] font-semibold shadow-sm"
           style={{

@@ -2,8 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { useSelectedProjectId } from "@/lib/project-store";
 import { getSectorPack } from "@/lib/sector-packs";
 import { SourcePreview, type SourceRef } from "@/components/SourcePreviewPanel";
+import { useAcknowledgeMappingRules, useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
+import { readMappingRules } from "@/lib/api/projects";
+import type { DocumentResponse, MappingRulesSummaryResponse } from "@/lib/api/types";
+import { ApiError } from "@/lib/api/errors";
+import { isExtractionResultsConflict, splitPdfFiles, type UploadFileStatus } from "@/lib/upload-documents";
+import { toast } from "sonner";
 import {
   CloudUpload,
   FileText,
@@ -11,6 +18,7 @@ import {
   Check,
   Loader2,
   AlertTriangle,
+  RotateCw,
   Minus,
   ChevronDown,
   ChevronRight,
@@ -168,17 +176,30 @@ type FeedRow = {
   duration?: string;
 };
 
+type SelectedUpload = {
+  file: File;
+  status: "pending" | "uploading" | "uploaded" | "failed";
+  message?: string;
+  document?: DocumentResponse;
+};
+
 function Ingestion() {
   const navigate = useNavigate();
   const cycle = useCycle();
   const pack = getSectorPack(cycle.sector);
-  const [file, setFile] = useState<File | null>(null);
+  const projectId = useSelectedProjectId();
+  const uploadDocuments = useUploadDocuments(projectId ?? "__no_project__");
+  const startExtractionMutation = useStartExtraction(projectId ?? "__no_project__");
+  const [selectedUploads, setSelectedUploads] = useState<SelectedUpload[]>([]);
+  const [rejectedFiles, setRejectedFiles] = useState<string[]>([]);
   const [threshold, setThreshold] = useState(85);
   const [running, setRunning] = useState(false);
   const [feed, setFeed] = useState<FeedRow[]>([]);
   const [feedDone, setFeedDone] = useState(false);
   const [ocrResolved, setOcrResolved] = useState<Record<number, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [pendingStartAfterAck, setPendingStartAfterAck] = useState(false);
+  const [rerunModalOpen, setRerunModalOpen] = useState(false);
 
   const ocrIssues: SourceRef[] = [
     { doc: "MTL Annual Report 2025", page: 42, field: "Revenue FY2025", value: "PKR 54.8B", conf: 87, bbox: [20, 38, 56, 5] },
@@ -190,8 +211,29 @@ function Ingestion() {
   const allResolved =
     feedDone && needsAction.every((_, i) => ocrResolved[i + 1]);
 
-  const startIngestion = () => {
+  // Reset feed state whenever a new cycle is started (cycle.startedAt changes each time
+  // cycleStore.startCycle is called — covers Resume and New Version from the registry).
+  useEffect(() => {
+    setRunning(false);
+    setFeed([]);
+    setFeedDone(false);
+    setOcrResolved({});
+    setRerunModalOpen(false);
+  }, [cycle.startedAt]);
+
+  useEffect(() => {
+    if (!allResolved) return;
+    const timer = window.setTimeout(() => {
+      cycleStore.setStatus("diagnosis");
+      navigate({ to: "/diagnosis" });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [allResolved, navigate]);
+
+  const startFeed = () => {
     setRunning(true);
+    setFeedDone(false);
+    setOcrResolved({});
     const initial: FeedRow[] = SOURCES.map((s) => ({
       name: s.name,
       state: s.status === "down" ? "skipped" : "pending",
@@ -228,9 +270,98 @@ function Ingestion() {
     tick();
   };
 
+  const startIngestion = async () => {
+    if (!projectId) {
+      toast.error("Select or create a project before uploading reports.");
+      return;
+    }
+    const filesToUpload = selectedUploads
+      .filter((item) => item.status !== "uploaded")
+      .map((item) => item.file);
+    if (!selectedUploads.length) return;
+    if (filesToUpload.length) {
+      const result = await uploadDocuments.mutateAsync({
+        files: filesToUpload,
+        onStatus: updateUploadStatus,
+      });
+      if (result.failed) {
+        toast.error(`Upload failed for ${result.failed.file.name}: ${result.failed.message}`);
+        return;
+      }
+      cycleStore.setDocumentIds(
+        result.uploaded
+          .map((document) => document.id)
+          .filter(Boolean),
+      );
+    }
+    try {
+      await startExtractionMutation.mutateAsync(false);
+      startFeed();
+    } catch (error) {
+      if (isExtractionResultsConflict(error)) {
+        setRerunModalOpen(true);
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409 && error.message.includes("Acknowledge")) {
+        setPendingStartAfterAck(true);
+        setRulesOpen(true);
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Unable to start extraction");
+    }
+  };
+
+  const rerunExtraction = async () => {
+    try {
+      await startExtractionMutation.mutateAsync(true);
+      setRerunModalOpen(false);
+      startFeed();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to re-run extraction");
+    }
+  };
+
+  const handleFileSelection = (files: FileList | null) => {
+    const { accepted, rejected } = splitPdfFiles(Array.from(files ?? []));
+    if (rejected.length) {
+      setRejectedFiles(rejected.map((file) => file.name));
+      toast.error("Only PDF reports are supported for extraction.");
+    } else {
+      setRejectedFiles([]);
+    }
+    if (!accepted.length) return;
+    setSelectedUploads((current) => {
+      const existingKeys = new Set(current.map((item) => fileKey(item.file)));
+      const next = accepted
+        .filter((file) => !existingKeys.has(fileKey(file)))
+        .map((file): SelectedUpload => ({ file, status: "pending" }));
+      return [...current, ...next];
+    });
+  };
+
+  const updateUploadStatus = (status: UploadFileStatus<DocumentResponse>) => {
+    setSelectedUploads((current) =>
+      current.map((item) => {
+        if (fileKey(item.file) !== fileKey(status.file)) return item;
+        if (status.status === "uploaded") {
+          return { ...item, status: "uploaded", document: status.document, message: undefined };
+        }
+        if (status.status === "failed") {
+          return { ...item, status: "failed", message: status.message };
+        }
+        return { ...item, status: status.status, message: undefined };
+      }),
+    );
+  };
+
+  const removeSelectedFile = (file: File) => {
+    setSelectedUploads((current) => current.filter((item) => fileKey(item.file) !== fileKey(file)));
+  };
+
   const liveCount = SOURCES.filter((s) => s.status === "live").length;
   const staleCount = SOURCES.filter((s) => s.status === "stale").length;
   const downCount = SOURCES.filter((s) => s.status === "down").length;
+  const uploadPending = uploadDocuments.isPending || startExtractionMutation.isPending;
 
   return (
     <PageShell
@@ -265,7 +396,7 @@ function Ingestion() {
             Upload PSX Annual Report / Filing
           </div>
 
-          {!file ? (
+          {!selectedUploads.length ? (
             <label
               className="block cursor-pointer rounded-[10px] px-6 py-9 text-center transition-colors"
               style={{ border: "2px dashed var(--color-brand)", background: "transparent" }}
@@ -278,31 +409,80 @@ function Ingestion() {
                 <span style={{ color: "var(--color-text-secondary)" }}>or drag and drop</span>
               </div>
               <div className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                PDF, XLSX (max. 50MB)
+                Select one or more PDF annual reports (max. 50MB each)
               </div>
               <input
                 type="file"
+                multiple
                 className="hidden"
-                accept=".pdf,.xlsx"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                accept="application/pdf,.pdf"
+                onChange={(e) => {
+                  handleFileSelection(e.target.files);
+                  e.currentTarget.value = "";
+                }}
               />
             </label>
           ) : (
-            <div className="flex items-center gap-3 rounded-lg border px-4 py-3" style={{ borderColor: "var(--color-border-default)" }}>
-              <FileText className="h-8 w-8 rounded-md p-1.5" style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }} />
-              <div className="flex-1">
-                <div className="text-[14px] font-medium" style={{ color: "var(--color-text-primary)" }}>{file.name}</div>
-                <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                  {(file.size / (1024 * 1024)).toFixed(1)} MB · ready for OCR
+            <div className="space-y-2">
+              {selectedUploads.map((item) => (
+                <div key={fileKey(item.file)} className="flex items-center gap-3 rounded-lg border px-4 py-3" style={{ borderColor: "var(--color-border-default)" }}>
+                  <FileText className="h-8 w-8 rounded-md p-1.5" style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-medium" style={{ color: "var(--color-text-primary)" }}>{item.file.name}</div>
+                    <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                      {(item.file.size / (1024 * 1024)).toFixed(1)} MB · {uploadStatusLabel(item)}
+                    </div>
+                    {item.status === "failed" && item.message ? (
+                      <div className="mt-1 text-[11px]" style={{ color: "var(--color-danger)" }}>{item.message}</div>
+                    ) : null}
+                  </div>
+                  {item.status === "uploading" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--color-brand)" }} />
+                  ) : (
+                    <button
+                      onClick={() => removeSelectedFile(item.file)}
+                      disabled={uploadPending}
+                      className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
+                    </button>
+                  )}
                 </div>
+              ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-[12px] font-semibold" style={{ borderColor: "var(--color-border-default)", color: "var(--color-brand)" }}>
+                  Add more PDFs
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    accept="application/pdf,.pdf"
+                    onChange={(e) => {
+                      handleFileSelection(e.target.files);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={() => setSelectedUploads([])}
+                  disabled={uploadPending}
+                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+                  style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+                >
+                  Clear
+                </button>
               </div>
-              <button onClick={() => setFile(null)} className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)]">
-                <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
-              </button>
             </div>
           )}
 
-          {file && (
+          {rejectedFiles.length ? (
+            <div className="mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-[12px]" style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>Rejected non-PDF file{rejectedFiles.length === 1 ? "" : "s"}: {rejectedFiles.join(", ")}</span>
+            </div>
+          ) : null}
+
+          {selectedUploads.length > 0 && (
             <div className="mt-4 flex items-center gap-3">
               <label className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>OCR confidence threshold:</label>
               <input
@@ -338,11 +518,29 @@ function Ingestion() {
         )}
       </div>
 
-      {rulesOpen && <RulePackModal onClose={() => setRulesOpen(false)} />}
+      {rulesOpen && (
+        <RulePackModal
+          projectId={projectId}
+          onClose={() => { setRulesOpen(false); setPendingStartAfterAck(false); }}
+          onAcknowledged={pendingStartAfterAck ? () => {
+            setPendingStartAfterAck(false);
+            startIngestion();
+          } : undefined}
+        />
+      )}
+      {rerunModalOpen && (
+        <RerunExtractionModal
+          pending={startExtractionMutation.isPending}
+          onClose={() => setRerunModalOpen(false)}
+          onConfirm={rerunExtraction}
+        />
+      )}
 
       <StickyFooter
         running={running}
-        file={file}
+        fileCount={selectedUploads.length}
+        uploadPending={uploadPending}
+        hasProject={!!projectId}
         feed={feed}
         feedDone={feedDone}
         allResolved={allResolved}
@@ -350,20 +548,135 @@ function Ingestion() {
         staleCount={staleCount}
         downCount={downCount}
         onStart={startIngestion}
-        onReviewDiffs={() => {
-          cycleStore.setStatus("diff-review");
-          navigate({ to: "/diff-review" });
+        onOpenDiagnosis={() => {
+          cycleStore.setStatus("diagnosis");
+          navigate({ to: "/diagnosis" });
         }}
       />
     </PageShell>
   );
 }
 
-function RulePackModal({ onClose }: { onClose: () => void }) {
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function uploadStatusLabel(item: SelectedUpload) {
+  if (item.status === "uploaded") return "uploaded";
+  if (item.status === "uploading") return "uploading";
+  if (item.status === "failed") return "upload failed";
+  return "ready for upload";
+}
+
+function RerunExtractionModal({
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6"
+      onClick={pending ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg p-2" style={{ background: "var(--color-warning-bg)" }}>
+            <AlertTriangle className="h-5 w-5" style={{ color: "var(--color-warning-fg)" }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              Replace existing extraction results?
+            </div>
+            <div className="mt-2 text-[13px] leading-5" style={{ color: "var(--color-text-secondary)" }}>
+              This project already has generated values in Diagnosis. Re-running extraction will replace the prior generated
+              values with results from the currently uploaded reports.
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={pending}
+            className="rounded p-1 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
+          </button>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={pending}
+            className="h-9 rounded-md border px-3 text-[13px] font-semibold disabled:opacity-50"
+            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={pending}
+            className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-[13px] font-semibold text-white disabled:opacity-50"
+            style={{ background: "var(--color-brand)" }}
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+            Re-run Extraction
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RulePackModal({
+  projectId,
+  onClose,
+  onAcknowledged,
+}: {
+  projectId: string | null;
+  onClose: () => void;
+  onAcknowledged?: () => void;
+}) {
   const cycle = useCycle();
   const pack = getSectorPack(cycle.sector);
   const overrideSet = new Set(pack.sectorOverrides);
   const all = [...pack.sectorOverrides, ...pack.baseRules];
+  const acknowledgeMutation = useAcknowledgeMappingRules(projectId ?? "__no_project__");
+  const [summary, setSummary] = useState<MappingRulesSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setSummaryLoading(true);
+    readMappingRules(projectId)
+      .then(setSummary)
+      .catch(() => {})
+      .finally(() => setSummaryLoading(false));
+  }, [projectId]);
+
+  const handleAcknowledge = async () => {
+    if (!summary || !projectId) return;
+    try {
+      await acknowledgeMutation.mutateAsync({
+        rulesHash: summary.rulesHash,
+        rulesCount: summary.rulesCount,
+        acknowledged: true,
+      });
+      toast.success("Data Mapping Rules acknowledged.");
+      onClose();
+      onAcknowledged?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Acknowledgement failed.");
+    }
+  };
+
+  const alreadyAcknowledged = summary?.acknowledged ?? false;
+  const canAcknowledge = !!summary && !!projectId && !alreadyAcknowledged;
 
   return (
     <div
@@ -383,7 +696,11 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               {pack.sector} · Data Mapping Rules
             </div>
             <div className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {pack.ruleCount} active rules · {pack.template} · {pack.yearEnd} year-end · {pack.currency}
+              {summaryLoading
+                ? "Loading…"
+                : summary
+                  ? `${summary.rulesCount} active rules · ${summary.criticalCount} critical · ${summary.advisoryCount} advisory`
+                  : `${pack.ruleCount} rules · ${pack.template} · ${pack.yearEnd} year-end · ${pack.currency}`}
             </div>
           </div>
           <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-tag-bg)]">
@@ -450,6 +767,42 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Acknowledge footer */}
+        <div
+          className="flex items-center justify-between border-t px-5 py-3"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          {alreadyAcknowledged ? (
+            <span className="flex items-center gap-1.5 text-[12px]" style={{ color: "var(--color-success)" }}>
+              <Check className="h-3.5 w-3.5" />
+              Rules acknowledged{summary?.acknowledgedAt ? ` · ${new Date(summary.acknowledgedAt).toLocaleString()}` : ""}
+            </span>
+          ) : (
+            <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Review all rules above, then acknowledge to begin extraction.
+            </span>
+          )}
+          <button
+            onClick={canAcknowledge ? handleAcknowledge : onClose}
+            disabled={acknowledgeMutation.isPending || summaryLoading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
+            style={{ background: "var(--color-brand)" }}
+          >
+            {acknowledgeMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : alreadyAcknowledged ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : null}
+            {alreadyAcknowledged
+              ? onAcknowledged
+                ? "Begin extraction →"
+                : "Close"
+              : onAcknowledged
+                ? "Acknowledge and begin extraction →"
+                : "Acknowledge rules"}
+          </button>
         </div>
       </div>
     </div>
@@ -549,13 +902,9 @@ function SourceCard({ s, threshold }: { s: Source; threshold: number }) {
                       <td className="px-2 py-1.5"><ConfPill v={f.confidence} /></td>
                       <td className="px-2 py-1.5 text-[11px]" style={{ color: "var(--color-text-muted)" }}>{f.timestamp}</td>
                       <td className="px-2 py-1.5 text-right">
-                        <a
-                          href={`/diff-review#row-${f.cell}`}
-                          className="text-[10px] font-semibold"
-                          style={{ color: "var(--color-brand)" }}
-                        >
-                          View in diff →
-                        </a>
+                        <span className="text-[10px] font-semibold" style={{ color: "var(--color-brand)" }}>
+                          Diagnosis
+                        </span>
                       </td>
                     </tr>
                   );
@@ -771,7 +1120,9 @@ function LiveFeed({
 
 function StickyFooter({
   running,
-  file,
+  fileCount,
+  uploadPending,
+  hasProject,
   feed,
   feedDone,
   allResolved,
@@ -779,10 +1130,12 @@ function StickyFooter({
   staleCount,
   downCount,
   onStart,
-  onReviewDiffs,
+  onOpenDiagnosis,
 }: {
   running: boolean;
-  file: File | null;
+  fileCount: number;
+  uploadPending: boolean;
+  hasProject: boolean;
   feed: FeedRow[];
   feedDone: boolean;
   allResolved: boolean;
@@ -790,7 +1143,7 @@ function StickyFooter({
   staleCount: number;
   downCount: number;
   onStart: () => void;
-  onReviewDiffs: () => void;
+  onOpenDiagnosis: () => void;
 }) {
   const doneCount = feed.filter((r) => r.state === "done").length;
   const totalCount = feed.filter((r) => r.state !== "skipped").length;
@@ -804,16 +1157,16 @@ function StickyFooter({
       {!running ? (
         <>
           <div className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
-            {file ? "PDF uploaded · " : "No PDF uploaded · "}
+            {!hasProject ? "No project selected · " : fileCount ? `${fileCount} PDF${fileCount === 1 ? "" : "s"} selected · ` : "No PDF selected · "}
             13 sources ready ({liveCount} live, {staleCount} stale, {downCount} error)
           </div>
           <button
             onClick={onStart}
-            disabled={!file}
+            disabled={!hasProject || !fileCount || uploadPending}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ background: "var(--color-brand)" }}
           >
-            Start ingestion →
+            {uploadPending ? "Uploading reports..." : "Upload and start extraction →"}
           </button>
         </>
       ) : (
@@ -831,12 +1184,12 @@ function StickyFooter({
             </div>
           </div>
           <button
-            onClick={onReviewDiffs}
+            onClick={onOpenDiagnosis}
             disabled={!allResolved}
             className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ background: "var(--color-brand)" }}
           >
-            Review diffs →
+            Open diagnosis →
           </button>
         </>
       )}
