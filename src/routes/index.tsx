@@ -3,12 +3,14 @@ import { useMemo, useState, type FormEvent } from "react";
 import { ArrowRight, ClipboardList, FolderOpen, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
 import type { BackendRole } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useAnalysisRequests, useCreateAnalysisRequest } from "@/hooks/use-analysis-requests";
 import { useProjects } from "@/hooks/use-projects";
+import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { roleLabel } from "@/lib/role-access";
 
@@ -24,15 +26,17 @@ export const Route = createFileRoute("/")({
 
 const blankRequest: AnalysisRequestCreateInput = {
   assignedAnalystEmail: "",
-  companyName: "Millat Tractors Limited",
-  companySymbol: "MTL",
-  sector: "Engineering & Industrials",
+  companyName: "",
+  companySymbol: "",
+  sector: "",
   fiscalYear: "FY2025",
   template: "Millat - Template.xlsx",
   priority: "normal",
   dueDate: "",
   note: "",
 };
+
+const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
 
 function Dashboard() {
   const { data: user } = useCurrentUser();
@@ -52,6 +56,8 @@ function Dashboard() {
 function ManagerDashboard() {
   const requests = useAnalysisRequests();
   const createRequest = useCreateAnalysisRequest();
+  const analysts = useAnalysts();
+  const psxCompanies = usePsxCompanies();
   const [draft, setDraft] = useState<AnalysisRequestCreateInput>(blankRequest);
   const error =
     createRequest.error instanceof ApiError
@@ -68,6 +74,36 @@ function ManagerDashboard() {
       converted: items.filter((item) => item.status === "converted").length,
     };
   }, [requests.data]);
+
+  const analystOptions = useMemo(
+    () =>
+      (analysts.data ?? []).map((a) => ({
+        value: a.email,
+        label: `${a.name} (${a.email})`,
+      })),
+    [analysts.data],
+  );
+
+  const companyOptions = useMemo(
+    () =>
+      (psxCompanies.data ?? []).map((c) => ({
+        value: c.symbol,
+        label: `${c.name} (${c.symbol})`,
+      })),
+    [psxCompanies.data],
+  );
+
+  const handleCompanySelect = (symbol: string) => {
+    const company = psxCompanies.data?.find((c) => c.symbol === symbol);
+    if (company) {
+      setDraft({
+        ...draft,
+        companyName: company.name,
+        companySymbol: company.symbol,
+        sector: company.sector,
+      });
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -94,33 +130,65 @@ function ManagerDashboard() {
           <Badge tone="info">Manager</Badge>
         </div>
         <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          <Field
-            label="Assigned analyst email"
+          <Combobox
+            label="Assigned analyst"
+            options={analystOptions}
             value={draft.assignedAnalystEmail}
             onChange={(value) => setDraft({ ...draft, assignedAnalystEmail: value })}
+            placeholder={analysts.isLoading ? "Loading…" : "Select analyst…"}
+            disabled={analysts.isLoading}
             required
           />
-          <Field
+          <Combobox
             label="Company"
-            value={draft.companyName}
-            onChange={(value) => setDraft({ ...draft, companyName: value })}
+            options={companyOptions}
+            value={draft.companySymbol ?? ""}
+            onChange={handleCompanySelect}
+            placeholder={psxCompanies.isLoading ? "Loading…" : "Search company…"}
+            disabled={psxCompanies.isLoading}
             required
           />
-          <Field
-            label="Symbol"
-            value={draft.companySymbol ?? ""}
-            onChange={(value) => setDraft({ ...draft, companySymbol: value })}
-          />
-          <Field
-            label="Sector"
-            value={draft.sector ?? ""}
-            onChange={(value) => setDraft({ ...draft, sector: value })}
-          />
-          <Field
-            label="Fiscal year"
-            value={draft.fiscalYear ?? ""}
-            onChange={(value) => setDraft({ ...draft, fiscalYear: value })}
-          />
+          <label>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Symbol
+            </span>
+            <input
+              type="text"
+              value={draft.companySymbol ?? ""}
+              disabled
+              className="h-10 w-full rounded-md border px-3 text-[13px] opacity-60"
+              style={{ borderColor: "var(--color-border-strong)" }}
+            />
+          </label>
+          <label>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Sector
+            </span>
+            <input
+              type="text"
+              value={draft.sector ?? ""}
+              disabled
+              className="h-10 w-full rounded-md border px-3 text-[13px] opacity-60"
+              style={{ borderColor: "var(--color-border-strong)" }}
+            />
+          </label>
+          <label>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Fiscal year
+            </span>
+            <select
+              value={draft.fiscalYear ?? "FY2025"}
+              onChange={(event) => setDraft({ ...draft, fiscalYear: event.target.value })}
+              className="h-10 w-full rounded-md border px-3 text-[13px]"
+              style={{ borderColor: "var(--color-border-strong)" }}
+            >
+              {FISCAL_YEARS.map((fy) => (
+                <option key={fy} value={fy}>
+                  {fy}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
               Priority
