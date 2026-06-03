@@ -5,8 +5,10 @@ import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { getSectorPack } from "@/lib/sector-packs";
 import { SourcePreview, type SourceRef } from "@/components/SourcePreviewPanel";
-import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
-import type { DocumentResponse } from "@/lib/api/types";
+import { useAcknowledgeMappingRules, useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
+import { readMappingRules } from "@/lib/api/projects";
+import type { DocumentResponse, MappingRulesSummaryResponse } from "@/lib/api/types";
+import { ApiError } from "@/lib/api/errors";
 import { isExtractionResultsConflict, splitPdfFiles, type UploadFileStatus } from "@/lib/upload-documents";
 import { toast } from "sonner";
 import {
@@ -196,6 +198,7 @@ function Ingestion() {
   const [feedDone, setFeedDone] = useState(false);
   const [ocrResolved, setOcrResolved] = useState<Record<number, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [pendingStartAfterAck, setPendingStartAfterAck] = useState(false);
   const [rerunModalOpen, setRerunModalOpen] = useState(false);
 
   const ocrIssues: SourceRef[] = [
@@ -207,6 +210,16 @@ function Ingestion() {
   const needsAction = ocrIssues.filter((o, i) => i > 0);
   const allResolved =
     feedDone && needsAction.every((_, i) => ocrResolved[i + 1]);
+
+  // Reset feed state whenever a new cycle is started (cycle.startedAt changes each time
+  // cycleStore.startCycle is called — covers Resume and New Version from the registry).
+  useEffect(() => {
+    setRunning(false);
+    setFeed([]);
+    setFeedDone(false);
+    setOcrResolved({});
+    setRerunModalOpen(false);
+  }, [cycle.startedAt]);
 
   useEffect(() => {
     if (!allResolved) return;
@@ -287,6 +300,11 @@ function Ingestion() {
     } catch (error) {
       if (isExtractionResultsConflict(error)) {
         setRerunModalOpen(true);
+        return;
+      }
+      if (error instanceof ApiError && error.status === 409 && error.message.includes("Acknowledge")) {
+        setPendingStartAfterAck(true);
+        setRulesOpen(true);
         return;
       }
       toast.error(error instanceof Error ? error.message : "Unable to start extraction");
@@ -500,7 +518,16 @@ function Ingestion() {
         )}
       </div>
 
-      {rulesOpen && <RulePackModal onClose={() => setRulesOpen(false)} />}
+      {rulesOpen && (
+        <RulePackModal
+          projectId={projectId}
+          onClose={() => { setRulesOpen(false); setPendingStartAfterAck(false); }}
+          onAcknowledged={pendingStartAfterAck ? () => {
+            setPendingStartAfterAck(false);
+            startIngestion();
+          } : undefined}
+        />
+      )}
       {rerunModalOpen && (
         <RerunExtractionModal
           pending={startExtractionMutation.isPending}
@@ -606,11 +633,50 @@ function RerunExtractionModal({
   );
 }
 
-function RulePackModal({ onClose }: { onClose: () => void }) {
+function RulePackModal({
+  projectId,
+  onClose,
+  onAcknowledged,
+}: {
+  projectId: string | null;
+  onClose: () => void;
+  onAcknowledged?: () => void;
+}) {
   const cycle = useCycle();
   const pack = getSectorPack(cycle.sector);
   const overrideSet = new Set(pack.sectorOverrides);
   const all = [...pack.sectorOverrides, ...pack.baseRules];
+  const acknowledgeMutation = useAcknowledgeMappingRules(projectId ?? "__no_project__");
+  const [summary, setSummary] = useState<MappingRulesSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setSummaryLoading(true);
+    readMappingRules(projectId)
+      .then(setSummary)
+      .catch(() => {})
+      .finally(() => setSummaryLoading(false));
+  }, [projectId]);
+
+  const handleAcknowledge = async () => {
+    if (!summary || !projectId) return;
+    try {
+      await acknowledgeMutation.mutateAsync({
+        rulesHash: summary.rulesHash,
+        rulesCount: summary.rulesCount,
+        acknowledged: true,
+      });
+      toast.success("Data Mapping Rules acknowledged.");
+      onClose();
+      onAcknowledged?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Acknowledgement failed.");
+    }
+  };
+
+  const alreadyAcknowledged = summary?.acknowledged ?? false;
+  const canAcknowledge = !!summary && !!projectId && !alreadyAcknowledged;
 
   return (
     <div
@@ -630,7 +696,11 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               {pack.sector} · Data Mapping Rules
             </div>
             <div className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {pack.ruleCount} active rules · {pack.template} · {pack.yearEnd} year-end · {pack.currency}
+              {summaryLoading
+                ? "Loading…"
+                : summary
+                  ? `${summary.rulesCount} active rules · ${summary.criticalCount} critical · ${summary.advisoryCount} advisory`
+                  : `${pack.ruleCount} rules · ${pack.template} · ${pack.yearEnd} year-end · ${pack.currency}`}
             </div>
           </div>
           <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-tag-bg)]">
@@ -697,6 +767,42 @@ function RulePackModal({ onClose }: { onClose: () => void }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Acknowledge footer */}
+        <div
+          className="flex items-center justify-between border-t px-5 py-3"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          {alreadyAcknowledged ? (
+            <span className="flex items-center gap-1.5 text-[12px]" style={{ color: "var(--color-success)" }}>
+              <Check className="h-3.5 w-3.5" />
+              Rules acknowledged{summary?.acknowledgedAt ? ` · ${new Date(summary.acknowledgedAt).toLocaleString()}` : ""}
+            </span>
+          ) : (
+            <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Review all rules above, then acknowledge to begin extraction.
+            </span>
+          )}
+          <button
+            onClick={canAcknowledge ? handleAcknowledge : onClose}
+            disabled={acknowledgeMutation.isPending || summaryLoading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
+            style={{ background: "var(--color-brand)" }}
+          >
+            {acknowledgeMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : alreadyAcknowledged ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : null}
+            {alreadyAcknowledged
+              ? onAcknowledged
+                ? "Begin extraction →"
+                : "Close"
+              : onAcknowledged
+                ? "Acknowledge and begin extraction →"
+                : "Acknowledge rules"}
+          </button>
         </div>
       </div>
     </div>

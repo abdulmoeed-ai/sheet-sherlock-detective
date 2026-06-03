@@ -14,4 +14,6 @@ export const queryKeys = {
     ["projects", projectId, "ingestion-preview", runId ?? "latest"] as const,
   latestBrief: (projectId: string) => ["projects", projectId, "briefs", "latest"] as const,
   latestArchive: (projectId: string) => ["projects", projectId, "archive", "latest"] as const,
+  analysts: ["users", "analysts"] as const,
+  psxCompanies: ["psx", "companies"] as const,
 };
