@@ -70,11 +70,14 @@ import {
   useRunBalanceSheetAssistant,
   useReviewCell,
 } from "@/hooks/use-project-actions";
-import { useSelectedProjectId } from "@/lib/project-store";
+import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/diagnosis")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    projectId: typeof search.projectId === "string" ? search.projectId : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Diagnosis - Sheet Sherlock" },
@@ -153,7 +156,9 @@ const EMPTY_ASSISTANT_CANDIDATES: NonNullable<
 function Diagnosis() {
   const navigate = useNavigate();
   const cycle = useCycle();
-  const projectId = useSelectedProjectId();
+  const search = Route.useSearch();
+  const selectedProjectId = useSelectedProjectId();
+  const projectId = search.projectId ?? selectedProjectId;
   const currentUser = useCurrentUser();
   const workspace = useWorkspace(projectId);
   const reviewCell = useReviewCell(projectId ?? "__no_project__", { invalidateOnSuccess: false });
@@ -175,6 +180,12 @@ function Diagnosis() {
     queryFn: () => readMappingRules(projectId as string),
     enabled: !!projectId,
   });
+
+  useEffect(() => {
+    if (search.projectId && search.projectId !== selectedProjectId) {
+      setSelectedProjectId(search.projectId);
+    }
+  }, [search.projectId, selectedProjectId]);
 
   const workbook = workbookPayload(
     workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview,

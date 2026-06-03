@@ -1,34 +1,22 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
-import { getSectorPack } from "@/lib/sector-packs";
 import { IconTooltip } from "@/components/IconTooltip";
-import {
-  useAcknowledgeMappingRules,
-  useStartExtraction,
-  useUploadDocuments,
-} from "@/hooks/use-project-actions";
-import { readMappingRules } from "@/lib/api/projects";
-import type { DocumentResponse, MappingRulesSummaryResponse } from "@/lib/api/types";
-import { ApiError } from "@/lib/api/errors";
+import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
+import { readExtractionJob } from "@/lib/api/projects";
+import { queryKeys } from "@/lib/api/query-keys";
+import type { DocumentResponse, ExtractionJobResponse } from "@/lib/api/types";
+import { waitForExtractionCompletion } from "@/lib/extraction-job";
 import {
   isExtractionResultsConflict,
   splitPdfFiles,
   type UploadFileStatus,
 } from "@/lib/upload-documents";
 import { toast } from "sonner";
-import {
-  CloudUpload,
-  FileText,
-  Trash2,
-  Check,
-  Loader2,
-  AlertTriangle,
-  RotateCw,
-  X,
-} from "lucide-react";
+import { CloudUpload, FileText, Trash2, Loader2, AlertTriangle, RotateCw, X } from "lucide-react";
 
 export const Route = createFileRoute("/ingestion")({
   head: () => ({
@@ -52,24 +40,25 @@ type SelectedUpload = {
 
 function Ingestion() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const cycle = useCycle();
   const projectId = useSelectedProjectId();
   const uploadDocuments = useUploadDocuments(projectId ?? "__no_project__");
   const startExtractionMutation = useStartExtraction(projectId ?? "__no_project__");
   const [selectedUploads, setSelectedUploads] = useState<SelectedUpload[]>([]);
   const [rejectedFiles, setRejectedFiles] = useState<string[]>([]);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [pendingStartAfterAck, setPendingStartAfterAck] = useState(false);
   const [rerunModalOpen, setRerunModalOpen] = useState(false);
+  const [extractionPending, setExtractionPending] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState<ExtractionJobResponse | null>(null);
 
   // Reset transient modal state when a new cycle starts from the registry.
   useEffect(() => {
     setRerunModalOpen(false);
   }, [cycle.startedAt]);
 
-  const openDiagnosis = () => {
+  const openDiagnosis = (id: string) => {
     cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis" });
+    navigate({ to: "/diagnosis", search: { projectId: id } });
   };
 
   const startIngestion = async () => {
@@ -93,37 +82,52 @@ function Ingestion() {
       cycleStore.setDocumentIds(result.uploaded.map((document) => document.id).filter(Boolean));
     }
     try {
-      await startExtractionMutation.mutateAsync(false);
-      openDiagnosis();
+      setExtractionPending(true);
+      setExtractionProgress(null);
+      const job = await startExtractionMutation.mutateAsync(false);
+      await waitForExtractionCompletion({
+        projectId,
+        initialJob: job,
+        readJob: readExtractionJob,
+        onProgress: setExtractionProgress,
+      });
+      await refreshExtractedProject(projectId);
+      openDiagnosis(projectId);
     } catch (error) {
       if (isExtractionResultsConflict(error)) {
         setRerunModalOpen(true);
         return;
       }
-      if (
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.message.includes("Acknowledge")
-      ) {
-        setPendingStartAfterAck(true);
-        setRulesOpen(true);
-        return;
-      }
       toast.error(error instanceof Error ? error.message : "Unable to start extraction");
+    } finally {
+      setExtractionPending(false);
     }
   };
 
   const rerunExtraction = async () => {
+    if (!projectId) return;
     try {
-      await startExtractionMutation.mutateAsync(true);
+      setExtractionPending(true);
+      setExtractionProgress(null);
+      const job = await startExtractionMutation.mutateAsync(true);
+      await waitForExtractionCompletion({
+        projectId,
+        initialJob: job,
+        readJob: readExtractionJob,
+        onProgress: setExtractionProgress,
+      });
+      await refreshExtractedProject(projectId);
       setRerunModalOpen(false);
-      openDiagnosis();
+      openDiagnosis(projectId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to re-run extraction");
+    } finally {
+      setExtractionPending(false);
     }
   };
 
   const handleFileSelection = (files: FileList | null) => {
+    setExtractionProgress(null);
     const { accepted, rejected } = splitPdfFiles(Array.from(files ?? []));
     if (rejected.length) {
       setRejectedFiles(rejected.map((file) => file.name));
@@ -160,12 +164,21 @@ function Ingestion() {
     setSelectedUploads((current) => current.filter((item) => fileKey(item.file) !== fileKey(file)));
   };
 
-  const uploadPending = uploadDocuments.isPending || startExtractionMutation.isPending;
+  const uploadPending =
+    uploadDocuments.isPending || startExtractionMutation.isPending || extractionPending;
+  const uploadSummary = uploadProgressSummary(selectedUploads);
+
+  const refreshExtractedProject = async (id: string) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(id) });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    await queryClient.refetchQueries({ queryKey: queryKeys.workspace(id), type: "all" });
+  };
 
   return (
     <PageShell
       title={`Ingestion — ${cycle.period} · ${cycle.company}`}
       subtitle="Upload source PDFs and trigger extraction"
+      hideProgress
     >
       <div className="pb-24">
         {/* Upload zone */}
@@ -312,26 +325,9 @@ function Ingestion() {
         </div>
       </div>
 
-      {rulesOpen && (
-        <RulePackModal
-          projectId={projectId}
-          onClose={() => {
-            setRulesOpen(false);
-            setPendingStartAfterAck(false);
-          }}
-          onAcknowledged={
-            pendingStartAfterAck
-              ? () => {
-                  setPendingStartAfterAck(false);
-                  startIngestion();
-                }
-              : undefined
-          }
-        />
-      )}
       {rerunModalOpen && (
         <RerunExtractionModal
-          pending={startExtractionMutation.isPending}
+          pending={startExtractionMutation.isPending || extractionPending}
           onClose={() => setRerunModalOpen(false)}
           onConfirm={rerunExtraction}
         />
@@ -340,6 +336,8 @@ function Ingestion() {
       <StickyFooter
         fileCount={selectedUploads.length}
         uploadPending={uploadPending}
+        uploadSummary={uploadSummary}
+        extractionProgress={extractionProgress}
         hasProject={!!projectId}
         onStart={startIngestion}
       />
@@ -356,6 +354,14 @@ function uploadStatusLabel(item: SelectedUpload) {
   if (item.status === "uploading") return "uploading";
   if (item.status === "failed") return "upload failed";
   return "ready for upload";
+}
+
+function uploadProgressSummary(items: SelectedUpload[]) {
+  const total = items.length;
+  const uploaded = items.filter((item) => item.status === "uploaded").length;
+  const uploading = items.find((item) => item.status === "uploading")?.file.name ?? null;
+  const failed = items.find((item) => item.status === "failed")?.file.name ?? null;
+  return { total, uploaded, uploading, failed };
 }
 
 function RerunExtractionModal({
@@ -438,218 +444,42 @@ function RerunExtractionModal({
   );
 }
 
-function RulePackModal({
-  projectId,
-  onClose,
-  onAcknowledged,
-}: {
-  projectId: string | null;
-  onClose: () => void;
-  onAcknowledged?: () => void;
-}) {
-  const cycle = useCycle();
-  const pack = getSectorPack(cycle.sector);
-  const overrideSet = new Set(pack.sectorOverrides);
-  const all = [...pack.sectorOverrides, ...pack.baseRules];
-  const acknowledgeMutation = useAcknowledgeMappingRules(projectId ?? "__no_project__");
-  const [summary, setSummary] = useState<MappingRulesSummaryResponse | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-
-  useEffect(() => {
-    if (!projectId) return;
-    setSummaryLoading(true);
-    readMappingRules(projectId)
-      .then(setSummary)
-      .catch(() => {})
-      .finally(() => setSummaryLoading(false));
-  }, [projectId]);
-
-  const handleAcknowledge = async () => {
-    if (!summary || !projectId) return;
-    try {
-      await acknowledgeMutation.mutateAsync({
-        rulesHash: summary.rulesHash,
-        rulesCount: summary.rulesCount,
-        acknowledged: true,
-      });
-      toast.success("Data Mapping Rules acknowledged.");
-      onClose();
-      onAcknowledged?.();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Acknowledgement failed.");
-    }
-  };
-
-  const alreadyAcknowledged = summary?.acknowledged ?? false;
-  const canAcknowledge = !!summary && !!projectId && !alreadyAcknowledged;
-
-  return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-start justify-between border-b px-5 py-4"
-          style={{ borderColor: "var(--color-border-default)" }}
-        >
-          <div>
-            <div
-              className="text-[14px] font-semibold"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              {pack.sector} · Data Mapping Rules
-            </div>
-            <div className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {summaryLoading
-                ? "Loading…"
-                : summary
-                  ? `${summary.rulesCount} active rules · ${summary.criticalCount} critical · ${summary.advisoryCount} advisory`
-                  : `${pack.ruleCount} rules · ${pack.template} · ${pack.yearEnd} year-end · ${pack.currency}`}
-            </div>
-          </div>
-          <IconTooltip label="Close">
-            <button
-              onClick={onClose}
-              className="rounded p-1 hover:bg-[var(--color-tag-bg)]"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
-            </button>
-          </IconTooltip>
-        </div>
-
-        <div className="overflow-y-auto px-5 py-3">
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {pack.macroVariables.map((m) => (
-              <span
-                key={m}
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ background: "var(--color-tag-bg)", color: "var(--color-accent-sparkle)" }}
-              >
-                {m}
-              </span>
-            ))}
-            {pack.regulatoryTags.map((r) => (
-              <span
-                key={r}
-                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ background: "var(--color-warning-bg)", color: "var(--color-warning-fg)" }}
-              >
-                {r}
-              </span>
-            ))}
-          </div>
-
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr
-                className="text-left text-[10px] uppercase"
-                style={{
-                  color: "var(--color-text-muted)",
-                  background: "var(--color-table-header)",
-                }}
-              >
-                <th className="px-3 py-2">#</th>
-                <th className="px-2 py-2">Rule</th>
-                <th className="px-2 py-2">Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {all.map((rule, i) => {
-                const isOverride = overrideSet.has(rule);
-                return (
-                  <tr
-                    key={`${rule}-${i}`}
-                    className="border-b"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    <td className="px-3 py-2 tnum text-[var(--color-text-muted)]">{i + 1}</td>
-                    <td className="px-2 py-2">{rule}</td>
-                    <td className="px-2 py-2">
-                      {isOverride ? (
-                        <span
-                          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-                          style={{ background: "#EDE9FE", color: "var(--color-brand)" }}
-                        >
-                          Sector override
-                        </span>
-                      ) : (
-                        <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-                          Universal
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Acknowledge footer */}
-        <div
-          className="flex items-center justify-between border-t px-5 py-3"
-          style={{ borderColor: "var(--color-border-default)" }}
-        >
-          {alreadyAcknowledged ? (
-            <span
-              className="flex items-center gap-1.5 text-[12px]"
-              style={{ color: "var(--color-success)" }}
-            >
-              <Check className="h-3.5 w-3.5" />
-              Rules acknowledged
-              {summary?.acknowledgedAt
-                ? ` · ${new Date(summary.acknowledgedAt).toLocaleString()}`
-                : ""}
-            </span>
-          ) : (
-            <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              Review all rules above, then acknowledge to begin extraction.
-            </span>
-          )}
-          <button
-            onClick={canAcknowledge ? handleAcknowledge : onClose}
-            disabled={acknowledgeMutation.isPending || summaryLoading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
-            style={{ background: "var(--color-brand)" }}
-          >
-            {acknowledgeMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : alreadyAcknowledged ? (
-              <Check className="h-3.5 w-3.5" />
-            ) : null}
-            {alreadyAcknowledged
-              ? onAcknowledged
-                ? "Begin extraction →"
-                : "Close"
-              : onAcknowledged
-                ? "Acknowledge and begin extraction →"
-                : "Acknowledge rules"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StickyFooter({
   fileCount,
   uploadPending,
+  uploadSummary,
+  extractionProgress,
   hasProject,
   onStart,
 }: {
   fileCount: number;
   uploadPending: boolean;
+  uploadSummary: ReturnType<typeof uploadProgressSummary>;
+  extractionProgress: ExtractionJobResponse | null;
   hasProject: boolean;
   onStart: () => void;
 }) {
+  const extractionPercent = Math.max(0, Math.min(100, extractionProgress?.percent ?? 0));
+  const showProgress = uploadPending || extractionProgress;
+  const progressPercent =
+    extractionProgress && extractionPercent > 0
+      ? extractionPercent
+      : uploadSummary.total
+        ? Math.round((uploadSummary.uploaded / uploadSummary.total) * 100)
+        : 0;
+  const progressLabel = extractionProgress
+    ? extractionProgress.message || "Extracting reports."
+    : uploadSummary.failed
+      ? `Upload failed: ${uploadSummary.failed}`
+      : uploadSummary.uploading
+        ? `Uploading ${uploadSummary.uploaded + 1} of ${uploadSummary.total}: ${uploadSummary.uploading}`
+        : uploadSummary.total
+          ? `${uploadSummary.uploaded} of ${uploadSummary.total} report uploads complete`
+          : "";
+
   return (
     <div
-      className="fixed bottom-0 left-[240px] right-0 z-20 flex h-16 items-center justify-between border-t bg-white px-8"
+      className="fixed bottom-0 left-[240px] right-0 z-20 flex min-h-16 items-center justify-between gap-6 border-t bg-white px-8 py-2"
       style={{ borderColor: "var(--color-border-default)" }}
     >
       {!hasProject ? (
@@ -657,7 +487,32 @@ function StickyFooter({
           Select or create a project before uploading reports.
         </div>
       ) : (
-        <div aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          {showProgress && progressLabel ? (
+            <div className="max-w-xl">
+              <div className="mb-1 flex items-center justify-between gap-3 text-[12px]">
+                <span
+                  className="truncate font-medium"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {progressLabel}
+                </span>
+                <span className="shrink-0 tnum" style={{ color: "var(--color-text-muted)" }}>
+                  {progressPercent}%
+                </span>
+              </div>
+              <div
+                className="h-1.5 overflow-hidden rounded-full"
+                style={{ background: "var(--color-border-default)" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${progressPercent}%`, background: "var(--color-brand)" }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
       )}
       <button
         onClick={onStart}
@@ -665,7 +520,7 @@ function StickyFooter({
         className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50"
         style={{ background: "var(--color-brand)" }}
       >
-        {uploadPending ? "Uploading reports..." : "Upload and start extraction ->"}
+        {uploadPending ? "Extracting reports..." : "Upload and start extraction ->"}
       </button>
     </div>
   );
