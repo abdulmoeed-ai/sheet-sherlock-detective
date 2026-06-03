@@ -1,8 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
-  Download,
-  Stethoscope,
   TrendingUp,
   FileText,
   ShieldCheck,
@@ -42,8 +40,6 @@ const nav = [
     icon: GitBranch,
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },
-  { to: "/ingestion", label: "Ingestion", icon: Download, roles: ["finance_analyst"] },
-  { to: "/diagnosis", label: "Diagnosis", icon: Stethoscope, roles: ["finance_analyst"] },
   { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
   { to: "/assumptions", label: "Assumptions", icon: FileText, roles: ["finance_analyst"] },
   { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },

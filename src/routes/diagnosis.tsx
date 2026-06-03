@@ -433,9 +433,9 @@ function Diagnosis() {
       >
         <div className="col-span-2 flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
           <button
-            onClick={() => navigate({ to: "/ingestion" })}
+            onClick={() => navigate({ to: "/registry" })}
             className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
-            title="Back to ingestion"
+            title="Back to Model Registry"
           >
             <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
           </button>
