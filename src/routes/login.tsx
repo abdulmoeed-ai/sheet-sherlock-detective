@@ -68,9 +68,7 @@ function Login() {
             off. Admins manage source controls.
           </p>
         </div>
-        <div className="text-[11px] text-[var(--color-sidebar-text)]">
-          Use seeded Admin credentials for admin login.
-        </div>
+        <div className="text-[11px] text-[var(--color-sidebar-text)]"></div>
       </section>
       <section className="flex flex-1 items-center justify-center px-5">
         <form

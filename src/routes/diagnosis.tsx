@@ -25,6 +25,7 @@ import {
   DiagnosisSourcePreviewModal,
   type SourceBoundingBox,
 } from "@/components/DiagnosisSourcePreviewModal";
+import { IconTooltip } from "@/components/IconTooltip";
 import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEditor";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
@@ -432,13 +433,15 @@ function Diagnosis() {
         }}
       >
         <div className="col-span-2 flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
-          <button
-            onClick={() => navigate({ to: "/registry" })}
-            className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
-            title="Back to Model Registry"
-          >
-            <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
-          </button>
+          <IconTooltip label="Back to Model Registry">
+            <button
+              onClick={() => navigate({ to: "/registry" })}
+              className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
+              aria-label="Back to Model Registry"
+            >
+              <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
+            </button>
+          </IconTooltip>
           <div className="text-[12px] font-semibold" style={{ color: "#292D34" }}>
             {workspace.data?.project.companyName ?? cycle.company} /{" "}
             {workspace.data?.project.fiscalYear ?? cycle.period} / Diagnosis
@@ -573,12 +576,15 @@ function Diagnosis() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setPanelOpen(false)}
-                className="rounded p-1 hover:bg-[#F7F8FA]"
-              >
-                <X className="h-4 w-4 text-[#818EA0]" />
-              </button>
+              <IconTooltip label="Close panel">
+                <button
+                  onClick={() => setPanelOpen(false)}
+                  className="rounded p-1 hover:bg-[#F7F8FA]"
+                  aria-label="Close panel"
+                >
+                  <X className="h-4 w-4 text-[#818EA0]" />
+                </button>
+              </IconTooltip>
             </div>
             {panelTab === "assistant" ? (
               <BalanceAssistantPanel

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, X } from "lucide-react";
+import { IconTooltip } from "@/components/IconTooltip";
 import { readDocumentPageImage } from "@/lib/api/projects";
 
 export interface SourceRef {
@@ -103,22 +104,26 @@ export function SourcePreview({
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <a
-            href={imageUrl ?? "#"}
-            target={imageUrl ? "_blank" : undefined}
-            rel={imageUrl ? "noreferrer" : undefined}
-            className="rounded p-1 hover:bg-white"
-            title="Open full page in new tab"
-            onClick={(e) => {
-              if (!imageUrl) e.preventDefault();
-            }}
-          >
-            <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
-          </a>
+          <IconTooltip label="Open full page in new tab">
+            <a
+              href={imageUrl ?? "#"}
+              target={imageUrl ? "_blank" : undefined}
+              rel={imageUrl ? "noreferrer" : undefined}
+              className="rounded p-1 hover:bg-white"
+              aria-label="Open full page in new tab"
+              onClick={(e) => {
+                if (!imageUrl) e.preventDefault();
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
+            </a>
+          </IconTooltip>
           {onClose && (
-            <button onClick={onClose} className="rounded p-1 hover:bg-white">
-              <X className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
-            </button>
+            <IconTooltip label="Close preview">
+              <button onClick={onClose} className="rounded p-1 hover:bg-white" aria-label="Close preview">
+                <X className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
+              </button>
+            </IconTooltip>
           )}
         </div>
       </div>
