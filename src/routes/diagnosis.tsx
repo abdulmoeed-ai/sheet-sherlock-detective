@@ -25,6 +25,7 @@ import {
   DiagnosisSourcePreviewModal,
   type SourceBoundingBox,
 } from "@/components/DiagnosisSourcePreviewModal";
+import { IconTooltip } from "@/components/IconTooltip";
 import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEditor";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
@@ -69,11 +70,14 @@ import {
   useRunBalanceSheetAssistant,
   useReviewCell,
 } from "@/hooks/use-project-actions";
-import { useSelectedProjectId } from "@/lib/project-store";
+import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/diagnosis")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    projectId: typeof search.projectId === "string" ? search.projectId : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Diagnosis - Sheet Sherlock" },
@@ -152,7 +156,9 @@ const EMPTY_ASSISTANT_CANDIDATES: NonNullable<
 function Diagnosis() {
   const navigate = useNavigate();
   const cycle = useCycle();
-  const projectId = useSelectedProjectId();
+  const search = Route.useSearch();
+  const selectedProjectId = useSelectedProjectId();
+  const projectId = search.projectId ?? selectedProjectId;
   const currentUser = useCurrentUser();
   const workspace = useWorkspace(projectId);
   const reviewCell = useReviewCell(projectId ?? "__no_project__", { invalidateOnSuccess: false });
@@ -174,6 +180,12 @@ function Diagnosis() {
     queryFn: () => readMappingRules(projectId as string),
     enabled: !!projectId,
   });
+
+  useEffect(() => {
+    if (search.projectId && search.projectId !== selectedProjectId) {
+      setSelectedProjectId(search.projectId);
+    }
+  }, [search.projectId, selectedProjectId]);
 
   const workbook = workbookPayload(
     workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview,
@@ -432,13 +444,15 @@ function Diagnosis() {
         }}
       >
         <div className="col-span-2 flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
-          <button
-            onClick={() => navigate({ to: "/registry" })}
-            className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
-            title="Back to Model Registry"
-          >
-            <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
-          </button>
+          <IconTooltip label="Back to Model Registry">
+            <button
+              onClick={() => navigate({ to: "/registry" })}
+              className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
+              aria-label="Back to Model Registry"
+            >
+              <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
+            </button>
+          </IconTooltip>
           <div className="text-[12px] font-semibold" style={{ color: "#292D34" }}>
             {workspace.data?.project.companyName ?? cycle.company} /{" "}
             {workspace.data?.project.fiscalYear ?? cycle.period} / Diagnosis
@@ -573,12 +587,15 @@ function Diagnosis() {
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setPanelOpen(false)}
-                className="rounded p-1 hover:bg-[#F7F8FA]"
-              >
-                <X className="h-4 w-4 text-[#818EA0]" />
-              </button>
+              <IconTooltip label="Close panel">
+                <button
+                  onClick={() => setPanelOpen(false)}
+                  className="rounded p-1 hover:bg-[#F7F8FA]"
+                  aria-label="Close panel"
+                >
+                  <X className="h-4 w-4 text-[#818EA0]" />
+                </button>
+              </IconTooltip>
             </div>
             {panelTab === "assistant" ? (
               <BalanceAssistantPanel

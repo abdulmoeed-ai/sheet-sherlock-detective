@@ -19,6 +19,7 @@ import type { BackendRole } from "@/lib/api/types";
 import { getAccessToken } from "@/lib/auth-store";
 import { useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { initialsFor, roleLabel } from "@/lib/role-access";
+import { IconTooltip } from "@/components/IconTooltip";
 import {
   sidebarStore,
   useSidebarCollapsed,
@@ -135,22 +136,23 @@ export function Sidebar() {
           const active = pathname === to;
           if (collapsed) {
             return (
-              <Link
-                key={to}
-                to={to}
-                title={label}
-                className="my-1 flex h-12 items-center justify-center rounded-lg transition-colors"
-                style={{
-                  background: active ? "var(--color-sidebar-active)" : "transparent",
-                }}
-              >
-                <Icon
-                  className="h-[22px] w-[22px]"
+              <IconTooltip key={to} label={label} side="right">
+                <Link
+                  to={to}
+                  aria-label={label}
+                  className="my-1 flex h-12 w-full items-center justify-center rounded-lg transition-colors"
                   style={{
-                    color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                    background: active ? "var(--color-sidebar-active)" : "transparent",
                   }}
-                />
-              </Link>
+                >
+                  <Icon
+                    className="h-[22px] w-[22px]"
+                    style={{
+                      color: active ? "var(--color-sidebar-icon)" : "var(--color-sidebar-text)",
+                    }}
+                  />
+                </Link>
+              </IconTooltip>
             );
           }
           return (
@@ -196,17 +198,19 @@ export function Sidebar() {
         </div>
       )}
 
-      <button
-        onClick={() => sidebarStore.toggle()}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className={`mx-2 mb-2 flex h-9 items-center rounded-lg transition-colors hover:bg-white/5 ${
-          collapsed ? "justify-center" : "gap-2 px-3"
-        }`}
-        style={{ color: "var(--color-sidebar-text)" }}
-      >
-        {collapsed ? <ChevronsRight className="h-5 w-5" /> : <ChevronsLeft className="h-4 w-4" />}
-        {!collapsed && <span className="text-[12px] font-medium">Collapse</span>}
-      </button>
+      <IconTooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
+        <button
+          onClick={() => sidebarStore.toggle()}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`mx-2 mb-2 flex h-9 items-center rounded-lg transition-colors hover:bg-white/5 ${
+            collapsed ? "justify-center" : "gap-2 px-3"
+          }`}
+          style={{ color: "var(--color-sidebar-text)" }}
+        >
+          {collapsed ? <ChevronsRight className="h-5 w-5" /> : <ChevronsLeft className="h-4 w-4" />}
+          {!collapsed && <span className="text-[12px] font-medium">Collapse</span>}
+        </button>
+      </IconTooltip>
 
       <div
         className={`flex items-center border-t py-3 ${collapsed ? "justify-center px-0" : "gap-2.5 px-4"}`}

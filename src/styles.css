@@ -119,6 +119,20 @@
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
   }
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label:has(input[type="file"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";

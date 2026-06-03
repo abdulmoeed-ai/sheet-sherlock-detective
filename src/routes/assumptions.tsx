@@ -3,6 +3,7 @@ import { useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { Pencil, Check, X, Download } from "lucide-react";
+import { IconTooltip } from "@/components/IconTooltip";
 
 export const Route = createFileRoute("/assumptions")({
   head: () => ({
@@ -113,12 +114,26 @@ function Assumptions() {
                             style={{ borderColor: "var(--color-brand)" }}
                             autoFocus
                           />
-                          <button onClick={() => saveEdit(i)} className="rounded p-1" style={{ color: "var(--color-success-fg)" }}>
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => setEditing(null)} className="rounded p-1" style={{ color: "var(--color-text-muted)" }}>
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          <IconTooltip label="Save assumption">
+                            <button
+                              onClick={() => saveEdit(i)}
+                              className="rounded p-1"
+                              style={{ color: "var(--color-success-fg)" }}
+                              aria-label="Save assumption"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          </IconTooltip>
+                          <IconTooltip label="Cancel edit">
+                            <button
+                              onClick={() => setEditing(null)}
+                              className="rounded p-1"
+                              style={{ color: "var(--color-text-muted)" }}
+                              aria-label="Cancel edit"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </IconTooltip>
                         </div>
                       ) : (
                         <span className="font-semibold tnum">{r.value}</span>
@@ -138,15 +153,18 @@ function Assumptions() {
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       {editing !== i && (
-                        <button
-                          onClick={() => {
-                            setEditing(i);
-                            setDraft(r.value);
-                          }}
-                          className="rounded p-1 hover:bg-[var(--color-tag-bg)]"
-                        >
-                          <Pencil className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
-                        </button>
+                        <IconTooltip label="Edit assumption">
+                          <button
+                            onClick={() => {
+                              setEditing(i);
+                              setDraft(r.value);
+                            }}
+                            className="rounded p-1 hover:bg-[var(--color-tag-bg)]"
+                            aria-label="Edit assumption"
+                          >
+                            <Pencil className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
+                          </button>
+                        </IconTooltip>
                       )}
                     </td>
                   </tr>

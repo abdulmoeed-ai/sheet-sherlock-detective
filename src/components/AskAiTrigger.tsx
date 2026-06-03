@@ -30,6 +30,7 @@ import {
   DiagnosisSourcePreviewModal,
   type DiagnosisSourcePreview,
 } from "@/components/DiagnosisSourcePreviewModal";
+import { IconTooltip } from "@/components/IconTooltip";
 import {
   ASK_AI_PROMPT_MIN_HEIGHT,
   getAskAiPromptKeyAction,
@@ -336,35 +337,37 @@ export function AskAiTrigger() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setExpanded((value) => !value)}
-                className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-                aria-label={expanded ? "Collapse chat" : "Expand chat"}
-                title={expanded ? "Collapse chat" : "Expand chat"}
-              >
-                {expanded ? (
-                  <Minimize2
-                    className="h-[18px] w-[18px]"
-                    style={{ color: "var(--color-text-muted)" }}
-                  />
-                ) : (
-                  <Maximize2
-                    className="h-[18px] w-[18px]"
-                    style={{ color: "var(--color-text-muted)" }}
-                  />
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  abortStream();
-                  setOpen(false);
-                }}
-                className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-                aria-label="Close"
-                title="Close"
-              >
-                <X className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
-              </button>
+              <IconTooltip label={expanded ? "Collapse chat" : "Expand chat"}>
+                <button
+                  onClick={() => setExpanded((value) => !value)}
+                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                  aria-label={expanded ? "Collapse chat" : "Expand chat"}
+                >
+                  {expanded ? (
+                    <Minimize2
+                      className="h-[18px] w-[18px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                  ) : (
+                    <Maximize2
+                      className="h-[18px] w-[18px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    />
+                  )}
+                </button>
+              </IconTooltip>
+              <IconTooltip label="Close Ask AI">
+                <button
+                  onClick={() => {
+                    abortStream();
+                    setOpen(false);
+                  }}
+                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                  aria-label="Close Ask AI"
+                >
+                  <X className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                </button>
+              </IconTooltip>
             </div>
           </div>
 
@@ -516,33 +519,37 @@ export function AskAiTrigger() {
                 style={{ borderColor: "var(--color-border-default)" }}
               >
                 <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Attach PDF"
-                    className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
+                  <IconTooltip label="Attach PDF">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label="Attach PDF"
+                      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                      style={{ borderColor: "var(--color-border-default)" }}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </button>
+                  </IconTooltip>
                   <span className="hidden text-[11px] text-[var(--color-text-muted)] sm:inline">
                     Enter to send · Shift+Enter for new line
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void send(input)}
-                  disabled={!input.trim() || asking}
-                  className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
-                  style={{ background: "var(--color-brand)" }}
-                  aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
-                >
-                  {asking ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </button>
+                <IconTooltip label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}>
+                  <button
+                    type="button"
+                    onClick={() => void send(input)}
+                    disabled={!input.trim() || asking}
+                    className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
+                    style={{ background: "var(--color-brand)" }}
+                    aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
+                  >
+                    {asking ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </button>
+                </IconTooltip>
               </div>
             </div>
             </div>
@@ -941,19 +948,21 @@ function InlineCitationBadge({
 
   return (
     <span className="relative inline-flex align-baseline">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="mx-0.5 inline-flex h-5 max-w-[220px] items-center rounded-full border px-1.5 text-[10px] font-semibold text-[var(--color-brand)] align-baseline transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-        style={{
-          borderColor: "rgba(123,104,238,0.36)",
-          background: open ? "var(--color-tag-bg)" : "#fff",
-        }}
-        aria-expanded={open}
-        title={title}
-      >
-        {index}
-      </button>
+      <IconTooltip label={title}>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="mx-0.5 inline-flex h-5 max-w-[220px] items-center rounded-full border px-1.5 text-[10px] font-semibold text-[var(--color-brand)] align-baseline transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+          style={{
+            borderColor: "rgba(123,104,238,0.36)",
+            background: open ? "var(--color-tag-bg)" : "#fff",
+          }}
+          aria-label={title}
+          aria-expanded={open}
+        >
+          {index}
+        </button>
+      </IconTooltip>
       {open && (
         <span
           className="absolute left-0 top-6 z-40 block w-[min(340px,calc(100vw-80px))] whitespace-normal rounded-lg border bg-white p-3 text-left text-[11px] leading-relaxed shadow-[0_18px_42px_-24px_rgba(17,24,39,0.55)]"
@@ -1330,22 +1339,20 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
     window.setTimeout(() => setCopied(false), 1000);
   };
   return (
-    <button
-      type="button"
-      onClick={() => void copy()}
-      className={`copy-button relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-white transition hover:bg-[var(--color-tag-bg)] ${className}`}
-      style={{
-        borderColor: "var(--color-border-default)",
-        color: "var(--color-text-muted)",
-      }}
-      aria-label={copied ? "Copied" : "Copy message"}
-      title={copied ? "Copied" : "Copy"}
-    >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      <span className="copy-tooltip pointer-events-none absolute bottom-full right-0 mb-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium opacity-0 shadow-sm">
-        {copied ? "Copied" : "Copy"}
-      </span>
-    </button>
+    <IconTooltip label={copied ? "Copied" : "Copy message"}>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className={`copy-button flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-white transition hover:bg-[var(--color-tag-bg)] ${className}`}
+        style={{
+          borderColor: "var(--color-border-default)",
+          color: "var(--color-text-muted)",
+        }}
+        aria-label={copied ? "Copied" : "Copy message"}
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </IconTooltip>
   );
 }
 

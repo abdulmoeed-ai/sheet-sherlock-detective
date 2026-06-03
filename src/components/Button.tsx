@@ -7,7 +7,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = "primary", children, className = "", ...rest }: Props) {
   const base =
-    "inline-flex items-center justify-center gap-2 text-[14px] font-semibold rounded-lg transition-colors active:scale-[0.98]";
+    "inline-flex cursor-pointer items-center justify-center gap-2 text-[14px] font-semibold rounded-lg transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
   const variants: Record<string, string> = {
     primary: "h-11 px-6 text-white",
     secondary: "h-10 px-5",

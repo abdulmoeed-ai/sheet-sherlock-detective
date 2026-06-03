@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { Pencil } from "lucide-react";
+import { IconTooltip } from "@/components/IconTooltip";
 
 export const Route = createFileRoute("/forecast")({
   head: () => ({
@@ -319,22 +320,26 @@ function MacroInput({
         )}
       </div>
       <div className="flex flex-col gap-0.5">
-        <button
-          onClick={() => nudge(1)}
-          className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
-          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
-          aria-label={`Increase ${label}`}
-        >
-          +
-        </button>
-        <button
-          onClick={() => nudge(-1)}
-          className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
-          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
-          aria-label={`Decrease ${label}`}
-        >
-          −
-        </button>
+        <IconTooltip label={`Increase ${label}`}>
+          <button
+            onClick={() => nudge(1)}
+            className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
+            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            aria-label={`Increase ${label}`}
+          >
+            +
+          </button>
+        </IconTooltip>
+        <IconTooltip label={`Decrease ${label}`}>
+          <button
+            onClick={() => nudge(-1)}
+            className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
+            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            aria-label={`Decrease ${label}`}
+          >
+            −
+          </button>
+        </IconTooltip>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AlertCircle, ExternalLink, Loader2, Maximize2, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Dialog, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { IconTooltip } from "@/components/IconTooltip";
 import { readDocumentPageImage } from "@/lib/api/projects";
 
 export type SourceBoundingBox =
@@ -106,19 +107,21 @@ export function DiagnosisSourcePreviewModal({
               <IconButton label="Fit page" onClick={() => changeZoom(0.85)}>
                 <Maximize2 className="h-4 w-4" />
               </IconButton>
-              <a
-                href={imageUrl ?? "#"}
-                target={imageUrl ? "_blank" : undefined}
-                rel={imageUrl ? "noreferrer" : undefined}
-                aria-label="Open image in new tab"
-                className="flex h-8 w-8 items-center justify-center rounded-md border disabled:opacity-50"
-                style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-                onClick={(event) => {
-                  if (!imageUrl) event.preventDefault();
-                }}
-              >
-                <ExternalLink className="h-4 w-4" />
-              </a>
+              <IconTooltip label="Open image in new tab">
+                <a
+                  href={imageUrl ?? "#"}
+                  target={imageUrl ? "_blank" : undefined}
+                  rel={imageUrl ? "noreferrer" : undefined}
+                  aria-label="Open image in new tab"
+                  className="flex h-8 w-8 items-center justify-center rounded-md border disabled:opacity-50"
+                  style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+                  onClick={(event) => {
+                    if (!imageUrl) event.preventDefault();
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </IconTooltip>
               <IconButton label="Close preview" onClick={() => onOpenChange(false)}>
                 <X className="h-4 w-4" />
               </IconButton>
@@ -211,17 +214,18 @@ function IconButton({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-      className="flex h-8 w-8 items-center justify-center rounded-md border disabled:opacity-50"
-      style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-    >
-      {children}
-    </button>
+    <IconTooltip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        disabled={disabled}
+        className="flex h-8 w-8 items-center justify-center rounded-md border disabled:opacity-50"
+        style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+      >
+        {children}
+      </button>
+    </IconTooltip>
   );
 }
 
