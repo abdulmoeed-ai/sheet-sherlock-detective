@@ -109,6 +109,8 @@ function ManagerDashboard() {
     event.preventDefault();
     await createRequest.mutateAsync({
       ...draft,
+      companySymbol: draft.companySymbol || null,
+      sector: draft.sector || null,
       dueDate: draft.dueDate || null,
       note: draft.note || null,
     });
