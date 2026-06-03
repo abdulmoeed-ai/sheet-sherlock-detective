@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Eye, FileClock, GitBranch, Lock, Plus } from "lucide-react";
+import { Eye, FileClock, GitBranch, Plus } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
@@ -31,21 +31,45 @@ function completeness(project: ProjectResponse) {
   return Math.round((reviewed / total) * 100);
 }
 
+// Projects the analyst can still act on (not yet submitted to manager/CFO/approved)
+const ACTIVE_STATUSES = new Set([
+  "created",
+  "documents_uploaded",
+  "extracting",
+  "extraction_failed",
+  "awaiting_review",
+  "cfo_changes_requested",
+]);
+
+function isActive(status: string) {
+  return ACTIVE_STATUSES.has(status);
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    created: "DRAFT",
+    documents_uploaded: "DRAFT",
+    extracting: "EXTRACTING",
+    extraction_failed: "FAILED",
+    awaiting_review: "PENDING REVIEW",
+    manager_review: "IN REVIEW",
+    cfo_review: "CFO REVIEW",
+    cfo_changes_requested: "CHANGES REQUESTED",
+    approved: "APPROVED",
+  };
+  return map[status] ?? status.toUpperCase().replace(/_/g, " ");
+}
+
 function statusTone(status: string): "success" | "warning" | "info" | "neutral" {
   if (status === "approved") return "success";
-  if (status === "draft") return "info";
-  if (status === "locked" || status === "submitted" || status.includes("review")) return "warning";
+  if (status === "created" || status === "documents_uploaded" || status === "extraction_failed")
+    return "info";
+  if (status.includes("review") || status === "cfo_changes_requested") return "warning";
   return "neutral";
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const isLocked = status === "locked";
-  return (
-    <Badge tone={statusTone(status)}>
-      {isLocked && <Lock className="h-3 w-3" />}
-      {status.toUpperCase().replace(/_/g, " ")}
-    </Badge>
-  );
+  return <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>;
 }
 
 function Registry() {
@@ -97,7 +121,8 @@ function Registry() {
     [companyProjects, selectedFY],
   );
 
-  const draftProject = fyProjects.find((p) => p.status === "draft");
+  // Active = analyst can still act on it (not yet in manager/CFO review or approved)
+  const activeProject = fyProjects.find((p) => isActive(p.status));
 
   // ── New version ───────────────────────────────────────────────────────────
   const handleNewVersion = async () => {
@@ -169,31 +194,30 @@ function Registry() {
       {/* ── Decision card ─────────────────────────────────────────────────── */}
       {selectedCompany && (
         <>
-          {draftProject ? (
+          {activeProject ? (
             <Card>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="mb-1.5 flex items-center gap-2">
                     <Badge tone="neutral">DECISION CARD</Badge>
-                    <Badge tone="info">DRAFT</Badge>
+                    <StatusBadge status={activeProject.status} />
                   </div>
                   <p className="text-[15px] font-semibold">
-                    Draft{" "}
-                    {versionId(selectedSymbol, selectedFY, draftProject.versionNum)} exists —
-                    Resume, start new version, or cancel.
+                    {versionId(selectedSymbol, selectedFY, activeProject.versionNum)} in progress —
+                    Resume or start a new version.
                   </p>
                   <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                    Completeness {completeness(draftProject)}% · last updated{" "}
-                    {new Date(draftProject.updatedAt).toLocaleString()}
+                    Completeness {completeness(activeProject)}% · last updated{" "}
+                    {new Date(activeProject.updatedAt).toLocaleString()}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => handleResume(draftProject.id)}
+                    onClick={() => handleResume(activeProject.id)}
                   >
                     <Eye className="h-4 w-4" />
-                    Resume {versionId(selectedSymbol, selectedFY, draftProject.versionNum)}
+                    Resume {versionId(selectedSymbol, selectedFY, activeProject.versionNum)}
                   </Button>
                   <Button onClick={handleNewVersion} disabled={createProject.isPending}>
                     <Plus className="h-4 w-4" />
@@ -228,10 +252,10 @@ function Registry() {
                 <div>
                   <div className="mb-1.5 flex items-center gap-2">
                     <Badge tone="neutral">DECISION CARD</Badge>
-                    <Badge tone="success">ALL LOCKED</Badge>
+                    <Badge tone="warning">IN REVIEW / APPROVED</Badge>
                   </div>
                   <p className="text-[15px] font-semibold">
-                    All versions locked for {selectedCompany.name} · {selectedFY}
+                    All versions submitted or approved for {selectedCompany.name} · {selectedFY}
                   </p>
                   <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                     Start a new version to continue analysis.
@@ -262,7 +286,7 @@ function Registry() {
                 {[...companyProjects].reverse().map((project) => {
                   const vid = versionId(selectedSymbol, project.fiscalYear ?? "FY", project.versionNum);
                   const pct = completeness(project);
-                  const isDraft = project.status === "draft";
+                  const active = isActive(project.status);
                   return (
                     <div key={project.id} className="flex items-center gap-3">
                       <div
@@ -271,21 +295,22 @@ function Registry() {
                           background:
                             project.status === "approved"
                               ? "var(--color-success)"
-                              : isDraft
+                              : active
                                 ? "#7c3aed"
-                                : "var(--color-success)",
+                                : "var(--color-warning, #f59e0b)",
                         }}
                       />
-                      <span className="w-40 text-[13px] font-semibold">{vid}</span>
+                      <span className="w-44 text-[13px] font-semibold">{vid}</span>
                       <StatusBadge status={project.status} />
-                      <span className="text-[12px] text-[var(--color-text-muted)]">
+                      <span className="flex-1 text-[12px] text-[var(--color-text-muted)]">
                         {pct}% complete · {new Date(project.updatedAt).toLocaleString()}
                       </span>
-                      {isDraft && (
+                      {active && (
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           onClick={() => handleResume(project.id)}
                         >
+                          <Eye className="h-3.5 w-3.5" />
                           Resume
                         </Button>
                       )}
