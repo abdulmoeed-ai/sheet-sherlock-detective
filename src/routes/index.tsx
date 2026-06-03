@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/api/errors";
 import type { BackendRole } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useAnalysisRequests, useCreateAnalysisRequest } from "@/hooks/use-analysis-requests";
+import { useAnalysisRequests, useCreateAnalysisRequest, useAcknowledgeAnalysisRequest } from "@/hooks/use-analysis-requests";
 import { useProjects } from "@/hooks/use-projects";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
@@ -257,14 +257,73 @@ function ManagerDashboard() {
 function ProjectDashboard({ role }: { role: BackendRole }) {
   const projects = useProjects();
   const navigate = useNavigate();
+  const requests = useAnalysisRequests();
+  const acknowledge = useAcknowledgeAnalysisRequest();
+
+  const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Projects" value={projects.data?.length ?? 0} />
+        {role === "finance_analyst" && (
+          <StatCard label="Pending requests" value={pendingRequests.length} />
+        )}
         <StatCard label="Role" value={roleLabel(role)} />
-        <StatCard label="Source" value="Backend API" />
       </div>
+
+      {role === "finance_analyst" && (
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+            <h2 className="text-[16px] font-semibold">Assigned requests</h2>
+            <Badge tone="info">Analyst</Badge>
+          </div>
+          {requests.isLoading ? (
+            <div className="text-[13px] text-[var(--color-text-muted)]">Loading requests...</div>
+          ) : pendingRequests.length === 0 ? (
+            <div
+              className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              No pending requests assigned to you.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pendingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between rounded-md border px-4 py-3"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  <div>
+                    <div className="text-[13px] font-semibold">
+                      {request.companyName}
+                      {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
+                      {request.fiscalYear ?? "Current"}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                      Priority: {request.priority ?? "normal"} · Received{" "}
+                      {new Date(request.createdAt).toLocaleDateString()}
+                      {request.note ? ` · ${request.note}` : ""}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => acknowledge.mutate(request.id)}
+                    disabled={acknowledge.isPending}
+                  >
+                    {acknowledge.isPending && acknowledge.variables === request.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : null}
+                    Acknowledge
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card>
         <div className="mb-3 flex items-center gap-2">
           <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
