@@ -1,3 +1,33 @@
+export type AskAiForecastChartPoint = {
+  label: string;
+  value: number;
+};
+
+export type AskAiForecastChartSeries = {
+  id: string;
+  title: string;
+  metric: "revenue" | "eps" | "share_price" | "pe_vs_sector" | string;
+  points: AskAiForecastChartPoint[];
+};
+
+export type AskAiRiskCallout = {
+  label: string;
+  severity: "High" | "Medium" | "Low";
+};
+
+export type AskAiForecastVisuals = {
+  executiveSummary?: string[];
+  chartSeries: AskAiForecastChartSeries[];
+  assumptionPills: string[];
+  riskCallouts: AskAiRiskCallout[];
+  confidence?: string;
+};
+
+export type AskAiClaimSourceGroup = {
+  claimId: string;
+  citationIndexes: number[];
+};
+
 export type AskAiFinalResponse = {
   answer: string;
   sourcesUsed: Array<Record<string, unknown>>;
@@ -6,6 +36,9 @@ export type AskAiFinalResponse = {
   warnings: string[];
   usage: Record<string, unknown>;
   activityLog?: Array<Record<string, unknown>>;
+  forecastVisuals?: AskAiForecastVisuals | null;
+  claimSourceGroups?: AskAiClaimSourceGroup[];
+  tavilyQuestions?: string[];
 };
 
 export type AskAiStatusEvent = {
@@ -19,6 +52,7 @@ export type AskAiSourceEvent = {
   message: string;
   count: number;
   items: Array<Record<string, unknown>>;
+  queries?: string[];
 };
 
 export type AskAiApproachEvent = {

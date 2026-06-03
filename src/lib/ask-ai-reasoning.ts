@@ -1,6 +1,13 @@
 export type StreamActivityEvent =
   | { type: "status"; message: string; stage: string; percent: number }
-  | { type: "source"; message: string; kind: string; count: number; items?: Array<Record<string, unknown>> };
+  | {
+      type: "source";
+      message: string;
+      kind: string;
+      count: number;
+      items?: Array<Record<string, unknown>>;
+      queries?: string[];
+    };
 
 export type ReasoningGroup = {
   title: string;
