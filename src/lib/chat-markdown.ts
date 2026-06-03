@@ -3,18 +3,21 @@ export type ChatMarkdownInline =
   | { type: "strong"; text: string }
   | { type: "em"; text: string }
   | { type: "code"; text: string }
-  | { type: "link"; text: string; href: string };
+  | { type: "link"; text: string; href: string }
+  | { type: "citation"; index: number };
 
 export type ChatMarkdownBlock =
   | { type: "paragraph"; children: ChatMarkdownInline[] }
   | { type: "heading"; level: 1 | 2 | 3; children: ChatMarkdownInline[] }
-  | { type: "list"; ordered: boolean; items: ChatMarkdownInline[][] };
+  | { type: "list"; ordered: boolean; items: ChatMarkdownInline[][] }
+  | { type: "table"; headers: string[]; rows: string[][] };
 
 export function parseChatMarkdown(markdown: string): ChatMarkdownBlock[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const blocks: ChatMarkdownBlock[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; items: ChatMarkdownInline[][] } | null = null;
+  let table: { headers: string[]; rows: string[][] } | null = null;
 
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
@@ -26,14 +29,38 @@ export function parseChatMarkdown(markdown: string): ChatMarkdownBlock[] {
     blocks.push({ type: "list", ordered: list.ordered, items: list.items });
     list = null;
   };
+  const flushTable = () => {
+    if (table === null) return;
+    blocks.push({ type: "table", headers: table.headers, rows: table.rows });
+    table = null;
+  };
 
-  for (const rawLine of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex];
     const line = rawLine.trimEnd();
     if (!line.trim()) {
       flushParagraph();
       flushList();
+      flushTable();
       continue;
     }
+
+    const nextLine = lines[lineIndex + 1]?.trimEnd();
+    if (isTableHeader(line, nextLine)) {
+      flushParagraph();
+      flushList();
+      flushTable();
+      table = { headers: parseTableRow(line), rows: [] };
+      lineIndex += 1;
+      continue;
+    }
+
+    if (table && isTableRow(line)) {
+      table.rows.push(parseTableRow(line));
+      continue;
+    }
+
+    flushTable();
 
     const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     if (heading) {
@@ -66,12 +93,13 @@ export function parseChatMarkdown(markdown: string): ChatMarkdownBlock[] {
 
   flushParagraph();
   flushList();
+  flushTable();
   return blocks;
 }
 
 function parseInline(value: string): ChatMarkdownInline[] {
   const nodes: ChatMarkdownInline[] = [];
-  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g;
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\d+\]|\*[^*]+\*)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -106,6 +134,9 @@ function parseInlineToken(token: string): ChatMarkdownInline {
       href: isSafeHref(href) ? href : "#",
     };
   }
+  if (/^\[\d+\]$/.test(token)) {
+    return { type: "citation", index: Number.parseInt(token.slice(1, -1), 10) };
+  }
   if (token.startsWith("*") && token.endsWith("*")) {
     return { type: "em", text: token.slice(1, -1) };
   }
@@ -114,4 +145,21 @@ function parseInlineToken(token: string): ChatMarkdownInline {
 
 function isSafeHref(href: string): boolean {
   return /^(https?:|mailto:)/i.test(href);
+}
+
+function isTableHeader(line: string, nextLine: string | undefined): boolean {
+  return isTableRow(line) && typeof nextLine === "string" && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(nextLine);
+}
+
+function isTableRow(line: string): boolean {
+  return line.includes("|") && parseTableRow(line).length >= 2;
+}
+
+function parseTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
 }

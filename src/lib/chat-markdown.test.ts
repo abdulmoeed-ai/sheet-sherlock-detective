@@ -27,4 +27,33 @@ describe("chat markdown parser", () => {
       },
     ]);
   });
+
+  it("parses markdown tables into table blocks", () => {
+    expect(
+      parseChatMarkdown(
+        "| Scenario | FY2026 | FY2027 |\n| --- | ---: | ---: |\n| Base | 10 | 11 |",
+      ),
+    ).toEqual([
+      {
+        type: "table",
+        headers: ["Scenario", "FY2026", "FY2027"],
+        rows: [["Base", "10", "11"]],
+      },
+    ]);
+  });
+
+  it("parses numeric citation markers as inline citation nodes", () => {
+    expect(parseChatMarkdown("Baseline uses PAT [1] and ADB [3].")).toEqual([
+      {
+        type: "paragraph",
+        children: [
+          { type: "text", text: "Baseline uses PAT " },
+          { type: "citation", index: 1 },
+          { type: "text", text: " and ADB " },
+          { type: "citation", index: 3 },
+          { type: "text", text: "." },
+        ],
+      },
+    ]);
+  });
 });
