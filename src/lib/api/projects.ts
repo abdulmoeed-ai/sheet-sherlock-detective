@@ -1,7 +1,6 @@
 import { apiBlob, apiFetch, apiStream } from "./client";
 import type {
   AssumptionsGenerateResponse,
-  BalanceSheetAssistantResponse,
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
@@ -174,13 +173,6 @@ export function askAi(projectId: string, input: Record<string, unknown>, options
 export function runBalanceSheetDiagnosis(projectId: string) {
   return apiFetch<Record<string, unknown>>(
     `/api/projects/${projectId}/diagnosis/balance-sheet/run`,
-    { method: "POST" },
-  );
-}
-
-export function runBalanceSheetAssistant(projectId: string) {
-  return apiFetch<BalanceSheetAssistantResponse>(
-    `/api/projects/${projectId}/diagnosis/balance-sheet/assistant`,
     { method: "POST" },
   );
 }

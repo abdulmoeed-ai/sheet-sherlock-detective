@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  AlertTriangle,
-  Bot,
   Download,
   FileSearch,
   History,
@@ -16,7 +14,6 @@ import {
   RotateCcw,
   Save,
   Send,
-  Sparkles,
   Stethoscope,
   X,
 } from "lucide-react";
@@ -31,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
 import { listComments, readMappingRules, saveWorkbook as saveWorkbookRequest } from "@/lib/api/projects";
-import type { BalanceSheetAssistantResponse, ReviewCommentResponse } from "@/lib/api/types";
+import type { ReviewCommentResponse } from "@/lib/api/types";
 import {
   activeMentionQuery,
   buildCellCommentIndicators,
@@ -47,27 +44,21 @@ import {
   type MentionUser,
 } from "@/lib/comments";
 import {
-  diagnosisCellTone,
   formatHistoryEntry,
-  isActionableWarningSet,
   orderedHistoryEntries,
   ruleTooltipDetails,
   sheetNeedsAttention,
-  shouldCommitCellDraftOnKey,
-  type DiagnosisTone,
   type RuleTooltipMetadata,
   warningDetails,
 } from "@/lib/diagnosis-cell";
 import { useWorkspace } from "@/hooks/use-projects";
 import {
-  useAcceptDiagnosis,
   useCreateComment,
   useCreateExcelExport,
   useDownloadExcelExport,
   useReopenComment,
   useRevertReviewCell,
   useResolveComment,
-  useRunBalanceSheetAssistant,
   useReviewCell,
 } from "@/hooks/use-project-actions";
 import { setSelectedProjectId } from "@/lib/project-store";
@@ -146,9 +137,6 @@ type OptimisticCellUpdate = {
 
 const MAX_VISIBLE_ROWS = 90;
 const MAX_VISIBLE_COLS = 14;
-const EMPTY_ASSISTANT_CANDIDATES: NonNullable<
-  BalanceSheetAssistantResponse["assistant"]
->["candidates"] = [];
 
 function Diagnosis() {
   const navigate = useNavigate();
@@ -158,8 +146,6 @@ function Diagnosis() {
   const workspace = useWorkspace(projectId);
   const reviewCell = useReviewCell(projectId, { invalidateOnSuccess: false });
   const revertCell = useRevertReviewCell(projectId);
-  const runAssistant = useRunBalanceSheetAssistant(projectId);
-  const acceptDiagnosis = useAcceptDiagnosis(projectId);
   const createComment = useCreateComment(projectId);
   const resolveComment = useResolveComment(projectId);
   const reopenComment = useReopenComment(projectId);
@@ -197,10 +183,7 @@ function Diagnosis() {
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [panelTab, setPanelTab] = useState<"assistant" | "diagnosis" | "comments">("diagnosis");
-  const [balanceAssistant, setBalanceAssistant] = useState<BalanceSheetAssistantResponse | null>(
-    null,
-  );
+  const [panelTab, setPanelTab] = useState<"diagnosis" | "comments">("diagnosis");
   const [draftValue, setDraftValue] = useState("");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, OptimisticCellUpdate>>({});
   const selectedCell = activeSheet
@@ -240,15 +223,6 @@ function Diagnosis() {
   );
   const dirty = draftValue.trim() !== "";
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
-  const assistantCandidates: Array<Record<string, unknown>> =
-    balanceAssistant?.assistant?.candidates ?? EMPTY_ASSISTANT_CANDIDATES ?? [];
-  const candidateCells = useMemo(() => {
-    return new Set(
-      assistantCandidates
-        .map((candidate) => stringOrNull(candidate.templateCell))
-        .filter((cell): cell is string => !!cell),
-    );
-  }, [assistantCandidates]);
   const rulesByCode = useMemo(() => {
     return Object.fromEntries(
       (mappingRules.data?.rules ?? [])
@@ -258,33 +232,6 @@ function Diagnosis() {
         .map((rule) => [rule.code, rule]),
     );
   }, [mappingRules.data?.rules]);
-
-  const runBalanceAssistant = async () => {
-    if (!projectId) return null;
-    setPanelOpen(true);
-    setPanelTab("assistant");
-    try {
-      const response = await runAssistant.mutateAsync();
-      setBalanceAssistant(response);
-      return response;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Balance Assistant failed");
-      return null;
-    }
-  };
-
-  const applyAssistantCandidate = async (candidateId: string) => {
-    if (!projectId) return;
-    try {
-      await acceptDiagnosis.mutateAsync(candidateId);
-      await workspace.refetch();
-      const response = await runAssistant.mutateAsync();
-      setBalanceAssistant(response);
-      toast.success("Balance Assistant fix applied");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to apply assistant fix");
-    }
-  };
 
   const revertToRevision = async (revisionId: string) => {
     if (!selectedMeta?.fieldId) return;
@@ -446,14 +393,6 @@ function Diagnosis() {
     if (!projectId) return;
     try {
       await flushAutosaves();
-      const assistant = await runAssistant.mutateAsync();
-      setBalanceAssistant(assistant);
-      if (assistant.imbalanceAmount && (assistant.assistant?.candidates ?? []).length > 0) {
-        setPanelOpen(true);
-        setPanelTab("assistant");
-        toast.warning("Review Balance Assistant suggestions before exporting");
-        return;
-      }
       const created = await createExport.mutateAsync();
       const blob = await downloadExport.mutateAsync(created.id);
       const url = window.URL.createObjectURL(blob);
@@ -501,19 +440,6 @@ function Diagnosis() {
             {workspace.data?.project.fiscalYear ?? cycle.period} / Diagnosis
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={runBalanceAssistant}
-              disabled={!projectId || runAssistant.isPending}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold disabled:opacity-50"
-              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-            >
-              {runAssistant.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Bot className="h-3.5 w-3.5" />
-              )}
-              Balance Assistant
-            </button>
             <button
               onClick={() => setPanelOpen((open) => !open)}
               className="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold"
@@ -593,7 +519,6 @@ function Diagnosis() {
               workbook={workbook}
               activeSheetId={resolvedActiveSheetId}
               selected={resolvedSelection}
-              candidateCells={candidateCells}
               commentIndicators={commentIndicators}
               draftValue={draftValue}
               onSelect={({ sheetId, row, col }) => {
@@ -616,7 +541,7 @@ function Diagnosis() {
               style={{ borderColor: "#E3E6EA" }}
             >
               <div className="flex rounded-md p-0.5" style={{ background: "#F7F8FA" }}>
-                {(["assistant", "diagnosis", "comments"] as const).map((tab) => (
+                {(["diagnosis", "comments"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setPanelTab(tab)}
@@ -640,14 +565,7 @@ function Diagnosis() {
                 </button>
               </IconTooltip>
             </div>
-            {panelTab === "assistant" ? (
-              <BalanceAssistantPanel
-                assistant={balanceAssistant}
-                loading={runAssistant.isPending || acceptDiagnosis.isPending}
-                onRun={runBalanceAssistant}
-                onApply={applyAssistantCandidate}
-              />
-            ) : panelTab === "diagnosis" ? (
+            {panelTab === "diagnosis" ? (
               <DiagnosisPanel
                 projectId={projectId}
                 address={selectedAddress}
@@ -679,347 +597,6 @@ function Diagnosis() {
           </aside>
         )}
       </div>
-    </div>
-  );
-}
-
-function WorkbookGrid({
-  sheet,
-  rows,
-  cols,
-  selected,
-  candidateCells,
-  optimisticCells,
-  draftValue,
-  onDraftValue,
-  onSelect,
-  onOpenPanel,
-  onCommitDraft,
-  commitPending,
-}: {
-  sheet: SheetPayload;
-  rows: number;
-  cols: number;
-  selected: { row: number; col: number };
-  candidateCells: Set<string>;
-  optimisticCells: Record<string, OptimisticCellUpdate>;
-  draftValue: string;
-  onDraftValue: (value: string) => void;
-  onSelect: (row: number, col: number) => void;
-  onOpenPanel: () => void;
-  onCommitDraft: () => Promise<void>;
-  commitPending: boolean;
-}) {
-  const minTableWidth = 40 + cols * 108;
-
-  return (
-    <div className="min-w-0 p-4">
-      <table
-        className="w-full table-fixed border-collapse bg-white text-[12px]"
-        style={{ minWidth: minTableWidth, boxShadow: "0 1px 2px rgba(15,23,42,0.08)" }}
-      >
-        <colgroup>
-          <col style={{ width: 40 }} />
-          {Array.from({ length: cols }, (_, col) => (
-            <col key={col} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            <th
-              className="sticky left-0 top-0 z-20 h-7 w-10 border bg-[#F7F8FA]"
-              style={{ borderColor: "#E3E6EA" }}
-            />
-            {Array.from({ length: cols }, (_, col) => (
-              <th
-                key={col}
-                className="sticky top-0 z-10 h-7 min-w-[108px] border bg-[#F7F8FA] px-2 font-semibold"
-                style={{ borderColor: "#E3E6EA", color: "#818EA0" }}
-              >
-                {columnName(col)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, row) => (
-            <tr key={row}>
-              <th
-                className="sticky left-0 z-10 h-8 border bg-[#F7F8FA] px-2 text-right font-medium"
-                style={{ borderColor: "#E3E6EA", color: "#818EA0" }}
-              >
-                {row + 1}
-              </th>
-              {Array.from({ length: cols }, (_, col) => {
-                const cell = optimisticCell(getCell(sheet, row, col), optimisticCells);
-                const active = selected.row === row && selected.col === col;
-                const hasDiagnosis = !!cell?.diagnosis;
-                const formula = !!cell?.f;
-                const editable = hasDiagnosis && cell?.diagnosis?.editable !== false && !formula;
-                const value = active && draftValue ? draftValue : displayValue(cell);
-                const tone = diagnosisCellTone({
-                  formula,
-                  status: cell?.diagnosis?.status,
-                  confidence: cell?.diagnosis?.confidence,
-                  hasCandidate:
-                    !!cell?.diagnosis?.templateCell &&
-                    candidateCells.has(cell.diagnosis.templateCell),
-                  hasWarning: isActionableWarningSet(cell?.diagnosis?.warnings),
-                });
-                const style = cellToneStyle(tone, { active, hasDiagnosis, formula });
-                return (
-                  <td
-                    key={col}
-                    onClick={() => onSelect(row, col)}
-                    onDoubleClick={() => {
-                      onSelect(row, col);
-                      onOpenPanel();
-                    }}
-                    className="relative h-8 truncate border px-2"
-                    style={{
-                      borderColor: style.borderColor,
-                      outline: active ? "2px solid #7B68EE" : undefined,
-                      outlineOffset: -1,
-                      background: style.background,
-                      color: style.color,
-                      textAlign: typeof cell?.v === "number" ? "right" : "left",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {tone === "candidate" && (
-                      <span className="absolute left-0 top-0 h-full w-1 bg-[#EF4444]" />
-                    )}
-                    {tone === "low-confidence" && (
-                      <span className="absolute left-0 top-0 h-full w-1 bg-[#F59E0B]" />
-                    )}
-                    {tone === "edited" && (
-                      <span className="absolute left-0 top-0 h-full w-1 bg-[#2563EB]" />
-                    )}
-                    {hasDiagnosis && (
-                      <span className="absolute right-0 top-0 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-[#7B68EE]" />
-                    )}
-                    {active && editable ? (
-                      <input
-                        value={value}
-                        onChange={(event) => onDraftValue(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (
-                            shouldCommitCellDraftOnKey({
-                              key: event.key,
-                              draftValue,
-                              editable,
-                              pending: commitPending,
-                            })
-                          ) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void onCommitDraft();
-                          }
-                        }}
-                        className="absolute inset-0 bg-white px-2 text-right outline-none"
-                        style={{ border: "1px solid #7B68EE", color: "#292D34" }}
-                      />
-                    ) : (
-                      value
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function BalanceAssistantPanel({
-  assistant,
-  loading,
-  onRun,
-  onApply,
-}: {
-  assistant: BalanceSheetAssistantResponse | null;
-  loading: boolean;
-  onRun: () => Promise<BalanceSheetAssistantResponse | null>;
-  onApply: (candidateId: string) => Promise<void>;
-}) {
-  const candidates = assistant?.assistant?.candidates ?? [];
-  return (
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <div
-            className="flex items-center gap-1.5 text-[12px] font-bold"
-            style={{ color: "#292D34" }}
-          >
-            <Bot className="h-4 w-4 text-[#7B68EE]" /> Balance Assistant
-          </div>
-          <div className="mt-1 text-[11px]" style={{ color: "#818EA0" }}>
-            LLM explanation with deterministic, auditable cell fixes.
-          </div>
-        </div>
-        <button
-          onClick={onRun}
-          disabled={loading}
-          className="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold disabled:opacity-50"
-          style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
-        >
-          {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="h-3.5 w-3.5" />
-          )}
-          Run
-        </button>
-      </div>
-
-      {!assistant ? (
-        <PanelEmpty
-          icon={Bot}
-          title="No assistant run"
-          detail="Run Balance Assistant to analyze the current workbook state."
-        />
-      ) : (
-        <>
-          <section
-            className="rounded-lg border p-3"
-            style={{
-              borderColor: assistant.imbalanceAmount ? "#FECACA" : "#BBF7D0",
-              background: assistant.imbalanceAmount ? "#FFF5F5" : "#F0FDF4",
-            }}
-          >
-            <div
-              className="flex items-center gap-1.5 text-[12px] font-bold"
-              style={{ color: assistant.imbalanceAmount ? "#B91C1C" : "#166534" }}
-            >
-              {assistant.imbalanceAmount ? (
-                <AlertTriangle className="h-4 w-4" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {assistant.imbalanceAmount
-                ? `Imbalance: ${assistant.imbalanceAmount}`
-                : "Balance sheet currently passes"}
-            </div>
-            <div className="mt-2 text-[12px]" style={{ color: "#4F546B" }}>
-              {assistant.assistant?.summary ?? "No assistant summary returned."}
-            </div>
-          </section>
-
-          {!!assistant.assistant?.activity?.length && (
-            <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-              <div
-                className="mb-2 text-[11px] font-semibold uppercase"
-                style={{ color: "#818EA0" }}
-              >
-                Activity
-              </div>
-              <div className="space-y-1.5">
-                {assistant.assistant.activity.map((event, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between gap-2 text-[12px]"
-                    style={{ color: "#4F546B" }}
-                  >
-                    <span>{stringValue(event.message, stringValue(event.stage, "Activity"))}</span>
-                    <span className="font-semibold">{stringValue(event.percent, "")}%</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-            <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
-              Suggested fixes
-            </div>
-            {candidates.length ? (
-              <div className="space-y-2">
-                {candidates.map((candidate, index) => {
-                  const candidateId = stringOrNull(candidate.candidateId);
-                  return (
-                    <div
-                      key={candidateId ?? index}
-                      className="rounded-md border p-2"
-                      style={{
-                        borderColor: index === 0 ? "#FCA5A5" : "#E3E6EA",
-                        background: index === 0 ? "#FFF7F7" : "#fff",
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div
-                            className="truncate text-[12px] font-bold"
-                            style={{ color: "#292D34" }}
-                          >
-                            {stringValue(candidate.templateCell, "Candidate cell")}
-                          </div>
-                          <div className="mt-1 text-[12px]" style={{ color: "#4F546B" }}>
-                            {stringValue(candidate.reason, "Review this candidate.")}
-                          </div>
-                        </div>
-                        <span
-                          className="shrink-0 rounded bg-[#EDE9FE] px-2 py-1 text-[11px] font-semibold"
-                          style={{ color: "#7B68EE" }}
-                        >
-                          {confidenceLabel(candidate.confidence)}
-                        </span>
-                      </div>
-                      <div
-                        className="mt-2 grid grid-cols-2 gap-2 text-[11px]"
-                        style={{ color: "#4F546B" }}
-                      >
-                        <KV label="Current" value={stringValue(candidate.currentValue, "-")} />
-                        <KV label="Proposed" value={stringValue(candidate.proposedValue, "-")} />
-                      </div>
-                      <button
-                        onClick={() => candidateId && onApply(candidateId)}
-                        disabled={!candidateId || loading || candidate.safeToApply === false}
-                        className="mt-2 h-7 rounded-md px-3 text-[11px] font-semibold text-white disabled:opacity-50"
-                        style={{ background: "#EF4444" }}
-                      >
-                        Apply fix
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-[12px]" style={{ color: "#818EA0" }}>
-                No safe deterministic candidate is available.
-              </div>
-            )}
-          </section>
-
-          {!!assistant.assistant?.citations?.length && (
-            <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-              <div
-                className="mb-2 text-[11px] font-semibold uppercase"
-                style={{ color: "#818EA0" }}
-              >
-                Citations
-              </div>
-              {assistant.assistant.citations.slice(0, 5).map((citation, index) => (
-                <div
-                  key={index}
-                  className="border-t py-2 text-[12px]"
-                  style={{ borderColor: "#F3F4F6", color: "#4F546B" }}
-                >
-                  <span className="font-semibold">
-                    [{stringValue(citation.index, String(index + 1))}]
-                  </span>{" "}
-                  {stringValue(
-                    citation.label,
-                    stringValue(citation.cellReference, "Project evidence"),
-                  )}
-                </div>
-              ))}
-            </section>
-          )}
-          <RiskLegend />
-        </>
-      )}
     </div>
   );
 }
@@ -1212,22 +789,6 @@ function DiagnosisPanel({
   );
 }
 
-function RiskLegend() {
-  return (
-    <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-      <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
-        Cell colors
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "#4F546B" }}>
-        <LegendItem color="#EF4444" label="Suggested fix / warning" />
-        <LegendItem color="#F59E0B" label="Low confidence" />
-        <LegendItem color="#2563EB" label="Edited" />
-        <LegendItem color="#9CA3AF" label="Formula protected" />
-      </div>
-    </section>
-  );
-}
-
 function RuleBadge({
   code,
   details,
@@ -1280,15 +841,6 @@ function WarningChip({ warning }: { warning: string }) {
         <div className="mt-2 text-[11px] leading-relaxed">{details.description}</div>
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: color }} />
-      <span>{label}</span>
-    </div>
   );
 }
 
@@ -1945,32 +1497,6 @@ function removeOptimisticCell(updates: Record<string, OptimisticCellUpdate>, fie
   return next;
 }
 
-function cellToneStyle(
-  tone: DiagnosisTone,
-  flags: { active: boolean; hasDiagnosis: boolean; formula: boolean },
-) {
-  if (flags.active) {
-    return { background: "#F5F3FF", color: "#292D34", borderColor: "#7B68EE" };
-  }
-  if (tone === "candidate") {
-    return { background: "#FFF5F5", color: "#991B1B", borderColor: "#FCA5A5" };
-  }
-  if (tone === "low-confidence") {
-    return { background: "#FFFBEB", color: "#92400E", borderColor: "#FCD34D" };
-  }
-  if (tone === "edited") {
-    return { background: "#EFF6FF", color: "#1D4ED8", borderColor: "#93C5FD" };
-  }
-  if (tone === "formula" || flags.formula) {
-    return { background: "#F9FAFB", color: "#374151", borderColor: "#E5E7EB" };
-  }
-  return {
-    background: flags.hasDiagnosis ? "#F8FBFF" : "#fff",
-    color: flags.hasDiagnosis ? "#1D4ED8" : "#4F546B",
-    borderColor: "#E3E6EA",
-  };
-}
-
 function buildCommentTarget({
   meta,
   sheetName,
@@ -2019,19 +1545,6 @@ function columnName(index: number) {
 
 function stringValue(value: unknown, fallback: string) {
   if (value === null || value === undefined || value === "") return fallback;
-  return String(value);
-}
-
-function stringOrNull(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) return null;
-  return value;
-}
-
-function confidenceLabel(value: unknown) {
-  if (value === null || value === undefined || value === "") return "-";
-  const numeric = Number(value);
-  if (!Number.isNaN(numeric) && numeric <= 1) return `${Math.round(numeric * 100)}%`;
-  if (!Number.isNaN(numeric)) return `${Math.round(numeric)}%`;
   return String(value);
 }
 

@@ -85,7 +85,6 @@ export function WorkbookEditor({
   activeSheetId,
   selected,
   draftValue,
-  candidateCells,
   commentIndicators = new Set(),
   commitPending,
   onSelect,
@@ -95,7 +94,6 @@ export function WorkbookEditor({
   activeSheetId?: string | null;
   selected: WorkbookSelection;
   draftValue: string;
-  candidateCells: Set<string>;
   commentIndicators?: Set<string>;
   commitPending: boolean;
   onSelect: (selection: WorkbookSelection) => void;
@@ -108,10 +106,7 @@ export function WorkbookEditor({
   const [editValue, setEditValue] = useState("");
   const [univerState, setUniverState] = useState<"loading" | "ready" | "fallback">("loading");
   const [paintState, setPaintState] = useState<"unknown" | "painted" | "blank">("unknown");
-  const preparedWorkbook = useMemo(
-    () => prepareWorkbookForUniver(workbook, candidateCells),
-    [candidateCells, workbook],
-  );
+  const preparedWorkbook = useMemo(() => prepareWorkbookForUniver(workbook), [workbook]);
   const activeSheet = activeSheetId ? workbook.sheets?.[activeSheetId] : undefined;
   const shape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
 
@@ -329,7 +324,6 @@ export function WorkbookEditor({
                     formula,
                     status: cell?.diagnosis?.status,
                     confidence: cell?.diagnosis?.confidence,
-                    hasCandidate: !!cell?.diagnosis?.templateCell && candidateCells.has(cell.diagnosis.templateCell),
                     hasWarning: isActionableWarningSet(cell?.diagnosis?.warnings),
                   });
                   const style = cellToneStyle(tone, { active, hasDiagnosis, formula });
@@ -420,10 +414,7 @@ export function buildWorkbookCellIndex(workbook: WorkbookPayload) {
   return cells;
 }
 
-export function prepareWorkbookForUniver(
-  workbook: WorkbookPayload,
-  candidateCells: Set<string> = new Set(),
-): WorkbookPayload {
+export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPayload {
   const prepared: WorkbookPayload = {
     id: workbook.id,
     name: workbook.name,
@@ -442,7 +433,7 @@ export function prepareWorkbookForUniver(
       defaultRowHeight: readableDefaultRowHeight(sheet.defaultRowHeight),
       columnData: readableColumnData(sheet),
       rowData: readableRowData(sheet),
-      cellData: styledCellData(sheet.cellData, candidateCells, styles),
+      cellData: styledCellData(sheet.cellData, styles),
     };
   }
   return prepared;
@@ -514,7 +505,6 @@ export function cellKey(sheetName: string, address: string) {
 
 function styledCellData(
   cellData: Record<string, Record<string, WorkbookCellPayload>> | undefined,
-  candidateCells: Set<string>,
   styles: Record<string, unknown>,
 ) {
   const next: Record<string, Record<string, WorkbookCellPayload>> = {};
@@ -526,7 +516,6 @@ function styledCellData(
         formula,
         status: cell.diagnosis?.status,
         confidence: cell.diagnosis?.confidence,
-        hasCandidate: !!cell.diagnosis?.templateCell && candidateCells.has(cell.diagnosis.templateCell),
         hasWarning: isActionableWarningSet(cell.diagnosis?.warnings),
       });
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
