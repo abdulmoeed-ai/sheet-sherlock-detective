@@ -61,6 +61,18 @@ export function readWorkbookCellHistory(projectId: string, sheetId: string, cell
   );
 }
 
+export function revertWorkbookCell(
+  projectId: string,
+  sheetId: string,
+  cellAddress: string,
+  revisionId: string,
+) {
+  return apiFetch<WorkbookSaveResponse>(
+    `/api/projects/${projectId}/workbook/cells/${encodeURIComponent(sheetId)}/${encodeURIComponent(cellAddress)}/history/${encodeURIComponent(revisionId)}/revert`,
+    { method: "POST" },
+  );
+}
+
 export function uploadDocument(projectId: string, file: File) {
   const form = new FormData();
   form.append("file", file);

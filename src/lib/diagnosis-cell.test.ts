@@ -11,6 +11,8 @@ import {
   sheetNeedsAttention,
   shouldCommitCellDraftOnKey,
   warningDetails,
+  workbookPayloadDisplayValue,
+  workbookRevisionHistoryEntry,
 } from "./diagnosis-cell";
 
 describe("diagnosis cell helpers", () => {
@@ -66,6 +68,33 @@ describe("diagnosis cell helpers", () => {
   it("extracts a revertable value from history entries", () => {
     expect(historyValue({ value: "10", newValue: "11" })).toBe("10");
     expect(historyValue({ newValue: "11" })).toBe("11");
+  });
+
+  it("formats workbook revision payloads for manual-cell history", () => {
+    expect(workbookPayloadDisplayValue(null)).toBe("-");
+    expect(workbookPayloadDisplayValue({ v: 2500 })).toBe("2,500");
+    expect(workbookPayloadDisplayValue({ f: "SUM(A1:A2)", v: null })).toBe("=SUM(A1:A2)");
+
+    expect(
+      workbookRevisionHistoryEntry({
+        id: "revision-1",
+        actor: "analyst-1",
+        actorName: "Dev Finance Analyst",
+        action: "edit",
+        oldPayload: null,
+        newPayload: { v: "Manual input" },
+        createdAt: "2026-06-04T08:00:00Z",
+      }),
+    ).toEqual({
+      id: "revision-1",
+      action: "edit",
+      actor: "analyst-1",
+      actorDisplayName: "Dev Finance Analyst",
+      oldValue: "-",
+      newValue: "Manual input",
+      note: "Saved from workbook editor.",
+      createdAt: "2026-06-04T08:00:00Z",
+    });
   });
 
   it("formats source, edit, and revert history entries for analysts", () => {

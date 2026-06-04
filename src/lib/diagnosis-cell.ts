@@ -76,6 +76,42 @@ export function historyValue(entry: Record<string, unknown>): string {
   return value === null || value === undefined ? "" : String(value);
 }
 
+export function workbookPayloadDisplayValue(payload?: Record<string, unknown> | null): string {
+  if (!payload) return "-";
+  const formula = typeof payload.f === "string" ? payload.f.trim() : "";
+  const value = payload.v;
+  if (formula && (value === null || value === undefined || value === "")) {
+    return formula.startsWith("=") ? formula : `=${formula}`;
+  }
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return value.toLocaleString();
+  return String(value);
+}
+
+export function workbookRevisionHistoryEntry(revision: {
+  id: string;
+  actor: string;
+  actorName?: string | null;
+  action: string;
+  oldPayload?: Record<string, unknown> | null;
+  newPayload?: Record<string, unknown> | null;
+  createdAt: string;
+}): Record<string, unknown> {
+  return {
+    id: revision.id,
+    action: revision.action,
+    actor: revision.actor,
+    actorDisplayName: revision.actorName,
+    oldValue: workbookPayloadDisplayValue(revision.oldPayload),
+    newValue: workbookPayloadDisplayValue(revision.newPayload),
+    note:
+      revision.action.toLowerCase() === "revert"
+        ? "Manual workbook cell reverted."
+        : "Saved from workbook editor.",
+    createdAt: revision.createdAt,
+  };
+}
+
 export function warningDetails(warning: string) {
   if (warning === "comparative_year") {
     return {
