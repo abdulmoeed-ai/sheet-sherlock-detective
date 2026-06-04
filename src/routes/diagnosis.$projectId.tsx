@@ -48,6 +48,7 @@ import {
   type MentionUser,
 } from "@/lib/comments";
 import {
+  buildExportWarningSummary,
   formatHistoryEntry,
   orderedHistoryEntries,
   ruleTooltipDetails,
@@ -103,6 +104,13 @@ type WorkbookPayload = {
   sheetOrder?: string[];
   sheets?: Record<string, SheetPayload>;
   summary?: Record<string, number>;
+  exportWarnings?: {
+    unresolvedIssues?: number;
+    lowConfidence?: number;
+    blocked?: number;
+    missing?: number;
+    actionableWarnings?: number;
+  };
 };
 
 type DiagnosisMeta = {
@@ -122,6 +130,11 @@ type DiagnosisMeta = {
   sourceText?: string | null;
   boundingBox?: SourceBoundingBox | null;
   confidence?: number | null;
+  confidenceScore?: string | null;
+  confidenceLevel?: string | null;
+  confidenceReasonCodes?: string[];
+  confidenceReasons?: string[];
+  matchMethod?: string | null;
   status?: string;
   ruleIds?: string[];
   warnings?: string[];
@@ -196,6 +209,11 @@ function Diagnosis() {
       )
     : undefined;
   const selectedMeta = selectedCell?.diagnosis;
+  const exportWarnings = useMemo(() => {
+    if (workbook?.exportWarnings) return workbook.exportWarnings;
+    const diagnosedCells = sheetIds.flatMap((sheetId) => sheetCells(workbook?.sheets?.[sheetId])).filter((cell) => cell.diagnosis);
+    return buildExportWarningSummary(diagnosedCells);
+  }, [workbook, sheetIds]);
   const selectedCellAddress = `${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
   const selectedAddress = `${activeSheet?.name ?? "Sheet"}!${selectedCellAddress}`;
   const commentTarget = useMemo(
@@ -397,6 +415,13 @@ function Diagnosis() {
 
   const exportWorkbook = async () => {
     if (!projectId) return;
+    const unresolved = Number(exportWarnings?.unresolvedIssues ?? 0);
+    if (unresolved > 0) {
+      const proceed = window.confirm(
+        `This export has ${unresolved} unresolved parsing review issue(s): ${Number(exportWarnings.lowConfidence ?? 0)} low confidence, ${Number(exportWarnings.blocked ?? 0)} blocked, ${Number(exportWarnings.missing ?? 0)} missing, and ${Number(exportWarnings.actionableWarnings ?? 0)} warning(s). Continue export?`,
+      );
+      if (!proceed) return;
+    }
     try {
       await flushAutosaves();
       const created = await createExport.mutateAsync();
@@ -681,6 +706,8 @@ function DiagnosisPanel({
             meta.confidence === null || meta.confidence === undefined ? "-" : `${meta.confidence}%`
           }
         />
+        <KV label="Confidence level" value={meta.confidenceLevel ?? "-"} />
+        <KV label="Match method" value={meta.matchMethod ?? "-"} />
         <KV label="Note" value={meta.noteReference ?? "-"} />
         <KV label="Source" value={meta.documentFilename ?? "-"} />
         <KV label="Page" value={meta.printedPageNumber ? String(meta.printedPageNumber) : "-"} />
@@ -725,6 +752,22 @@ function DiagnosisPanel({
                 <WarningChip key={warning} warning={warning} />
               ))}
             </TooltipProvider>
+          </div>
+        )}
+        {!!meta.confidenceReasons?.length && (
+          <div className="mt-3 space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
+              Confidence reasons
+            </div>
+            {meta.confidenceReasons.map((reason, index) => (
+              <div
+                key={`${reason}-${index}`}
+                className="rounded border px-2 py-1.5 text-[11px] leading-relaxed"
+                style={{ borderColor: "#E5E7EB", background: "#F9FAFB", color: "#4F546B" }}
+              >
+                {reason}
+              </div>
+            ))}
           </div>
         )}
       </section>

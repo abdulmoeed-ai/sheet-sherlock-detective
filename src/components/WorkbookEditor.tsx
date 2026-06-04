@@ -17,6 +17,7 @@ export type WorkbookCellMeta = {
   fieldId?: string;
   status?: string;
   confidence?: number | null;
+  confidenceLevel?: string | null;
   templateCell?: string;
   warnings?: string[];
   value?: unknown;
@@ -337,6 +338,7 @@ export function WorkbookEditor({
                     formula,
                     status: cell?.diagnosis?.status,
                     confidence: cell?.diagnosis?.confidence,
+                    confidenceLevel: cell?.diagnosis?.confidenceLevel,
                     hasWarning: isActionableWarningSet(cell?.diagnosis?.warnings),
                   });
                   const style = cellToneStyle(tone, { active, hasDiagnosis, formula });
@@ -530,6 +532,7 @@ function styledCellData(
         formula,
         status: cell.diagnosis?.status,
         confidence: cell.diagnosis?.confidence,
+        confidenceLevel: cell.diagnosis?.confidenceLevel,
         hasWarning: isActionableWarningSet(cell.diagnosis?.warnings),
       });
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
@@ -627,6 +630,9 @@ function clampWidth(width: number) {
 
 function styleIdForTone(tone: DiagnosisTone, formula: boolean, hasDiagnosis: boolean) {
   if (tone === "candidate") return "diagnosis-candidate";
+  if (tone === "high-confidence") return "diagnosis-high-confidence";
+  if (tone === "medium-confidence") return "diagnosis-medium-confidence";
+  if (tone === "blocked-confidence") return "diagnosis-blocked-confidence";
   if (tone === "low-confidence") return "diagnosis-low-confidence";
   if (tone === "edited") return "diagnosis-edited";
   if (tone === "formula" || formula) return "diagnosis-formula";
@@ -861,8 +867,17 @@ function cellToneStyle(
   if (tone === "candidate") {
     return { background: "#FFF5F5", color: "#991B1B", borderColor: "#FCA5A5" };
   }
-  if (tone === "low-confidence") {
+  if (tone === "high-confidence") {
+    return { background: "#F0FDF4", color: "#166534", borderColor: "#86EFAC" };
+  }
+  if (tone === "medium-confidence") {
     return { background: "#FFFBEB", color: "#92400E", borderColor: "#FCD34D" };
+  }
+  if (tone === "low-confidence") {
+    return { background: "#FEF2F2", color: "#991B1B", borderColor: "#FCA5A5" };
+  }
+  if (tone === "blocked-confidence") {
+    return { background: "#F3F4F6", color: "#374151", borderColor: "#9CA3AF" };
   }
   if (tone === "edited") {
     return { background: "#EFF6FF", color: "#1D4ED8", borderColor: "#93C5FD" };

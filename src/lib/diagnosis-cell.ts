@@ -1,4 +1,13 @@
-export type DiagnosisTone = "candidate" | "low-confidence" | "edited" | "formula" | "normal";
+export type DiagnosisTone =
+  | "candidate"
+  | "high-confidence"
+  | "medium-confidence"
+  | "low-confidence"
+  | "blocked-confidence"
+  | "edited"
+  | "formula"
+  | "normal";
+export type BackendConfidenceLevel = "high" | "medium" | "low" | "blocked" | "missing" | string;
 export type RuleTooltipMetadata = {
   code?: unknown;
   title?: unknown;
@@ -11,18 +20,55 @@ export function diagnosisCellTone({
   formula,
   status,
   confidence,
+  confidenceLevel,
   hasWarning = false,
 }: {
   formula: boolean;
   status?: string | null;
   confidence?: number | null;
+  confidenceLevel?: BackendConfidenceLevel | null;
   hasWarning?: boolean;
 }): DiagnosisTone {
-  if (hasWarning) return "candidate";
   if (formula) return "formula";
   if ((status ?? "").toLowerCase() === "edited") return "edited";
+  const level = String(confidenceLevel ?? "").toLowerCase();
+  if (level === "blocked") return "blocked-confidence";
+  if (level === "low") return "low-confidence";
+  if (level === "medium") return "medium-confidence";
+  if (level === "high") return "high-confidence";
+  if (hasWarning) return "candidate";
   if (typeof confidence === "number" && confidence > 0 && confidence < 70) return "low-confidence";
   return "normal";
+}
+
+export function buildExportWarningSummary(
+  cells: Array<{ diagnosis?: { confidenceLevel?: BackendConfidenceLevel | null; warnings?: string[] | null } | null }>,
+) {
+  let lowConfidence = 0;
+  let blocked = 0;
+  let missing = 0;
+  let actionableWarnings = 0;
+  let unresolvedIssues = 0;
+  for (const cell of cells) {
+    const diagnosis = cell.diagnosis;
+    const level = String(diagnosis?.confidenceLevel ?? "").toLowerCase();
+    const isMissing = !diagnosis || level === "missing";
+    const isLow = level === "low";
+    const isBlocked = level === "blocked";
+    const hasActionableWarning = isActionableWarningSet(diagnosis?.warnings);
+    if (isMissing) missing += 1;
+    if (isLow) lowConfidence += 1;
+    if (isBlocked) blocked += 1;
+    if (hasActionableWarning) actionableWarnings += 1;
+    if (isMissing || isLow || isBlocked || hasActionableWarning) unresolvedIssues += 1;
+  }
+  return {
+    unresolvedIssues,
+    lowConfidence,
+    blocked,
+    missing,
+    actionableWarnings,
+  };
 }
 
 export function historyValue(entry: Record<string, unknown>): string {

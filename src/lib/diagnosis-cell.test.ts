@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildExportWarningSummary,
   diagnosisCellTone,
   formatHistoryEntry,
   formatHistoryTimestamp,
@@ -28,6 +29,38 @@ describe("diagnosis cell helpers", () => {
     expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 65 })).toBe("low-confidence");
     expect(diagnosisCellTone({ formula: false, status: "edited", confidence: 95 })).toBe("edited");
     expect(diagnosisCellTone({ formula: true, status: "pending", confidence: 95 })).toBe("formula");
+  });
+
+  it("derives workbook tone from backend confidence level before local score heuristics", () => {
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "medium" })).toBe(
+      "medium-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "blocked" })).toBe(
+      "blocked-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "low" })).toBe(
+      "low-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "high" })).toBe(
+      "high-confidence",
+    );
+  });
+
+  it("builds export warning summaries from unresolved backend confidence states", () => {
+    expect(
+      buildExportWarningSummary([
+        { diagnosis: { confidenceLevel: "high", warnings: [] } },
+        { diagnosis: { confidenceLevel: "low", warnings: ["note_subtotal_reconciliation"] } },
+        { diagnosis: { confidenceLevel: "blocked", warnings: [] } },
+        {},
+      ]),
+    ).toEqual({
+      unresolvedIssues: 3,
+      lowConfidence: 1,
+      blocked: 1,
+      missing: 1,
+      actionableWarnings: 1,
+    });
   });
 
   it("extracts a revertable value from history entries", () => {
