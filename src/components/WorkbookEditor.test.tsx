@@ -84,6 +84,7 @@ describe("WorkbookEditor bridge", () => {
     expect(prepared.unknownBackendField).toBeUndefined();
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe("field-a1");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.f).toBe("=A1*2");
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]).not.toHaveProperty("v");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.s).toBeDefined();
   });
 

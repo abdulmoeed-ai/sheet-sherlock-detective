@@ -530,11 +530,15 @@ function styledCellData(
         hasWarning: isActionableWarningSet(cell.diagnosis?.warnings),
       });
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
-      next[rowKey][colKey] = {
+      const preparedCell: WorkbookCellPayload = {
         ...cell,
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
+      if (formula) {
+        delete preparedCell.v;
+      }
+      next[rowKey][colKey] = preparedCell;
     }
   }
   return next;

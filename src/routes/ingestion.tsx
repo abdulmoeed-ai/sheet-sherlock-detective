@@ -6,7 +6,7 @@ import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { IconTooltip } from "@/components/IconTooltip";
 import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
-import { readExtractionJob } from "@/lib/api/projects";
+import { readExtractionJob, readWorkspace } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 import type { DocumentResponse, ExtractionJobResponse } from "@/lib/api/types";
 import { waitForExtractionCompletion } from "@/lib/extraction-job";
@@ -171,7 +171,11 @@ function Ingestion() {
   const refreshExtractedProject = async (id: string) => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(id) });
     await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-    await queryClient.refetchQueries({ queryKey: queryKeys.workspace(id), type: "all" });
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.workspace(id),
+      queryFn: () => readWorkspace(id),
+      staleTime: 0,
+    });
   };
 
   return (

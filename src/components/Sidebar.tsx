@@ -131,16 +131,16 @@ export function Sidebar() {
         </div>
       )}
 
-      <nav className={`flex-1 py-1 ${collapsed ? "px-2" : "px-1"}`}>
+      <nav className={`flex-1 py-1 ${collapsed ? "flex flex-col items-center gap-1 px-0" : "px-1"}`}>
         {visibleNav.map(({ to, label, icon: Icon }) => {
           const active = pathname === to;
           if (collapsed) {
             return (
-              <IconTooltip key={to} label={label} side="right">
+              <IconTooltip key={to} label={label} side="right" className="block">
                 <Link
                   to={to}
                   aria-label={label}
-                  className="my-1 flex h-12 w-full items-center justify-center rounded-lg transition-colors"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors"
                   style={{
                     background: active ? "var(--color-sidebar-active)" : "transparent",
                   }}
@@ -198,12 +198,16 @@ export function Sidebar() {
         </div>
       )}
 
-      <IconTooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
+      <IconTooltip
+        label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        side="right"
+        className={collapsed ? "mx-auto mb-2 block h-10 w-10" : "inline-flex"}
+      >
         <button
           onClick={() => sidebarStore.toggle()}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`mx-2 mb-2 flex h-9 items-center rounded-lg transition-colors hover:bg-white/5 ${
-            collapsed ? "justify-center" : "gap-2 px-3"
+          className={`flex items-center rounded-lg transition-colors hover:bg-white/5 ${
+            collapsed ? "h-10 w-10 justify-center" : "mx-2 mb-2 h-9 gap-2 px-3"
           }`}
           style={{ color: "var(--color-sidebar-text)" }}
         >
