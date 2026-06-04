@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { waitForExtractionCompletion } from "./extraction-job";
-import type { ExtractionJobResponse } from "./api/types";
+import { mergeExtractionEvents, waitForExtractionCompletion } from "./extraction-job";
+import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./api/types";
 
 function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): ExtractionJobResponse {
   return {
@@ -64,5 +64,46 @@ describe("waitForExtractionCompletion", () => {
     expect(onProgress).toHaveBeenCalledWith(
       expect.objectContaining({ status: "completed", percent: 100 }),
     );
+  });
+});
+
+function event(
+  eventId: string,
+  createdAt: string,
+  overrides: Partial<ExtractionProgressEventResponse> = {},
+): ExtractionProgressEventResponse {
+  return {
+    eventId,
+    projectId: "project-1",
+    jobId: "job-1",
+    documentId: null,
+    documentFilename: null,
+    stage: "queued",
+    status: "pending",
+    percent: 0,
+    title: "Queued",
+    message: "Extraction queued.",
+    ruleCodes: [],
+    cellRef: null,
+    sheetName: null,
+    confidenceLevel: null,
+    details: {},
+    createdAt,
+    ...overrides,
+  };
+}
+
+describe("mergeExtractionEvents", () => {
+  it("deduplicates replayed backend events and keeps timeline order", () => {
+    const merged = mergeExtractionEvents(
+      [event("event-2", "2026-06-04T10:00:02.000Z")],
+      [
+        event("event-1", "2026-06-04T10:00:01.000Z"),
+        event("event-2", "2026-06-04T10:00:02.000Z", { message: "Updated replay row" }),
+      ],
+    );
+
+    expect(merged.map((item) => item.eventId)).toEqual(["event-1", "event-2"]);
+    expect(merged[1].message).toBe("Updated replay row");
   });
 });

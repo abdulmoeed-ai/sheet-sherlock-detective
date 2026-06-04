@@ -101,6 +101,25 @@ export interface ExtractionJobResponse {
   updatedAt: string | null;
 }
 
+export interface ExtractionProgressEventResponse {
+  eventId: string;
+  projectId: string;
+  jobId: string;
+  documentId: string | null;
+  documentFilename: string | null;
+  stage: string;
+  status: string;
+  percent: number;
+  title: string;
+  message: string;
+  ruleCodes: string[];
+  cellRef: string | null;
+  sheetName: string | null;
+  confidenceLevel: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface MappingRulesSummaryResponse {
   rulesHash: string;
   rulesCount: number;

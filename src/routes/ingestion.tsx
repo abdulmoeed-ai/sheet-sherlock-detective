@@ -6,10 +6,14 @@ import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { IconTooltip } from "@/components/IconTooltip";
 import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
-import { readExtractionJob, readWorkspace } from "@/lib/api/projects";
+import { readExtractionEvents, readExtractionJob, readWorkspace } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { DocumentResponse, ExtractionJobResponse } from "@/lib/api/types";
-import { waitForExtractionCompletion } from "@/lib/extraction-job";
+import type {
+  DocumentResponse,
+  ExtractionJobResponse,
+  ExtractionProgressEventResponse,
+} from "@/lib/api/types";
+import { mergeExtractionEvents, waitForExtractionCompletion } from "@/lib/extraction-job";
 import {
   isExtractionResultsConflict,
   splitPdfFiles,
@@ -50,6 +54,7 @@ function Ingestion() {
   const [rerunModalOpen, setRerunModalOpen] = useState(false);
   const [extractionPending, setExtractionPending] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<ExtractionJobResponse | null>(null);
+  const [extractionEvents, setExtractionEvents] = useState<ExtractionProgressEventResponse[]>([]);
 
   // Reset transient modal state when a new cycle starts from the registry.
   useEffect(() => {
@@ -84,12 +89,17 @@ function Ingestion() {
     try {
       setExtractionPending(true);
       setExtractionProgress(null);
+      setExtractionEvents([]);
       const job = await startExtractionMutation.mutateAsync(false);
+      syncExtractionEvents(job.id);
       await waitForExtractionCompletion({
         projectId,
         initialJob: job,
         readJob: readExtractionJob,
-        onProgress: setExtractionProgress,
+        onProgress: (progress) => {
+          setExtractionProgress(progress);
+          syncExtractionEvents(progress.id);
+        },
       });
       await refreshExtractedProject(projectId);
       openDiagnosis(projectId);
@@ -109,12 +119,17 @@ function Ingestion() {
     try {
       setExtractionPending(true);
       setExtractionProgress(null);
+      setExtractionEvents([]);
       const job = await startExtractionMutation.mutateAsync(true);
+      syncExtractionEvents(job.id);
       await waitForExtractionCompletion({
         projectId,
         initialJob: job,
         readJob: readExtractionJob,
-        onProgress: setExtractionProgress,
+        onProgress: (progress) => {
+          setExtractionProgress(progress);
+          syncExtractionEvents(progress.id);
+        },
       });
       await refreshExtractedProject(projectId);
       setRerunModalOpen(false);
@@ -128,6 +143,7 @@ function Ingestion() {
 
   const handleFileSelection = (files: FileList | null) => {
     setExtractionProgress(null);
+    setExtractionEvents([]);
     const { accepted, rejected } = splitPdfFiles(Array.from(files ?? []));
     if (rejected.length) {
       setRejectedFiles(rejected.map((file) => file.name));
@@ -176,6 +192,13 @@ function Ingestion() {
       queryFn: () => readWorkspace(id),
       staleTime: 0,
     });
+  };
+
+  const syncExtractionEvents = (jobId: string) => {
+    if (!projectId) return;
+    void readExtractionEvents(projectId, jobId)
+      .then((events) => setExtractionEvents((current) => mergeExtractionEvents(current, events)))
+      .catch(() => undefined);
   };
 
   return (
@@ -342,6 +365,7 @@ function Ingestion() {
         uploadPending={uploadPending}
         uploadSummary={uploadSummary}
         extractionProgress={extractionProgress}
+        extractionEvents={extractionEvents}
         hasProject={!!projectId}
         onStart={startIngestion}
       />
@@ -453,6 +477,7 @@ function StickyFooter({
   uploadPending,
   uploadSummary,
   extractionProgress,
+  extractionEvents,
   hasProject,
   onStart,
 }: {
@@ -460,6 +485,7 @@ function StickyFooter({
   uploadPending: boolean;
   uploadSummary: ReturnType<typeof uploadProgressSummary>;
   extractionProgress: ExtractionJobResponse | null;
+  extractionEvents: ExtractionProgressEventResponse[];
   hasProject: boolean;
   onStart: () => void;
 }) {
@@ -514,6 +540,32 @@ function StickyFooter({
                   style={{ width: `${progressPercent}%`, background: "var(--color-brand)" }}
                 />
               </div>
+              {extractionEvents.length ? (
+                <div className="mt-2 max-h-24 overflow-y-auto rounded-md border bg-white px-2 py-1.5">
+                  {extractionEvents.slice(-4).map((event) => (
+                    <div
+                      key={event.eventId}
+                      className="flex items-start justify-between gap-3 py-1 text-[11px]"
+                      style={{ color: "var(--color-text-secondary)" }}
+                    >
+                      <div className="min-w-0">
+                        <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          {event.title}
+                        </span>
+                        <span className="ml-1">{event.message}</span>
+                        {event.ruleCodes.length ? (
+                          <span className="ml-1 font-semibold">
+                            {event.ruleCodes.join(", ")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 uppercase" style={{ color: "var(--color-text-muted)" }}>
+                        {event.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -1,4 +1,4 @@
-import type { ExtractionJobResponse } from "./api/types";
+import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./api/types";
 
 const COMPLETE_STATUSES = new Set(["completed", "succeeded", "success"]);
 const FAILED_STATUSES = new Set(["failed", "error", "cancelled", "canceled"]);
@@ -41,4 +41,19 @@ function isFailedExtractionJob(job: ExtractionJobResponse) {
 function delay(ms: number) {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+export function mergeExtractionEvents(
+  current: ExtractionProgressEventResponse[],
+  next: ExtractionProgressEventResponse[],
+) {
+  const byId = new Map<string, ExtractionProgressEventResponse>();
+  for (const event of [...current, ...next]) {
+    byId.set(event.eventId, event);
+  }
+  return [...byId.values()].sort((left, right) => {
+    const timeDelta = Date.parse(left.createdAt) - Date.parse(right.createdAt);
+    if (timeDelta !== 0) return timeDelta;
+    return left.eventId.localeCompare(right.eventId);
+  });
 }

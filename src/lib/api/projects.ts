@@ -4,6 +4,7 @@ import type {
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
+  ExtractionProgressEventResponse,
   ForecastRunResponse,
   MappingRulesSummaryResponse,
   ModelArchiveResponse,
@@ -79,6 +80,12 @@ export function startExtraction(projectId: string, force = false) {
 
 export function readExtractionJob(projectId: string, jobId: string) {
   return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/${jobId}`);
+}
+
+export function readExtractionEvents(projectId: string, jobId: string) {
+  return apiFetch<ExtractionProgressEventResponse[]>(
+    `/api/projects/${projectId}/extractions/${jobId}/events`,
+  );
 }
 
 export function readMappingRules(projectId: string) {
