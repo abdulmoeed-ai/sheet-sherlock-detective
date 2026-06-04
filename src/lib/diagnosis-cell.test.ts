@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildExportWarningSummary,
   diagnosisCellTone,
+  formatLlmReview,
   formatHistoryEntry,
   formatHistoryTimestamp,
   historyValue,
@@ -189,6 +190,35 @@ describe("diagnosis cell helpers", () => {
       label: "Note subtotal reconciliation",
       description: "Review this extraction warning before sign-off.",
       actionable: true,
+    });
+  });
+
+  it("formats LLM warnings and review metadata", () => {
+    expect(warningDetails("llm.accepted_after_validation")).toEqual({
+      label: "LLM accepted after validation",
+      description: "The configured LLM reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      actionable: false,
+    });
+    expect(warningDetails("llm.rejected_wrong_section").actionable).toBe(true);
+
+    expect(
+      formatLlmReview({
+        decision: "accept",
+        validationStatus: "accepted",
+        recommendedValue: "0",
+        reason: "Dash source evidence.",
+        provider: "google-genai",
+        model: "gemini-3.5-flash",
+        riskFlags: ["dash_zero"],
+      }),
+    ).toEqual({
+      decision: "accept",
+      validationStatus: "accepted",
+      recommendedValue: "0",
+      reason: "Dash source evidence.",
+      provider: "google-genai",
+      model: "gemini-3.5-flash",
+      riskFlags: ["dash_zero"],
     });
   });
 

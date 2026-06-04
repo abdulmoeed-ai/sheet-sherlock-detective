@@ -15,6 +15,15 @@ export type RuleTooltipMetadata = {
   severity?: unknown;
   description?: unknown;
 };
+export type LlmReviewMetadata = {
+  decision?: unknown;
+  validationStatus?: unknown;
+  recommendedValue?: unknown;
+  reason?: unknown;
+  riskFlags?: unknown;
+  provider?: unknown;
+  model?: unknown;
+};
 
 export function diagnosisCellTone({
   formula,
@@ -113,6 +122,34 @@ export function workbookRevisionHistoryEntry(revision: {
 }
 
 export function warningDetails(warning: string) {
+  if (warning === "llm.accepted_after_validation") {
+    return {
+      label: "LLM accepted after validation",
+      description: "The configured LLM reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.recommended_zero_dash") {
+    return {
+      label: "LLM recommended zero",
+      description: "The configured LLM recommended zero from dash or nil source evidence and deterministic checks accepted it.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.rejected_wrong_section") {
+    return {
+      label: "LLM rejected mapping",
+      description: "The configured LLM rejected this mapping, so an analyst should review the cell.",
+      actionable: true,
+    };
+  }
+  if (warning === "llm.requires_analyst_review") {
+    return {
+      label: "LLM review unresolved",
+      description: "The configured LLM could not safely accept this mapping; analyst review is required.",
+      actionable: true,
+    };
+  }
   if (warning === "comparative_year") {
     return {
       label: "Comparative-year source column",
@@ -125,6 +162,22 @@ export function warningDetails(warning: string) {
     label: humanizeKey(warning),
     description: "Review this extraction warning before sign-off.",
     actionable: true,
+  };
+}
+
+export function formatLlmReview(review?: LlmReviewMetadata | null) {
+  if (!review) return null;
+  const riskFlags = Array.isArray(review.riskFlags)
+    ? review.riskFlags.map((flag) => String(flag)).filter(Boolean)
+    : [];
+  return {
+    decision: stringValue(review.decision, "-"),
+    validationStatus: stringValue(review.validationStatus, "-"),
+    recommendedValue: stringValue(review.recommendedValue, "-"),
+    reason: stringValue(review.reason, "-"),
+    provider: stringValue(review.provider, "-"),
+    model: stringValue(review.model, "-"),
+    riskFlags,
   };
 }
 

@@ -50,6 +50,7 @@ import {
 } from "@/lib/comments";
 import {
   buildExportWarningSummary,
+  formatLlmReview,
   formatHistoryEntry,
   orderedHistoryEntries,
   ruleTooltipDetails,
@@ -141,6 +142,7 @@ type DiagnosisMeta = {
   status?: string;
   ruleIds?: string[];
   warnings?: string[];
+  llmReview?: Record<string, unknown> | null;
   history?: Array<Record<string, unknown>>;
   commentsSummary?: { total?: number; open?: number; comments?: ReviewCommentResponse[] };
   diagnosisCandidates?: Array<Record<string, unknown>>;
@@ -696,6 +698,7 @@ function DiagnosisPanel({
   manualRevertPending: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const llmReview = formatLlmReview(meta?.llmReview);
   const previewSource =
     projectId &&
     meta?.sourceDocumentId &&
@@ -881,6 +884,37 @@ function DiagnosisPanel({
                 {reason}
               </div>
             ))}
+          </div>
+        )}
+        {llmReview && (
+          <div
+            className="mt-3 space-y-2 border-t pt-3"
+            style={{ borderColor: "#E5E7EB" }}
+          >
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
+              LLM review
+            </div>
+            <KV label="Decision" value={llmReview.decision} />
+            <KV label="Validation" value={llmReview.validationStatus} />
+            <KV label="Recommended value" value={llmReview.recommendedValue} />
+            <KV label="Provider" value={llmReview.provider} />
+            <KV label="Model" value={llmReview.model} />
+            <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
+              {llmReview.reason}
+            </div>
+            {llmReview.riskFlags.length ? (
+              <div className="flex flex-wrap gap-1">
+                {llmReview.riskFlags.map((flag) => (
+                  <span
+                    key={flag}
+                    className="rounded border px-1.5 py-0.5 text-[10px]"
+                    style={{ borderColor: "#BFDBFE", color: "#1D4ED8" }}
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </section>
