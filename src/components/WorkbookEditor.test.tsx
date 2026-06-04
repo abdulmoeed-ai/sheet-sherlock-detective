@@ -170,16 +170,28 @@ describe("WorkbookEditor bridge", () => {
   it("converts Univer edit-end events into review-cell save events for editable inputs only", () => {
     expect(
       workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, "300"),
-    ).toEqual({
-      sheetName: "Inputs",
-      address: "A1",
-      fieldId: "field-a1",
-      oldValue: "125",
-      newValue: "300",
-      note: "Saved from workbook editor.",
-    });
+    ).toEqual(
+      expect.objectContaining({
+        sheetId: "sheet-1",
+        sheetName: "Inputs",
+        address: "A1",
+        fieldId: "field-a1",
+        oldCell: expect.objectContaining({ v: 125 }),
+        newCell: expect.objectContaining({ v: 300 }),
+        oldValue: "125",
+        newValue: "300",
+        note: "Saved from workbook editor.",
+      }),
+    );
 
-    expect(workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 1 }, "300")).toBeNull();
+    expect(
+      workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 1 }, "300"),
+    ).toMatchObject({
+      sheetId: "sheet-1",
+      sheetName: "Inputs",
+      address: "B1",
+      newValue: "300",
+    });
   });
 
   it("extracts scalar values from Univer cell objects before saving", () => {
@@ -246,17 +258,20 @@ describe("WorkbookEditor bridge", () => {
     await userEvent.clear(screen.getByDisplayValue("125"));
     await userEvent.type(screen.getByDisplayValue(""), "300{enter}");
 
-    expect(onCommitEdit).toHaveBeenCalledWith({
-      sheetName: "Inputs",
-      address: "A1",
-      fieldId: "field-a1",
-      oldValue: "125",
-      newValue: "300",
-      note: "Saved from workbook editor.",
-    });
+    expect(onCommitEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetId: "sheet-1",
+        sheetName: "Inputs",
+        address: "A1",
+        fieldId: "field-a1",
+        oldValue: "125",
+        newValue: "300",
+        note: "Saved from workbook editor.",
+      }),
+    );
   });
 
-  it("does not allow formula cells to enter edit mode", async () => {
+  it("autosaves formula edits with an updated workbook snapshot", async () => {
     const onCommitEdit = vi.fn();
 
     render(
@@ -273,9 +288,100 @@ describe("WorkbookEditor bridge", () => {
     );
 
     await userEvent.dblClick(screen.getByRole("gridcell", { name: /B1 250/i }));
+    await userEvent.clear(screen.getByDisplayValue("250"));
+    await userEvent.type(screen.getByDisplayValue(""), "=A1*3{enter}");
 
-    expect(screen.queryByDisplayValue("250")).toBeNull();
-    expect(onCommitEdit).not.toHaveBeenCalled();
+    expect(onCommitEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetName: "Inputs",
+        address: "B1",
+        oldCell: expect.objectContaining({ f: "A1*2" }),
+        newCell: expect.objectContaining({ f: "=A1*3" }),
+      }),
+    );
+    expect(onCommitEdit.mock.calls[0][0].workbook.sheets["sheet-1"].cellData["0"]["1"].f).toBe(
+      "=A1*3",
+    );
+  });
+
+  it("allows Univer to start editing blank cells and existing formula cells", async () => {
+    vi.resetModules();
+    let beforeEditStart: ((params: Record<string, unknown>) => void) | undefined;
+    const createWorkbook = vi.fn();
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing: vi.fn() }),
+          createWorkbook,
+          getActiveWorkbook: () => ({ setActiveSheet: vi.fn() }),
+          dispose: vi.fn(),
+          Event: { BeforeSheetEditStart: "BeforeSheetEditStart" },
+          addEvent: vi.fn((event, callback) => {
+            if (event === "BeforeSheetEditStart") beforeEditStart = callback;
+          }),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: vi.fn((config: unknown) => ({ config })),
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        candidateCells={new Set()}
+        commitPending={false}
+        onSelect={vi.fn()}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+    const formulaCellParams = {
+      worksheet: { getSheetId: () => "sheet-1" },
+      row: 0,
+      column: 1,
+    };
+    const blankCellParams = {
+      worksheet: { getSheetId: () => "sheet-1" },
+      row: 2,
+      column: 2,
+    };
+
+    beforeEditStart?.(formulaCellParams);
+    beforeEditStart?.(blankCellParams);
+
+    expect(formulaCellParams).not.toHaveProperty("cancel");
+    expect(blankCellParams).not.toHaveProperty("cancel");
+  });
+
+  it("builds autosave events for formula edits from Univer", () => {
+    const event = workbookEditEventFromUniverEnd(
+      workbook,
+      { sheetId: "sheet-1", row: 0, column: 1 },
+      "=A2+B2",
+    );
+
+    expect(event).toEqual(
+      expect.objectContaining({
+        sheetId: "sheet-1",
+        sheetName: "Inputs",
+        address: "B1",
+        oldCell: expect.objectContaining({ f: "A1*2" }),
+        newCell: expect.objectContaining({ f: "=A2+B2" }),
+      }),
+    );
   });
 
   it("marks cells that have open comments", async () => {

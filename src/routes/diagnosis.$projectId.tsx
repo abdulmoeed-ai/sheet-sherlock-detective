@@ -30,7 +30,7 @@ import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEdi
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
-import { listComments, readMappingRules } from "@/lib/api/projects";
+import { listComments, readMappingRules, saveWorkbook as saveWorkbookRequest } from "@/lib/api/projects";
 import type { BalanceSheetAssistantResponse, ReviewCommentResponse } from "@/lib/api/types";
 import {
   activeMentionQuery,
@@ -70,14 +70,11 @@ import {
   useRunBalanceSheetAssistant,
   useReviewCell,
 } from "@/hooks/use-project-actions";
-import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
+import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/diagnosis")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    projectId: typeof search.projectId === "string" ? search.projectId : undefined,
-  }),
+export const Route = createFileRoute("/diagnosis/$projectId")({
   head: () => ({
     meta: [
       { title: "Diagnosis - Sheet Sherlock" },
@@ -156,20 +153,20 @@ const EMPTY_ASSISTANT_CANDIDATES: NonNullable<
 function Diagnosis() {
   const navigate = useNavigate();
   const cycle = useCycle();
-  const search = Route.useSearch();
-  const selectedProjectId = useSelectedProjectId();
-  const projectId = search.projectId ?? selectedProjectId;
+  const { projectId } = Route.useParams();
   const currentUser = useCurrentUser();
   const workspace = useWorkspace(projectId);
-  const reviewCell = useReviewCell(projectId ?? "__no_project__", { invalidateOnSuccess: false });
-  const revertCell = useRevertReviewCell(projectId ?? "__no_project__");
-  const runAssistant = useRunBalanceSheetAssistant(projectId ?? "__no_project__");
-  const acceptDiagnosis = useAcceptDiagnosis(projectId ?? "__no_project__");
-  const createComment = useCreateComment(projectId ?? "__no_project__");
-  const resolveComment = useResolveComment(projectId ?? "__no_project__");
-  const reopenComment = useReopenComment(projectId ?? "__no_project__");
-  const createExport = useCreateExcelExport(projectId ?? "__no_project__");
-  const downloadExport = useDownloadExcelExport(projectId ?? "__no_project__");
+  const reviewCell = useReviewCell(projectId, { invalidateOnSuccess: false });
+  const revertCell = useRevertReviewCell(projectId);
+  const runAssistant = useRunBalanceSheetAssistant(projectId);
+  const acceptDiagnosis = useAcceptDiagnosis(projectId);
+  const createComment = useCreateComment(projectId);
+  const resolveComment = useResolveComment(projectId);
+  const reopenComment = useReopenComment(projectId);
+  const createExport = useCreateExcelExport(projectId);
+  const downloadExport = useDownloadExcelExport(projectId);
+  const autosavePromises = useRef(new Set<Promise<unknown>>());
+  const autosaveStatusRef = useRef<"idle" | "saving" | "saved" | "error">("idle");
   const comments = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
@@ -182,14 +179,15 @@ function Diagnosis() {
   });
 
   useEffect(() => {
-    if (search.projectId && search.projectId !== selectedProjectId) {
-      setSelectedProjectId(search.projectId);
-    }
-  }, [search.projectId, selectedProjectId]);
+    setSelectedProjectId(projectId);
+  }, [projectId]);
 
-  const workbook = workbookPayload(
-    workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview,
+  const workbookSource = workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview;
+  const serverWorkbook = useMemo(
+    () => workbookPayload(workbookSource),
+    [workbookSource],
   );
+  const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedSheetId =
@@ -242,7 +240,8 @@ function Diagnosis() {
   );
   const dirty = draftValue.trim() !== "";
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
-  const assistantCandidates = balanceAssistant?.assistant?.candidates ?? EMPTY_ASSISTANT_CANDIDATES;
+  const assistantCandidates: Array<Record<string, unknown>> =
+    balanceAssistant?.assistant?.candidates ?? EMPTY_ASSISTANT_CANDIDATES ?? [];
   const candidateCells = useMemo(() => {
     return new Set(
       assistantCandidates
@@ -381,28 +380,72 @@ function Diagnosis() {
 
   const commitWorkbookEdit = async (event: WorkbookEditEvent) => {
     if (!projectId) return;
-    const optimisticUpdate = buildOptimisticCellUpdate({
-      fieldId: event.fieldId,
-      draftValue: event.newValue,
-      oldValue: event.oldValue,
-      currentUser: currentUser.data,
-    });
+    const fieldId = event.fieldId ?? null;
+    const optimisticUpdate =
+      fieldId && isNumericDraft(event.newValue)
+        ? buildOptimisticCellUpdate({
+            fieldId,
+            draftValue: event.newValue,
+            oldValue: event.oldValue,
+            currentUser: currentUser.data,
+          })
+        : null;
     try {
-      setOptimisticCells((updates) => ({ ...updates, [event.fieldId]: optimisticUpdate }));
-      await reviewCell.mutateAsync({
-        fieldId: event.fieldId,
-        input: { action: "edit", value: event.newValue, note: event.note },
-      });
+      if (fieldId && optimisticUpdate) {
+        setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
+      }
+      await trackAutosave(
+        saveWorkbookRequest(projectId, {
+          workbook: event.workbook as Record<string, unknown>,
+          action: "edit",
+          sheetId: event.sheetId,
+          sheetName: event.sheetName,
+          cellAddress: event.address,
+          fieldId,
+          oldCell: (event.oldCell as Record<string, unknown> | null | undefined) ?? null,
+          newCell: (event.newCell as Record<string, unknown> | null | undefined) ?? null,
+        }),
+      );
+      if (fieldId) {
+        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
+      }
       toast.success(`${event.sheetName}!${event.address} saved`);
     } catch (error) {
-      setOptimisticCells((updates) => removeOptimisticCell(updates, event.fieldId));
+      if (fieldId) {
+        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
+      }
       toast.error(error instanceof Error ? error.message : "Unable to save workbook edit");
     }
+  };
+
+  const trackAutosave = async <T,>(promise: Promise<T>) => {
+    setAutosaveStatusIfChanged("saving");
+    autosavePromises.current.add(promise);
+    try {
+      const result = await promise;
+      setAutosaveStatusIfChanged("saved");
+      return result;
+    } catch (error) {
+      setAutosaveStatusIfChanged("error");
+      throw error;
+    } finally {
+      autosavePromises.current.delete(promise);
+    }
+  };
+
+  const setAutosaveStatusIfChanged = (status: "idle" | "saving" | "saved" | "error") => {
+    if (autosaveStatusRef.current === status) return;
+    autosaveStatusRef.current = status;
+  };
+
+  const flushAutosaves = async () => {
+    await Promise.all(Array.from(autosavePromises.current));
   };
 
   const exportWorkbook = async () => {
     if (!projectId) return;
     try {
+      await flushAutosaves();
       const assistant = await runAssistant.mutateAsync();
       setBalanceAssistant(assistant);
       if (assistant.imbalanceAmount && (assistant.assistant?.candidates ?? []).length > 0) {
@@ -540,7 +583,7 @@ function Diagnosis() {
                   : "Workspace request failed."
               }
             />
-          ) : !activeSheet ? (
+          ) : !workbook || !activeSheet ? (
             <EmptyState
               title="No workbook data"
               detail="Run extraction after acknowledging the Data Mapping Rules."
@@ -1129,7 +1172,7 @@ function DiagnosisPanel({
                       </div>
                     )}
                   </div>
-                  {entry.id && !String(entry.id).endsWith("-source") && (
+                  {typeof entry.id === "string" && !entry.id.endsWith("-source") && (
                     <button
                       onClick={() => onRevert(String(entry.id))}
                       disabled={revertPending}
@@ -1782,16 +1825,16 @@ function resolveSelection(
   selection: Selection | null,
   sheetId: string | undefined,
   sheet?: SheetPayload,
-) {
-  if (!sheetId || !sheet) return { row: 0, col: 0 };
+): Selection {
+  if (!sheetId || !sheet) return { sheetId: sheetId ?? "", row: 0, col: 0 };
   if (selection?.sheetId === sheetId) return selection;
   const shape = sheetShape(sheet);
   for (let row = 0; row < shape.rows; row++) {
     for (let col = 0; col < shape.cols; col++) {
-      if (getCell(sheet, row, col)?.diagnosis) return { row, col };
+      if (getCell(sheet, row, col)?.diagnosis) return { sheetId, row, col };
     }
   }
-  return { row: 0, col: 0 };
+  return { sheetId, row: 0, col: 0 };
 }
 
 function sheetShape(sheet?: SheetPayload) {
@@ -1890,6 +1933,10 @@ function workbookValueFromDraft(value: string) {
     return accountingNegative ? -numeric : numeric;
   }
   return trimmed;
+}
+
+function isNumericDraft(value: string) {
+  return typeof workbookValueFromDraft(value) === "number";
 }
 
 function removeOptimisticCell(updates: Record<string, OptimisticCellUpdate>, fieldId: string) {

@@ -58,7 +58,7 @@ function Ingestion() {
 
   const openDiagnosis = (id: string) => {
     cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis", search: { projectId: id } });
+    navigate({ to: "/diagnosis/$projectId", params: { projectId: id } });
   };
 
   const startIngestion = async () => {

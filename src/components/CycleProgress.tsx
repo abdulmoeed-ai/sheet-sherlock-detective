@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 import { CYCLE_STEPS, stepIndex, useCycle } from "@/lib/cycle-store";
+import { useSelectedProjectId } from "@/lib/project-store";
 
 export function CycleProgress() {
   const cycle = useCycle();
+  const selectedProjectId = useSelectedProjectId();
   if (cycle.status === "idle") return null;
   const current = stepIndex(cycle.status);
 
@@ -42,36 +44,40 @@ export function CycleProgress() {
 
           return (
             <div key={step.key} className="flex flex-1 items-center gap-1.5">
-              <Link
-                to={step.to}
-                className="flex items-center gap-2 group"
-                style={{ pointerEvents: upcoming ? "none" : undefined }}
-              >
-                <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
-                  style={{
-                    background: dotBg,
-                    color: dotColor,
-                    border: `2px solid ${dotBorder}`,
-                    boxShadow: active ? "0 0 0 4px rgba(123,104,238,0.15)" : undefined,
-                  }}
+              {step.key === "diagnosis" ? (
+                <Link
+                  to="/diagnosis/$projectId"
+                  params={{ projectId: selectedProjectId ?? "" }}
+                  className="flex items-center gap-2 group"
+                  style={{ pointerEvents: upcoming || !selectedProjectId ? "none" : undefined }}
                 >
-                  {done ? <Check className="h-3 w-3" /> : i + 1}
-                </span>
-                <span
-                  className="text-[12px] font-medium"
-                  style={{
-                    color: active
-                      ? "var(--color-text-primary)"
-                      : done
-                        ? "var(--color-text-secondary)"
-                        : "var(--color-text-muted)",
-                    fontWeight: active ? 600 : 500,
-                  }}
+                  <StepMarker
+                    done={done}
+                    index={i}
+                    active={active}
+                    dotBg={dotBg}
+                    dotColor={dotColor}
+                    dotBorder={dotBorder}
+                    label={step.label}
+                  />
+                </Link>
+              ) : (
+                <Link
+                  to={step.to ?? "/"}
+                  className="flex items-center gap-2 group"
+                  style={{ pointerEvents: upcoming ? "none" : undefined }}
                 >
-                  {step.label}
-                </span>
-              </Link>
+                  <StepMarker
+                    done={done}
+                    index={i}
+                    active={active}
+                    dotBg={dotBg}
+                    dotColor={dotColor}
+                    dotBorder={dotBorder}
+                    label={step.label}
+                  />
+                </Link>
+              )}
               {i < CYCLE_STEPS.length - 1 && (
                 <div className="flex-1 h-px" style={{ background: lineColor }} />
               )}
@@ -80,5 +86,52 @@ export function CycleProgress() {
         })}
       </div>
     </div>
+  );
+}
+
+function StepMarker({
+  done,
+  index,
+  active,
+  dotBg,
+  dotColor,
+  dotBorder,
+  label,
+}: {
+  done: boolean;
+  index: number;
+  active: boolean;
+  dotBg: string;
+  dotColor: string;
+  dotBorder: string;
+  label: string;
+}) {
+  return (
+    <>
+      <span
+        className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold transition-all"
+        style={{
+          background: dotBg,
+          color: dotColor,
+          border: `2px solid ${dotBorder}`,
+          boxShadow: active ? "0 0 0 4px rgba(123,104,238,0.15)" : undefined,
+        }}
+      >
+        {done ? <Check className="h-3 w-3" /> : index + 1}
+      </span>
+      <span
+        className="text-[12px] font-medium"
+        style={{
+          color: active
+            ? "var(--color-text-primary)"
+            : done
+              ? "var(--color-text-secondary)"
+              : "var(--color-text-muted)",
+          fontWeight: active ? 600 : 500,
+        }}
+      >
+        {label}
+      </span>
+    </>
   );
 }

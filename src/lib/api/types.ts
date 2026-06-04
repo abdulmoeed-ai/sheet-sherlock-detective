@@ -129,6 +129,38 @@ export interface ReviewCommentInput {
   parentCommentId?: string | null;
 }
 
+export interface WorkbookSaveInput {
+  workbook: Record<string, unknown>;
+  action?: string;
+  sheetId?: string | null;
+  sheetName?: string | null;
+  cellAddress?: string | null;
+  fieldId?: string | null;
+  oldCell?: Record<string, unknown> | null;
+  newCell?: Record<string, unknown> | null;
+}
+
+export interface WorkbookRevisionResponse {
+  id: string;
+  projectId: string;
+  actor: string;
+  actorName?: string | null;
+  action: string;
+  sheetId?: string | null;
+  sheetName?: string | null;
+  cellAddress?: string | null;
+  fieldId?: string | null;
+  oldPayload?: Record<string, unknown> | null;
+  newPayload?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface WorkbookSaveResponse {
+  projectId: string;
+  workbook: Record<string, unknown>;
+  revision: WorkbookRevisionResponse;
+}
+
 export interface ReviewCommentResponse {
   id: string;
   projectId: string;

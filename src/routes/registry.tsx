@@ -152,7 +152,7 @@ function Registry() {
       period: project.fiscalYear ?? selectedFY,
     });
     cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis", search: { projectId: project.id } });
+    navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
   };
 
   // Build versioned projects list: correct version numbers per company, PSX symbol resolved
@@ -188,7 +188,7 @@ function Registry() {
       period: project.fiscalYear ?? "",
     });
     cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis", search: { projectId: project.id } });
+    navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
   };
 
   return (

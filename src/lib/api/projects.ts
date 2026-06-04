@@ -12,6 +12,9 @@ import type {
   ReviewCommentInput,
   ReviewCommentResponse,
   ReviewHandoffResponse,
+  WorkbookRevisionResponse,
+  WorkbookSaveInput,
+  WorkbookSaveResponse,
   WorkspaceResponse,
 } from "./types";
 
@@ -43,6 +46,19 @@ export function readProject(projectId: string) {
 
 export function readWorkspace(projectId: string) {
   return apiFetch<WorkspaceResponse>(`/api/projects/${projectId}/workspace`);
+}
+
+export function saveWorkbook(projectId: string, input: WorkbookSaveInput) {
+  return apiFetch<WorkbookSaveResponse>(`/api/projects/${projectId}/workbook`, {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+export function readWorkbookCellHistory(projectId: string, sheetId: string, cellAddress: string) {
+  return apiFetch<WorkbookRevisionResponse[]>(
+    `/api/projects/${projectId}/workbook/cells/${encodeURIComponent(sheetId)}/${encodeURIComponent(cellAddress)}/history`,
+  );
 }
 
 export function uploadDocument(projectId: string, file: File) {
