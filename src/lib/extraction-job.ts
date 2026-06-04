@@ -57,3 +57,27 @@ export function mergeExtractionEvents(
     return left.eventId.localeCompare(right.eventId);
   });
 }
+
+export function latestExtractionEvent(events: ExtractionProgressEventResponse[]) {
+  return events.at(-1) ?? null;
+}
+
+export function effectiveExtractionPercent(
+  job: ExtractionJobResponse | null,
+  events: ExtractionProgressEventResponse[],
+  fallbackPercent = 0,
+) {
+  if (!job) return clampPercent(fallbackPercent);
+  const eventPercent = Math.max(0, ...events.map((event) => event.percent));
+  const queuedFloor = job.status.toLowerCase() === "queued" ? 10 : 0;
+  return clampPercent(Math.max(job.percent, eventPercent, queuedFloor));
+}
+
+export function extractionFailureMessage(job: ExtractionJobResponse | null) {
+  if (!job || !isFailedExtractionJob(job)) return null;
+  return job.error || job.message || "Extraction failed. Please try again.";
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}

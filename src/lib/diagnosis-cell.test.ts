@@ -3,6 +3,7 @@ import {
   buildExportWarningSummary,
   diagnosisCellTone,
   formatLlmReview,
+  formatTermStandardization,
   formatHistoryEntry,
   formatHistoryTimestamp,
   historyValue,
@@ -219,6 +220,41 @@ describe("diagnosis cell helpers", () => {
       provider: "google-genai",
       model: "gemini-3.5-flash",
       riskFlags: ["dash_zero"],
+    });
+  });
+
+  it("formats term standardization warnings and metadata", () => {
+    expect(warningDetails("llm.term_standardization_requires_review")).toEqual({
+      label: "Term mapping needs review",
+      description: "The configured LLM found a likely standardized financial term, but analyst review is required.",
+      actionable: true,
+    });
+    expect(warningDetails("llm.term_standardized_after_validation").actionable).toBe(false);
+
+    expect(
+      formatTermStandardization({
+        decision: "match",
+        validationStatus: "requires_review",
+        canonicalFinancialTerm: "Goods Cost",
+        standardizedFromLabel: "Cost of Goods",
+        standardizedToLabel: "Goods Cost",
+        confidence: 0.84,
+        reason: "Equivalent finance term.",
+        provider: "google-genai",
+        model: "gemini-3.5-flash",
+        riskFlags: ["term.medium_confidence_requires_review"],
+      }),
+    ).toEqual({
+      decision: "match",
+      validationStatus: "requires_review",
+      canonicalFinancialTerm: "Goods Cost",
+      standardizedFromLabel: "Cost of Goods",
+      standardizedToLabel: "Goods Cost",
+      confidence: "0.84",
+      reason: "Equivalent finance term.",
+      provider: "google-genai",
+      model: "gemini-3.5-flash",
+      riskFlags: ["term.medium_confidence_requires_review"],
     });
   });
 

@@ -51,6 +51,7 @@ import {
 import {
   buildExportWarningSummary,
   formatLlmReview,
+  formatTermStandardization,
   formatHistoryEntry,
   orderedHistoryEntries,
   ruleTooltipDetails,
@@ -143,6 +144,7 @@ type DiagnosisMeta = {
   ruleIds?: string[];
   warnings?: string[];
   llmReview?: Record<string, unknown> | null;
+  termStandardization?: Record<string, unknown> | null;
   history?: Array<Record<string, unknown>>;
   commentsSummary?: { total?: number; open?: number; comments?: ReviewCommentResponse[] };
   diagnosisCandidates?: Array<Record<string, unknown>>;
@@ -699,6 +701,7 @@ function DiagnosisPanel({
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const llmReview = formatLlmReview(meta?.llmReview);
+  const termStandardization = formatTermStandardization(meta?.termStandardization);
   const previewSource =
     projectId &&
     meta?.sourceDocumentId &&
@@ -905,6 +908,36 @@ function DiagnosisPanel({
             {llmReview.riskFlags.length ? (
               <div className="flex flex-wrap gap-1">
                 {llmReview.riskFlags.map((flag) => (
+                  <span
+                    key={flag}
+                    className="rounded border px-1.5 py-0.5 text-[10px]"
+                    style={{ borderColor: "#BFDBFE", color: "#1D4ED8" }}
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+        {termStandardization && (
+          <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: "#E5E7EB" }}>
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
+              Term standardization
+            </div>
+            <KV label="From" value={termStandardization.standardizedFromLabel} />
+            <KV label="To" value={termStandardization.standardizedToLabel} />
+            <KV label="Canonical term" value={termStandardization.canonicalFinancialTerm} />
+            <KV label="Validation" value={termStandardization.validationStatus} />
+            <KV label="Confidence" value={termStandardization.confidence} />
+            <KV label="Provider" value={termStandardization.provider} />
+            <KV label="Model" value={termStandardization.model} />
+            <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
+              {termStandardization.reason}
+            </div>
+            {termStandardization.riskFlags.length ? (
+              <div className="flex flex-wrap gap-1">
+                {termStandardization.riskFlags.map((flag) => (
                   <span
                     key={flag}
                     className="rounded border px-1.5 py-0.5 text-[10px]"

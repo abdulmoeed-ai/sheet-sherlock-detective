@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { mergeExtractionEvents, waitForExtractionCompletion } from "./extraction-job";
+import {
+  effectiveExtractionPercent,
+  extractionFailureMessage,
+  latestExtractionEvent,
+  mergeExtractionEvents,
+  waitForExtractionCompletion,
+} from "./extraction-job";
 import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./api/types";
 
 function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): ExtractionJobResponse {
@@ -105,5 +111,30 @@ describe("mergeExtractionEvents", () => {
 
     expect(merged.map((item) => item.eventId)).toEqual(["event-1", "event-2"]);
     expect(merged[1].message).toBe("Updated replay row");
+  });
+});
+
+describe("extraction progress helpers", () => {
+  it("uses backend event percent instead of upload completion fallback for queued jobs", () => {
+    expect(effectiveExtractionPercent(job("queued", { percent: 0 }), [], 100)).toBe(10);
+    expect(
+      effectiveExtractionPercent(
+        job("queued", { percent: 0 }),
+        [event("event-1", "2026-06-04T10:00:01.000Z", { percent: 35 })],
+        100,
+      ),
+    ).toBe(35);
+  });
+
+  it("returns latest event and user-facing failure message", () => {
+    const events = [
+      event("event-1", "2026-06-04T10:00:01.000Z"),
+      event("event-2", "2026-06-04T10:00:02.000Z", { message: "Parsing failed." }),
+    ];
+
+    expect(latestExtractionEvent(events)?.eventId).toBe("event-2");
+    expect(extractionFailureMessage(job("failed", { error: "PDF parse failed" }))).toBe(
+      "PDF parse failed",
+    );
   });
 });

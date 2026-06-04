@@ -24,6 +24,18 @@ export type LlmReviewMetadata = {
   provider?: unknown;
   model?: unknown;
 };
+export type TermStandardizationMetadata = {
+  decision?: unknown;
+  validationStatus?: unknown;
+  canonicalFinancialTerm?: unknown;
+  standardizedFromLabel?: unknown;
+  standardizedToLabel?: unknown;
+  confidence?: unknown;
+  reason?: unknown;
+  riskFlags?: unknown;
+  provider?: unknown;
+  model?: unknown;
+};
 
 export function diagnosisCellTone({
   formula,
@@ -150,6 +162,41 @@ export function warningDetails(warning: string) {
       actionable: true,
     };
   }
+  if (warning === "llm.term_standardized_after_validation") {
+    return {
+      label: "LLM standardized term",
+      description: "The configured LLM standardized the financial term and deterministic checks accepted the mapping.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.term_standardization_requires_review") {
+    return {
+      label: "Term mapping needs review",
+      description: "The configured LLM found a likely standardized financial term, but analyst review is required.",
+      actionable: true,
+    };
+  }
+  if (warning === "llm.term_standardization_rejected") {
+    return {
+      label: "Term mapping rejected",
+      description: "The configured LLM proposed a term mapping that failed deterministic validation.",
+      actionable: true,
+    };
+  }
+  if (warning === "mapping.deterministic_synonym_match") {
+    return {
+      label: "Synonym term match",
+      description: "The financial term matched through the curated synonym registry.",
+      actionable: true,
+    };
+  }
+  if (warning === "mapping.token_reordered_label_match") {
+    return {
+      label: "Reordered label match",
+      description: "The financial term matched after comparing reordered label tokens.",
+      actionable: true,
+    };
+  }
   if (warning === "comparative_year") {
     return {
       label: "Comparative-year source column",
@@ -174,6 +221,25 @@ export function formatLlmReview(review?: LlmReviewMetadata | null) {
     decision: stringValue(review.decision, "-"),
     validationStatus: stringValue(review.validationStatus, "-"),
     recommendedValue: stringValue(review.recommendedValue, "-"),
+    reason: stringValue(review.reason, "-"),
+    provider: stringValue(review.provider, "-"),
+    model: stringValue(review.model, "-"),
+    riskFlags,
+  };
+}
+
+export function formatTermStandardization(review?: TermStandardizationMetadata | null) {
+  if (!review) return null;
+  const riskFlags = Array.isArray(review.riskFlags)
+    ? review.riskFlags.map((flag) => String(flag)).filter(Boolean)
+    : [];
+  return {
+    decision: stringValue(review.decision, "-"),
+    validationStatus: stringValue(review.validationStatus, "-"),
+    canonicalFinancialTerm: stringValue(review.canonicalFinancialTerm, "-"),
+    standardizedFromLabel: stringValue(review.standardizedFromLabel, "-"),
+    standardizedToLabel: stringValue(review.standardizedToLabel, "-"),
+    confidence: stringValue(review.confidence, "-"),
     reason: stringValue(review.reason, "-"),
     provider: stringValue(review.provider, "-"),
     model: stringValue(review.model, "-"),
