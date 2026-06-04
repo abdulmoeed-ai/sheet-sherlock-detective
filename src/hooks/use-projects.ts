@@ -19,5 +19,7 @@ export function useWorkspace(projectId: string | null) {
     queryKey: projectId ? queryKeys.workspace(projectId) : ["projects", "none", "workspace"],
     queryFn: () => readWorkspace(projectId as string),
     enabled: !!projectId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }

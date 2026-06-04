@@ -26,6 +26,7 @@ export type WorkbookCellPayload = {
   v?: unknown;
   f?: string;
   diagnosis?: WorkbookCellMeta;
+  s?: string;
 };
 
 export type WorkbookSheetPayload = {
@@ -51,9 +52,13 @@ export type WorkbookPayload = {
 export type WorkbookSelection = { sheetId: string; row: number; col: number };
 
 export type WorkbookEditEvent = {
+  workbook: WorkbookPayload;
+  sheetId: string;
   sheetName: string;
   address: string;
-  fieldId: string;
+  fieldId?: string | null;
+  oldCell?: WorkbookCellPayload | null;
+  newCell?: WorkbookCellPayload | null;
   oldValue: string;
   newValue: string;
   note: string;
@@ -80,7 +85,6 @@ export function WorkbookEditor({
   activeSheetId,
   selected,
   draftValue,
-  candidateCells,
   commentIndicators = new Set(),
   commitPending,
   onSelect,
@@ -90,7 +94,6 @@ export function WorkbookEditor({
   activeSheetId?: string | null;
   selected: WorkbookSelection;
   draftValue: string;
-  candidateCells: Set<string>;
   commentIndicators?: Set<string>;
   commitPending: boolean;
   onSelect: (selection: WorkbookSelection) => void;
@@ -103,10 +106,7 @@ export function WorkbookEditor({
   const [editValue, setEditValue] = useState("");
   const [univerState, setUniverState] = useState<"loading" | "ready" | "fallback">("loading");
   const [paintState, setPaintState] = useState<"unknown" | "painted" | "blank">("unknown");
-  const preparedWorkbook = useMemo(
-    () => prepareWorkbookForUniver(workbook, candidateCells),
-    [candidateCells, workbook],
-  );
+  const preparedWorkbook = useMemo(() => prepareWorkbookForUniver(workbook), [workbook]);
   const activeSheet = activeSheetId ? workbook.sheets?.[activeSheetId] : undefined;
   const shape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
 
@@ -147,10 +147,14 @@ export function WorkbookEditor({
             }),
           ],
         });
-        const eventApi = univerAPI as {
+        const eventApi = univerAPI as unknown as {
           getFormula?: () => { setInitialFormulaComputing?: (mode: unknown) => void };
           createWorkbook: (data: WorkbookPayload, options?: Record<string, unknown>) => void;
-          getActiveWorkbook?: () => { setActiveSheet?: (sheetId: string) => void };
+          getActiveWorkbook?: () => {
+            setActiveSheet?: (sheetId: string) => void;
+            save?: () => WorkbookPayload;
+            getSnapshot?: () => WorkbookPayload;
+          };
           dispose: () => void;
           Event?: {
             BeforeSheetEditEnd?: unknown;
@@ -166,9 +170,10 @@ export function WorkbookEditor({
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
         }
         eventApi.addEvent?.(eventApi.Event?.CellClicked, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
@@ -178,43 +183,47 @@ export function WorkbookEditor({
           }
         });
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditStart, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
-          const sheet = sheetId ? workbook.sheets?.[sheetId] : undefined;
-          const cell = sheet && row !== null && column !== null ? getCell(sheet, row, column) : undefined;
-          if (!isEditableInput(cell)) {
-            (params as { cancel?: boolean }).cancel = true;
+          if (sheetId && row !== null && column !== null) {
+            onSelectRef.current({ sheetId, row, col: column });
           }
         });
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditEnd, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
+          if (sheetId && row !== null && column !== null) {
+            onSelectRef.current({ sheetId, row, col: column });
+          }
           const editEvent =
             sheetId && row !== null && column !== null
-              ? workbookEditEventFromUniverEnd(workbook, { sheetId, row, column }, editedValueFromEvent(params))
+              ? workbookEditEventFromUniverEnd(
+                  workbook.sheets?.[sheetId] ? workbook : eventWorkbook,
+                  { sheetId, row, column },
+                  editedValueFromEvent(params),
+                )
               : null;
-          if (!editEvent) {
-            (params as { cancel?: boolean }).cancel = true;
-            return;
-          }
-          if (editEvent.oldValue !== editEvent.newValue) {
+          if (editEvent && editEvent.oldValue !== editEvent.newValue) {
             void Promise.resolve(onCommitEditRef.current(editEvent));
           }
         });
         eventApi.addEvent?.(eventApi.Event?.SheetEditEnded, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
@@ -243,21 +252,24 @@ export function WorkbookEditor({
   }, [preparedWorkbook, workbook]);
 
   const startEdit = (selection: WorkbookSelection, cell?: WorkbookCellPayload) => {
-    if (!isEditableInput(cell)) return;
     setEditing(selection);
     setEditValue(displayValue(cell));
   };
 
   const commitEdit = async (cell?: WorkbookCellPayload) => {
-    if (!activeSheet || !editing || !cell?.diagnosis?.fieldId) return;
-    await onCommitEdit({
-      sheetName: activeSheet.name,
-      address: columnName(editing.col) + String(editing.row + 1),
-      fieldId: cell.diagnosis.fieldId,
-      oldValue: displayValue(cell),
-      newValue: editValue.trim(),
-      note: "Saved from workbook editor.",
-    });
+    if (!activeSheet || !editing) return;
+    const currentEditing = editing;
+    const nextValue = editValue.trim();
+    const editEvent = workbookEditEventFromCell(
+      workbook,
+      activeSheet,
+      { row: currentEditing.row, column: currentEditing.col },
+      cell,
+      nextValue,
+    );
+    if (editEvent && editEvent.oldValue !== editEvent.newValue) {
+      await onCommitEdit(editEvent);
+    }
     setEditing(null);
     setEditValue("");
   };
@@ -315,14 +327,14 @@ export function WorkbookEditor({
                   const active = selected.sheetId === activeSheetId && selected.row === row && selected.col === col;
                   const commentKey = `${activeSheet.name}!${address}`;
                   const hasOpenComment = commentIndicators.has(commentKey);
-                  const editingCell = editing?.sheetId === activeSheetId && editing.row === row && editing.col === col;
+                  const editingCell =
+                    editing !== null && editing.sheetId === activeSheetId && editing.row === row && editing.col === col;
                   const formula = !!cell?.f || !!cell?.diagnosis?.formula;
                   const hasDiagnosis = !!cell?.diagnosis;
                   const tone = diagnosisCellTone({
                     formula,
                     status: cell?.diagnosis?.status,
                     confidence: cell?.diagnosis?.confidence,
-                    hasCandidate: !!cell?.diagnosis?.templateCell && candidateCells.has(cell.diagnosis.templateCell),
                     hasWarning: isActionableWarningSet(cell?.diagnosis?.warnings),
                   });
                   const style = cellToneStyle(tone, { active, hasDiagnosis, formula });
@@ -361,7 +373,7 @@ export function WorkbookEditor({
                               shouldCommitCellDraftOnKey({
                                 key: event.key,
                                 draftValue: editValue,
-                                editable: isEditableInput(cell),
+                                editable: true,
                                 pending: commitPending,
                               })
                             ) {
@@ -413,10 +425,7 @@ export function buildWorkbookCellIndex(workbook: WorkbookPayload) {
   return cells;
 }
 
-export function prepareWorkbookForUniver(
-  workbook: WorkbookPayload,
-  candidateCells: Set<string> = new Set(),
-): WorkbookPayload {
+export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPayload {
   const prepared: WorkbookPayload = {
     id: workbook.id,
     name: workbook.name,
@@ -435,7 +444,7 @@ export function prepareWorkbookForUniver(
       defaultRowHeight: readableDefaultRowHeight(sheet.defaultRowHeight),
       columnData: readableColumnData(sheet),
       rowData: readableRowData(sheet),
-      cellData: styledCellData(sheet.cellData, candidateCells, styles),
+      cellData: styledCellData(sheet.cellData, styles),
     };
   }
   return prepared;
@@ -476,16 +485,29 @@ export function workbookEditEventFromUniverEnd(
   newValue: unknown,
 ): WorkbookEditEvent | null {
   const resolved = workbookCellFromUniverPosition(workbook, position);
-  if (!resolved?.meta?.fieldId || !isEditableInput(resolved.cell)) return null;
+  const sheet = workbook.sheets?.[position.sheetId];
+  if (!sheet) return null;
   const nextValue = workbookEditValueToString(newValue);
-  return {
-    sheetName: resolved.sheetName,
-    address: resolved.address,
-    fieldId: resolved.meta.fieldId,
-    oldValue: displayValue(resolved.cell),
+  const oldCell = resolved?.cell;
+  const oldValue = displayValue(oldCell);
+  if (oldValue === nextValue) return null;
+  const nextCell = workbookCellPayloadFromDraft(oldCell, nextValue);
+  return buildWorkbookEditEvent({
+    workbook: updateWorkbookCell(workbook, {
+      sheetId: position.sheetId,
+      row: position.row,
+      column: position.column,
+      cell: nextCell,
+    }),
+    sheetId: position.sheetId,
+    sheetName: sheet.name,
+    address: columnName(position.column) + String(position.row + 1),
+    fieldId: oldCell?.diagnosis?.fieldId ?? null,
+    oldCell: oldCell ?? null,
+    newCell: nextCell,
+    oldValue,
     newValue: nextValue,
-    note: "Saved from workbook editor.",
-  };
+  });
 }
 
 export function cellKey(sheetName: string, address: string) {
@@ -494,7 +516,6 @@ export function cellKey(sheetName: string, address: string) {
 
 function styledCellData(
   cellData: Record<string, Record<string, WorkbookCellPayload>> | undefined,
-  candidateCells: Set<string>,
   styles: Record<string, unknown>,
 ) {
   const next: Record<string, Record<string, WorkbookCellPayload>> = {};
@@ -506,15 +527,18 @@ function styledCellData(
         formula,
         status: cell.diagnosis?.status,
         confidence: cell.diagnosis?.confidence,
-        hasCandidate: !!cell.diagnosis?.templateCell && candidateCells.has(cell.diagnosis.templateCell),
         hasWarning: isActionableWarningSet(cell.diagnosis?.warnings),
       });
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
-      next[rowKey][colKey] = {
+      const preparedCell: WorkbookCellPayload = {
         ...cell,
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
+      if (formula) {
+        delete preparedCell.v;
+      }
+      next[rowKey][colKey] = preparedCell;
     }
   }
   return next;
@@ -624,14 +648,134 @@ function getCell(sheet: WorkbookSheetPayload, row: number, col: number): Workboo
   return sheet.cellData?.[String(row)]?.[String(col)];
 }
 
-function isEditableInput(cell?: WorkbookCellPayload) {
+function workbookEditEventFromCell(
+  workbook: WorkbookPayload,
+  sheet: WorkbookSheetPayload,
+  position: { row: number; column: number },
+  cell: WorkbookCellPayload | undefined,
+  newValue: string,
+): WorkbookEditEvent | null {
+  const sheetId = sheet.id ?? sheet.name;
+  const address = columnName(position.column) + String(position.row + 1);
+  const oldValue = displayValue(cell);
+  if (oldValue === newValue) {
+    return null;
+  }
+  const nextCell = workbookCellPayloadFromDraft(cell, newValue);
+  return buildWorkbookEditEvent({
+    workbook: updateWorkbookCell(workbook, { sheetId, row: position.row, column: position.column, cell: nextCell }),
+    sheetId,
+    sheetName: sheet.name,
+    address,
+    fieldId: cell?.diagnosis?.fieldId ?? null,
+    oldCell: cell ?? null,
+    newCell: nextCell,
+    oldValue,
+    newValue,
+  });
+}
+
+function buildWorkbookEditEvent({
+  workbook,
+  sheetId,
+  sheetName,
+  address,
+  fieldId,
+  oldCell,
+  newCell,
+  oldValue,
+  newValue,
+}: {
+  workbook: WorkbookPayload;
+  sheetId: string;
+  sheetName: string;
+  address: string;
+  fieldId?: string | null;
+  oldCell?: WorkbookCellPayload | null;
+  newCell?: WorkbookCellPayload | null;
+  oldValue: string;
+  newValue: string;
+}): WorkbookEditEvent {
+  return {
+    workbook,
+    sheetId,
+    sheetName,
+    address,
+    fieldId,
+    oldCell,
+    newCell,
+    oldValue,
+    newValue,
+    note: "Saved from workbook editor.",
+  };
+}
+
+function isBackendReviewCell(cell?: WorkbookCellPayload) {
   return !!cell?.diagnosis?.fieldId && cell.diagnosis.editable !== false && !cell.f && !cell.diagnosis.formula;
+}
+
+function isNumericReviewEdit(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("=")) return false;
+  const cleaned = trimmed
+    .replace(/[−–—]/g, "-")
+    .replace(/,/g, "")
+    .replace(/^\((.*)\)$/, "-$1")
+    .replace(/%$/, "");
+  return cleaned !== "" && cleaned !== "-" && Number.isFinite(Number(cleaned));
+}
+
+function workbookCellPayloadFromDraft(
+  cell: WorkbookCellPayload | undefined,
+  draftValue: string,
+): WorkbookCellPayload {
+  const next: WorkbookCellPayload = { ...(cell ?? {}) };
+  if (draftValue.startsWith("=")) {
+    next.f = draftValue;
+    next.v = null;
+  } else {
+    delete next.f;
+    next.v = numericCellValue(draftValue) ?? draftValue;
+  }
+  return next;
+}
+
+function updateWorkbookCell(
+  workbook: WorkbookPayload,
+  update: { sheetId: string; row: number; column: number; cell: WorkbookCellPayload },
+): WorkbookPayload {
+  const next = structuredCloneSafe(workbook);
+  const sheet = next.sheets?.[update.sheetId];
+  if (!sheet) return next;
+  sheet.cellData = sheet.cellData ?? {};
+  sheet.cellData[String(update.row)] = sheet.cellData[String(update.row)] ?? {};
+  sheet.cellData[String(update.row)][String(update.column)] = update.cell;
+  return next;
+}
+
+function numericCellValue(value: string): number | null {
+  if (!isNumericReviewEdit(value)) return null;
+  const cleaned = value
+    .replace(/[−–—]/g, "-")
+    .replace(/,/g, "")
+    .replace(/^\((.*)\)$/, "-$1")
+    .replace(/%$/, "");
+  return Number(cleaned);
+}
+
+function structuredCloneSafe<T>(value: T): T {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function displayValue(cell?: WorkbookCellPayload) {
   if (!cell) return "";
   const value = cell.v;
-  if (value === null || value === undefined) return cell.f ? `=${cell.f}` : "";
+  if (value === null || value === undefined) {
+    return cell.f ? (cell.f.startsWith("=") ? cell.f : `=${cell.f}`) : "";
+  }
   if (typeof value === "number") return value.toLocaleString();
   return String(value);
 }
@@ -721,6 +865,16 @@ function editedValueFromEvent(params: Record<string, unknown>) {
   if ("text" in params) return params.text;
   if ("rawValue" in params) return params.rawValue;
   return "";
+}
+
+function workbookSnapshotFromApi(api: {
+  getActiveWorkbook?: () => {
+    save?: () => WorkbookPayload;
+    getSnapshot?: () => WorkbookPayload;
+  };
+}) {
+  const activeWorkbook = api.getActiveWorkbook?.();
+  return activeWorkbook?.save?.() ?? activeWorkbook?.getSnapshot?.() ?? null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

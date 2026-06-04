@@ -72,9 +72,9 @@ export function useCycle(): CycleState {
   return useSyncExternalStore(cycleStore.subscribe, cycleStore.get, cycleStore.get);
 }
 
-export const CYCLE_STEPS: { key: CycleStatus; label: string; to: string }[] = [
+export const CYCLE_STEPS: { key: CycleStatus; label: string; to?: string }[] = [
   { key: "ingestion", label: "Ingestion", to: "/ingestion" },
-  { key: "diagnosis", label: "Diagnosis", to: "/diagnosis" },
+  { key: "diagnosis", label: "Diagnosis" },
   { key: "forecast", label: "Forecast", to: "/forecast" },
   { key: "assumptions", label: "Assumptions", to: "/assumptions" },
   { key: "review", label: "Review", to: "/audit" },

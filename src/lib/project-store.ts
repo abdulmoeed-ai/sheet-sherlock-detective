@@ -1,27 +1,32 @@
 import { useSyncExternalStore } from "react";
 
-const PROJECT_KEY = "sheet_sherlock_selected_project_id";
+const STORAGE_KEY = "sheet_sherlock_selected_project_id";
 const listeners = new Set<() => void>();
+let selectedProjectId: string | null = null;
 
 function emit() {
   listeners.forEach((listener) => listener());
 }
 
 export function getSelectedProjectId(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(PROJECT_KEY);
+  if (selectedProjectId === null) {
+    selectedProjectId = readStoredProjectId();
+  }
+  return selectedProjectId;
 }
 
 export function setSelectedProjectId(projectId: string): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROJECT_KEY, projectId);
-  window.dispatchEvent(new CustomEvent("sheet-sherlock-project-selected", { detail: projectId }));
+  selectedProjectId = projectId;
+  writeStoredProjectId(projectId);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("sheet-sherlock-project-selected", { detail: projectId }));
+  }
   emit();
 }
 
 export function clearSelectedProjectId(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(PROJECT_KEY);
+  selectedProjectId = null;
+  clearStoredProjectId();
   emit();
 }
 
@@ -32,4 +37,32 @@ export function subscribeSelectedProject(listener: () => void): () => void {
 
 export function useSelectedProjectId(): string | null {
   return useSyncExternalStore(subscribeSelectedProject, getSelectedProjectId, () => null);
+}
+
+function readStoredProjectId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = window.localStorage.getItem(STORAGE_KEY);
+    return value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredProjectId(projectId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, projectId);
+  } catch {
+    // The in-memory store still lets the current session continue when storage is unavailable.
+  }
+}
+
+function clearStoredProjectId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage failures; clearing the in-memory value is the important state change.
+  }
 }

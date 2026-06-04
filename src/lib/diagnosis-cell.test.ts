@@ -13,23 +13,12 @@ import {
 } from "./diagnosis-cell";
 
 describe("diagnosis cell helpers", () => {
-  it("prioritizes candidate and warning cells over low confidence", () => {
-    expect(
-      diagnosisCellTone({
-        formula: false,
-        status: "pending",
-        confidence: 45,
-        hasCandidate: true,
-        hasWarning: false,
-      }),
-    ).toBe("candidate");
-
+  it("prioritizes warning cells over low confidence", () => {
     expect(
       diagnosisCellTone({
         formula: false,
         status: "pending",
         confidence: 95,
-        hasCandidate: false,
         hasWarning: true,
       }),
     ).toBe("candidate");

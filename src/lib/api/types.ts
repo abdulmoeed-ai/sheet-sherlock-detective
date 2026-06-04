@@ -129,6 +129,38 @@ export interface ReviewCommentInput {
   parentCommentId?: string | null;
 }
 
+export interface WorkbookSaveInput {
+  workbook: Record<string, unknown>;
+  action?: string;
+  sheetId?: string | null;
+  sheetName?: string | null;
+  cellAddress?: string | null;
+  fieldId?: string | null;
+  oldCell?: Record<string, unknown> | null;
+  newCell?: Record<string, unknown> | null;
+}
+
+export interface WorkbookRevisionResponse {
+  id: string;
+  projectId: string;
+  actor: string;
+  actorName?: string | null;
+  action: string;
+  sheetId?: string | null;
+  sheetName?: string | null;
+  cellAddress?: string | null;
+  fieldId?: string | null;
+  oldPayload?: Record<string, unknown> | null;
+  newPayload?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface WorkbookSaveResponse {
+  projectId: string;
+  workbook: Record<string, unknown>;
+  revision: WorkbookRevisionResponse;
+}
+
 export interface ReviewCommentResponse {
   id: string;
   projectId: string;
@@ -157,26 +189,6 @@ export interface ExcelExportResponse {
   warnings: Array<Record<string, unknown>>;
   exportedAt: string | null;
   downloadUrl: string;
-}
-
-export interface BalanceSheetAssistantResponse {
-  runId: string | null;
-  projectId: string;
-  checkRunId: string | null;
-  status: string;
-  imbalanceAmount: string | null;
-  createdAt: string | null;
-  candidates: Array<Record<string, unknown>>;
-  threeStatementCheck?: Record<string, unknown> | null;
-  assistant: {
-    summary?: string;
-    assumptions?: string[];
-    warnings?: string[];
-    activity?: Array<Record<string, unknown>>;
-    citations?: Array<Record<string, unknown>>;
-    retrievalResults?: Array<Record<string, unknown>>;
-    candidates?: Array<Record<string, unknown>>;
-  };
 }
 
 export interface ForecastRunResponse {

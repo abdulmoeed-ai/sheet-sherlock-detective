@@ -1,7 +1,6 @@
 import { apiBlob, apiFetch, apiStream } from "./client";
 import type {
   AssumptionsGenerateResponse,
-  BalanceSheetAssistantResponse,
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
@@ -12,6 +11,9 @@ import type {
   ReviewCommentInput,
   ReviewCommentResponse,
   ReviewHandoffResponse,
+  WorkbookRevisionResponse,
+  WorkbookSaveInput,
+  WorkbookSaveResponse,
   WorkspaceResponse,
 } from "./types";
 
@@ -43,6 +45,19 @@ export function readProject(projectId: string) {
 
 export function readWorkspace(projectId: string) {
   return apiFetch<WorkspaceResponse>(`/api/projects/${projectId}/workspace`);
+}
+
+export function saveWorkbook(projectId: string, input: WorkbookSaveInput) {
+  return apiFetch<WorkbookSaveResponse>(`/api/projects/${projectId}/workbook`, {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+export function readWorkbookCellHistory(projectId: string, sheetId: string, cellAddress: string) {
+  return apiFetch<WorkbookRevisionResponse[]>(
+    `/api/projects/${projectId}/workbook/cells/${encodeURIComponent(sheetId)}/${encodeURIComponent(cellAddress)}/history`,
+  );
 }
 
 export function uploadDocument(projectId: string, file: File) {
@@ -158,13 +173,6 @@ export function askAi(projectId: string, input: Record<string, unknown>, options
 export function runBalanceSheetDiagnosis(projectId: string) {
   return apiFetch<Record<string, unknown>>(
     `/api/projects/${projectId}/diagnosis/balance-sheet/run`,
-    { method: "POST" },
-  );
-}
-
-export function runBalanceSheetAssistant(projectId: string) {
-  return apiFetch<BalanceSheetAssistantResponse>(
-    `/api/projects/${projectId}/diagnosis/balance-sheet/assistant`,
     { method: "POST" },
   );
 }

@@ -13,9 +13,9 @@ import {
   recordManagerDecision,
   reopenComment,
   resolveComment,
-  runBalanceSheetAssistant,
   revertReviewCell,
   runBalanceSheetDiagnosis,
+  saveWorkbook,
   runForecast,
   startExtraction,
   submitForManagerReview,
@@ -25,7 +25,7 @@ import {
   uploadDocument,
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { DocumentResponse, ExtractionJobResponse, ReviewCommentInput } from "@/lib/api/types";
+import type { DocumentResponse, ExtractionJobResponse, ReviewCommentInput, WorkbookSaveInput } from "@/lib/api/types";
 import { uploadDocumentsSequential } from "@/lib/upload-documents";
 
 function invalidateProject(queryClient: QueryClient, projectId: string) {
@@ -67,6 +67,12 @@ export function useStartExtraction(projectId: string) {
 export function useCreateExcelExport(projectId: string) {
   return useMutation({
     mutationFn: () => createExcelExport(projectId),
+  });
+}
+
+export function useSaveWorkbook(projectId: string) {
+  return useMutation({
+    mutationFn: (input: WorkbookSaveInput) => saveWorkbook(projectId, input),
   });
 }
 
@@ -173,14 +179,6 @@ export function useRunDiagnosis(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => runBalanceSheetDiagnosis(projectId),
-    onSuccess: () => invalidateProject(queryClient, projectId),
-  });
-}
-
-export function useRunBalanceSheetAssistant(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => runBalanceSheetAssistant(projectId),
     onSuccess: () => invalidateProject(queryClient, projectId),
   });
 }
