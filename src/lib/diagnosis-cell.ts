@@ -11,16 +11,14 @@ export function diagnosisCellTone({
   formula,
   status,
   confidence,
-  hasCandidate = false,
   hasWarning = false,
 }: {
   formula: boolean;
   status?: string | null;
   confidence?: number | null;
-  hasCandidate?: boolean;
   hasWarning?: boolean;
 }): DiagnosisTone {
-  if (hasCandidate || hasWarning) return "candidate";
+  if (hasWarning) return "candidate";
   if (formula) return "formula";
   if ((status ?? "").toLowerCase() === "edited") return "edited";
   if (typeof confidence === "number" && confidence > 0 && confidence < 70) return "low-confidence";
