@@ -34,7 +34,17 @@ const workbook: WorkbookPayload = {
               status: "pending",
             },
           },
-          "1": { v: 250, f: "A1*2", diagnosis: { sheetName: "Inputs", address: "B1", editable: false, formula: true } },
+          "1": {
+            v: 250,
+            f: "A1*2",
+            diagnosis: {
+              sheetName: "Inputs",
+              address: "B1",
+              editable: false,
+              formula: true,
+              value: "-2,630,470",
+            },
+          },
         },
       },
     },
@@ -77,6 +87,16 @@ describe("WorkbookEditor bridge", () => {
     const prepared = prepareWorkbookForUniver({
       ...workbook,
       formulaEvaluation: { status: "computed" },
+      styles: {
+        "diagnosis-formula": { bg: { rgb: "#F9FAFB" }, cl: { rgb: "#374151" } },
+        "diagnosis-default": { bg: { rgb: "#F8FBFF" }, cl: { rgb: "#1D4ED8" } },
+      },
+      sheets: {
+        "sheet-1": {
+          ...workbook.sheets!["sheet-1"],
+          showGridlines: 0,
+        },
+      },
       unknownBackendField: true,
     });
 
@@ -84,8 +104,13 @@ describe("WorkbookEditor bridge", () => {
     expect(prepared.unknownBackendField).toBeUndefined();
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe("field-a1");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.f).toBe("=A1*2");
-    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]).not.toHaveProperty("v");
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.v).toBe(-2630470);
+    expect(prepared.sheets?.["sheet-1"]?.showGridlines).toBe(1);
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.s).toBeDefined();
+    expect(prepared.styles).toMatchObject({
+      "diagnosis-formula": { n: { pattern: "#,##0;(#,##0);0" } },
+      "diagnosis-default": { n: { pattern: "#,##0;(#,##0);0" } },
+    });
   });
 
   it("normalizes Univer sheet dimensions so extracted values remain readable", () => {
@@ -116,7 +141,7 @@ describe("WorkbookEditor bridge", () => {
     expect(sheet?.columnData?.["1"]?.w).toBeGreaterThanOrEqual(112);
   });
 
-  it("configures Univer to force formula calculation when loading the workbook", async () => {
+  it("configures Univer to preserve cached formula values when loading the workbook", async () => {
     vi.resetModules();
     const presetSpy = vi.fn((config: unknown) => ({ config }));
     const setInitialFormulaComputing = vi.fn();
@@ -161,10 +186,10 @@ describe("WorkbookEditor bridge", () => {
     await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
     expect(presetSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        formula: { initialFormulaComputing: CalculationMode.FORCED },
+        formula: { initialFormulaComputing: CalculationMode.WHEN_EMPTY },
       }),
     );
-    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.FORCED);
+    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.WHEN_EMPTY);
   });
 
   it("converts Univer edit-end events into review-cell save events for editable inputs only", () => {

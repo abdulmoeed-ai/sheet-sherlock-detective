@@ -19,6 +19,7 @@ export type WorkbookCellMeta = {
   confidence?: number | null;
   templateCell?: string;
   warnings?: string[];
+  value?: unknown;
   [key: string]: unknown;
 };
 
@@ -79,6 +80,7 @@ const MAX_VISIBLE_COLS = 14;
 const MIN_COLUMN_WIDTH = 112;
 const MAX_COLUMN_WIDTH = 260;
 const MIN_ROW_HEIGHT = 28;
+const FINANCE_NUMBER_FORMAT = "#,##0;(#,##0);0";
 
 export function WorkbookEditor({
   workbook,
@@ -142,7 +144,7 @@ export function WorkbookEditor({
             UniverSheetsCorePreset({
               container: containerRef.current,
               formula: {
-                initialFormulaComputing: CalculationMode.FORCED,
+                initialFormulaComputing: CalculationMode.WHEN_EMPTY,
               },
             }),
           ],
@@ -164,7 +166,7 @@ export function WorkbookEditor({
           };
           addEvent?: (event: unknown, callback: (params: Record<string, unknown>) => void) => void;
         };
-        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.FORCED);
+        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.WHEN_EMPTY);
         eventApi.createWorkbook(preparedWorkbook, { makeCurrent: true });
         if (activeSheetId) {
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
@@ -440,6 +442,7 @@ export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPay
   for (const [sheetId, sheet] of Object.entries(workbook.sheets ?? {})) {
     prepared.sheets![sheetId] = {
       ...sheet,
+      showGridlines: 1,
       defaultColumnWidth: readableDefaultColumnWidth(sheet.defaultColumnWidth),
       defaultRowHeight: readableDefaultRowHeight(sheet.defaultRowHeight),
       columnData: readableColumnData(sheet),
@@ -535,13 +538,26 @@ function styledCellData(
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
-      if (formula) {
-        delete preparedCell.v;
+      if (formula && cell.diagnosis && "value" in cell.diagnosis) {
+        preparedCell.v = workbookDisplayValue(cell.diagnosis.value);
       }
       next[rowKey][colKey] = preparedCell;
     }
   }
   return next;
+}
+
+function workbookDisplayValue(value: unknown) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const normalized = trimmed
+    .replace(/[−–—]/g, "-")
+    .replace(/,/g, "");
+  const accountingNegative = normalized.match(/^\(([-+]?\d+(?:\.\d+)?)\)$/);
+  const numericText = accountingNegative ? `-${accountingNegative[1]}` : normalized;
+  const numericValue = Number(numericText);
+  return Number.isFinite(numericValue) ? numericValue : value;
 }
 
 function normalizeFormula(formula: string) {
@@ -624,9 +640,19 @@ function ensureToneStyle(
   tone: DiagnosisTone,
   formula: boolean,
 ) {
-  if (!styles[styleId]) {
+  const existingStyle = styles[styleId];
+  if (isRecord(existingStyle)) {
+    styles[styleId] = {
+      ...existingStyle,
+      n: { pattern: FINANCE_NUMBER_FORMAT },
+    };
+  } else {
     const style = cellToneStyle(tone, { active: false, hasDiagnosis: true, formula });
-    styles[styleId] = { bg: { rgb: style.background }, cl: { rgb: style.color } };
+    styles[styleId] = {
+      bg: { rgb: style.background },
+      cl: { rgb: style.color },
+      n: { pattern: FINANCE_NUMBER_FORMAT },
+    };
   }
   return styleId;
 }

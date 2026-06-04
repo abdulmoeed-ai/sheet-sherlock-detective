@@ -27,7 +27,11 @@ import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEdi
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
-import { listComments, readMappingRules, saveWorkbook as saveWorkbookRequest } from "@/lib/api/projects";
+import {
+  listComments,
+  readMappingRules,
+  saveWorkbook as saveWorkbookRequest,
+} from "@/lib/api/projects";
 import type { ReviewCommentResponse } from "@/lib/api/types";
 import {
   activeMentionQuery,
@@ -169,17 +173,16 @@ function Diagnosis() {
   }, [projectId]);
 
   const workbookSource = workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview;
-  const serverWorkbook = useMemo(
-    () => workbookPayload(workbookSource),
-    [workbookSource],
-  );
+  const serverWorkbook = useMemo(() => workbookPayload(workbookSource), [workbookSource]);
   const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedSheetId =
     selection?.sheetId && sheetIds.includes(selection.sheetId) ? selection.sheetId : null;
   const resolvedActiveSheetId =
-    selectedSheetId ?? (selection ? null : firstSheetWithDiagnosis(workbook, sheetIds)) ?? sheetIds[0];
+    selectedSheetId ??
+    (selection ? null : firstSheetWithDiagnosis(workbook, sheetIds)) ??
+    sheetIds[0];
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
