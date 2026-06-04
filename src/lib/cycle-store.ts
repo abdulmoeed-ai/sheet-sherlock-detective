@@ -3,7 +3,6 @@ import { useSyncExternalStore } from "react";
 export type CycleStatus =
   | "idle"
   | "ingestion"
-  | "diff-review"
   | "diagnosis"
   | "forecast"
   | "assumptions"
@@ -16,6 +15,7 @@ export interface CycleState {
   period: string;
   status: CycleStatus;
   startedAt: string | null;
+  documentIds: string[];
 }
 
 const initial: CycleState = {
@@ -24,6 +24,7 @@ const initial: CycleState = {
   period: "FY2025",
   status: "idle",
   startedAt: null,
+  documentIds: [],
 };
 
 let state: CycleState = { ...initial };
@@ -42,7 +43,19 @@ export const cycleStore = {
       ...input,
       status: "ingestion",
       startedAt: new Date().toISOString(),
+      documentIds: [],
     };
+    emit();
+  },
+  addDocumentId: (documentId: string) => {
+    const normalized = documentId.trim();
+    if (!normalized || state.documentIds.includes(normalized)) return;
+    state = { ...state, documentIds: [...state.documentIds, normalized] };
+    emit();
+  },
+  setDocumentIds: (documentIds: string[]) => {
+    const normalized = Array.from(new Set(documentIds.map((id) => id.trim()).filter(Boolean)));
+    state = { ...state, documentIds: normalized };
     emit();
   },
   setStatus: (status: CycleStatus) => {
@@ -56,16 +69,11 @@ export const cycleStore = {
 };
 
 export function useCycle(): CycleState {
-  return useSyncExternalStore(
-    cycleStore.subscribe,
-    cycleStore.get,
-    cycleStore.get,
-  );
+  return useSyncExternalStore(cycleStore.subscribe, cycleStore.get, cycleStore.get);
 }
 
 export const CYCLE_STEPS: { key: CycleStatus; label: string; to: string }[] = [
   { key: "ingestion", label: "Ingestion", to: "/ingestion" },
-  { key: "diff-review", label: "Diff Review", to: "/diff-review" },
   { key: "diagnosis", label: "Diagnosis", to: "/diagnosis" },
   { key: "forecast", label: "Forecast", to: "/forecast" },
   { key: "assumptions", label: "Assumptions", to: "/assumptions" },

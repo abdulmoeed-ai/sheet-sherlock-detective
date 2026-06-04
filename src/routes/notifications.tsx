@@ -11,7 +11,7 @@ export const Route = createFileRoute("/notifications")({
       {
         name: "description",
         content:
-          "Outbound Microsoft Teams notification rules and delivery log for ingestion, diff review, sign-off and source health.",
+          "Outbound Microsoft Teams notification rules and delivery log for ingestion, diagnosis, sign-off and source health.",
       },
     ],
   }),
@@ -36,25 +36,102 @@ interface LogEntry {
 }
 
 const INITIAL_RULES: Rule[] = [
-  { id: "n1", trigger: "Ingestion completed",            channel: "#fp&a-cycle",      enabled: true,  recipients: "Analyst, Manager" },
-  { id: "n2", trigger: "Diff review needs reviewer",     channel: "#fp&a-cycle",      enabled: true,  recipients: "Manager" },
-  { id: "n3", trigger: "Diagnosis: imbalance detected",  channel: "DM · Analyst",     enabled: true,  recipients: "Analyst" },
-  { id: "n4", trigger: "CFO sign-off requested",         channel: "DM · CFO",         enabled: true,  recipients: "CFO" },
-  { id: "n5", trigger: "Source Health: STALE / DOWN",    channel: "#sherlock-alerts", enabled: true,  recipients: "Admin" },
-  { id: "n6", trigger: "Forecast Prediction Agent run",  channel: "#fp&a-cycle",      enabled: false, recipients: "Manager, CFO" },
+  {
+    id: "n1",
+    trigger: "Ingestion completed",
+    channel: "#fp&a-cycle",
+    enabled: true,
+    recipients: "Analyst, Manager",
+  },
+  {
+    id: "n2",
+    trigger: "Diagnosis needs reviewer",
+    channel: "#fp&a-cycle",
+    enabled: true,
+    recipients: "Manager",
+  },
+  {
+    id: "n3",
+    trigger: "Diagnosis: imbalance detected",
+    channel: "DM · Analyst",
+    enabled: true,
+    recipients: "Analyst",
+  },
+  {
+    id: "n4",
+    trigger: "CFO sign-off requested",
+    channel: "DM · CFO",
+    enabled: true,
+    recipients: "CFO",
+  },
+  {
+    id: "n5",
+    trigger: "Source Health: STALE / DOWN",
+    channel: "#sherlock-alerts",
+    enabled: true,
+    recipients: "Admin",
+  },
+  {
+    id: "n6",
+    trigger: "Forecast Prediction Agent run",
+    channel: "#fp&a-cycle",
+    enabled: false,
+    recipients: "Manager, CFO",
+  },
 ];
 
 const INITIAL_LOG: LogEntry[] = [
-  { id: "l1", ts: "2026-05-20 09:32", event: "Ingestion completed",        channel: "#fp&a-cycle",      status: "delivered", preview: "MTL_FY2025_v1 · 247 cells ingested from 4 portals. Confidence 96%." },
-  { id: "l2", ts: "2026-05-20 09:34", event: "Diff review needs reviewer", channel: "#fp&a-cycle",      status: "delivered", preview: "12 deltas, 2 blocked. Open Diff Review →" },
-  { id: "l3", ts: "2026-05-20 09:41", event: "Source Health: STALE",       channel: "#sherlock-alerts", status: "delivered", preview: "SBP weekly publication overdue by 6h. Fallback: AKD Research." },
-  { id: "l4", ts: "2026-05-20 09:55", event: "CFO sign-off requested",     channel: "DM · CFO",         status: "queued",    preview: "MTL_FY2025_v1 ready for sign-off. Executive brief attached." },
-  { id: "l5", ts: "2026-05-19 17:08", event: "Source Health: DOWN",        channel: "#sherlock-alerts", status: "failed",    preview: "Investify+SWS unreachable. Retry in 15m." },
+  {
+    id: "l1",
+    ts: "2026-05-20 09:32",
+    event: "Ingestion completed",
+    channel: "#fp&a-cycle",
+    status: "delivered",
+    preview: "MTL_FY2025_v1 · 247 cells ingested from 4 portals. Confidence 96%.",
+  },
+  {
+    id: "l2",
+    ts: "2026-05-20 09:34",
+    event: "Diagnosis needs reviewer",
+    channel: "#fp&a-cycle",
+    status: "delivered",
+    preview: "12 deltas, 2 blocked. Open Diagnosis →",
+  },
+  {
+    id: "l3",
+    ts: "2026-05-20 09:41",
+    event: "Source Health: STALE",
+    channel: "#sherlock-alerts",
+    status: "delivered",
+    preview: "SBP weekly publication overdue by 6h. Fallback: AKD Research.",
+  },
+  {
+    id: "l4",
+    ts: "2026-05-20 09:55",
+    event: "CFO sign-off requested",
+    channel: "DM · CFO",
+    status: "queued",
+    preview: "MTL_FY2025_v1 ready for sign-off. Executive brief attached.",
+  },
+  {
+    id: "l5",
+    ts: "2026-05-19 17:08",
+    event: "Source Health: DOWN",
+    channel: "#sherlock-alerts",
+    status: "failed",
+    preview: "Investify+SWS unreachable. Retry in 15m.",
+  },
 ];
 
 function statusBadge(s: LogEntry["status"]) {
-  if (s === "delivered") return <Badge tone="success"><CheckCircle2 className="mr-1 inline h-3 w-3" />Delivered</Badge>;
-  if (s === "queued")    return <Badge tone="warning">Queued</Badge>;
+  if (s === "delivered")
+    return (
+      <Badge tone="success">
+        <CheckCircle2 className="mr-1 inline h-3 w-3" />
+        Delivered
+      </Badge>
+    );
+  if (s === "queued") return <Badge tone="warning">Queued</Badge>;
   return <Badge tone="danger">Failed</Badge>;
 }
 
@@ -86,8 +163,14 @@ function Notifications() {
       hideProgress
       actions={
         <>
-          <Button variant="secondary" onClick={sendTest}><Send className="h-4 w-4" />Send test</Button>
-          <Button><Plus className="h-4 w-4" />New rule</Button>
+          <Button variant="secondary" onClick={sendTest}>
+            <Send className="h-4 w-4" />
+            Send test
+          </Button>
+          <Button>
+            <Plus className="h-4 w-4" />
+            New rule
+          </Button>
         </>
       }
     >
@@ -97,7 +180,8 @@ function Notifications() {
       >
         <MessageSquare className="h-5 w-5" style={{ color: "var(--color-brand)" }} />
         <div className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
-          {active} of {rules.length} rules active · connected to Microsoft Teams tenant <b>millat.com.pk</b>.
+          {active} of {rules.length} rules active · connected to Microsoft Teams tenant{" "}
+          <b>millat.com.pk</b>.
         </div>
       </div>
 
@@ -125,7 +209,9 @@ function Notifications() {
                     <button
                       onClick={() => toggle(r.id)}
                       className="inline-flex h-5 w-9 items-center rounded-full transition-colors"
-                      style={{ background: r.enabled ? "var(--color-brand)" : "var(--color-border-strong)" }}
+                      style={{
+                        background: r.enabled ? "var(--color-brand)" : "var(--color-border-strong)",
+                      }}
                       aria-label="toggle rule"
                     >
                       <span
@@ -156,7 +242,9 @@ function Notifications() {
                 <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
                   {e.ts} · {e.channel}
                 </div>
-                <div className="mt-1.5 text-[12px] text-[var(--color-text-secondary)]">{e.preview}</div>
+                <div className="mt-1.5 text-[12px] text-[var(--color-text-secondary)]">
+                  {e.preview}
+                </div>
               </div>
             ))}
           </div>
