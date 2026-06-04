@@ -179,7 +179,7 @@ function Diagnosis() {
   const selectedSheetId =
     selection?.sheetId && sheetIds.includes(selection.sheetId) ? selection.sheetId : null;
   const resolvedActiveSheetId =
-    selectedSheetId ?? firstSheetWithDiagnosis(workbook, sheetIds) ?? sheetIds[0];
+    selectedSheetId ?? (selection ? null : firstSheetWithDiagnosis(workbook, sheetIds)) ?? sheetIds[0];
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -353,6 +353,9 @@ function Diagnosis() {
           newCell: (event.newCell as Record<string, unknown> | null | undefined) ?? null,
         }),
       );
+      if (!sheetIds.includes(event.sheetId)) {
+        await workspace.refetch();
+      }
       if (fieldId) {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }

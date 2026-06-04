@@ -7,16 +7,24 @@ describe("project-store", () => {
     window.localStorage.clear();
   });
 
-  it("keeps the selected project in memory without writing localStorage", () => {
+  it("persists the selected project so ingestion can recover after reload", () => {
     setSelectedProjectId("project-1");
 
     expect(getSelectedProjectId()).toBe("project-1");
-    expect(window.localStorage.getItem("sheet_sherlock_selected_project_id")).toBeNull();
+    expect(window.localStorage.getItem("sheet_sherlock_selected_project_id")).toBe("project-1");
   });
 
-  it("does not restore stale selected project ids from localStorage", () => {
-    window.localStorage.setItem("sheet_sherlock_selected_project_id", "stale-project");
+  it("restores the selected project id from localStorage", () => {
+    window.localStorage.setItem("sheet_sherlock_selected_project_id", "project-2");
+
+    expect(getSelectedProjectId()).toBe("project-2");
+  });
+
+  it("clears the persisted selected project id", () => {
+    setSelectedProjectId("project-1");
+    clearSelectedProjectId();
 
     expect(getSelectedProjectId()).toBeNull();
+    expect(window.localStorage.getItem("sheet_sherlock_selected_project_id")).toBeNull();
   });
 });

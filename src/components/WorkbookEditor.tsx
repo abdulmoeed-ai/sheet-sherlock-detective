@@ -170,9 +170,10 @@ export function WorkbookEditor({
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
         }
         eventApi.addEvent?.(eventApi.Event?.CellClicked, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
@@ -182,9 +183,10 @@ export function WorkbookEditor({
           }
         });
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditStart, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
@@ -194,25 +196,34 @@ export function WorkbookEditor({
           }
         });
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditEnd, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
+          if (sheetId && row !== null && column !== null) {
+            onSelectRef.current({ sheetId, row, col: column });
+          }
           const editEvent =
             sheetId && row !== null && column !== null
-              ? workbookEditEventFromUniverEnd(workbook, { sheetId, row, column }, editedValueFromEvent(params))
+              ? workbookEditEventFromUniverEnd(
+                  workbook.sheets?.[sheetId] ? workbook : eventWorkbook,
+                  { sheetId, row, column },
+                  editedValueFromEvent(params),
+                )
               : null;
           if (editEvent && editEvent.oldValue !== editEvent.newValue) {
             void Promise.resolve(onCommitEditRef.current(editEvent));
           }
         });
         eventApi.addEvent?.(eventApi.Event?.SheetEditEnded, (params) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
           const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
           const sheetId = resolveWorkbookSheetId(
-            workbook,
+            eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
           );
           const row = numberOrNull(params.row);
@@ -850,6 +861,16 @@ function editedValueFromEvent(params: Record<string, unknown>) {
   if ("text" in params) return params.text;
   if ("rawValue" in params) return params.rawValue;
   return "";
+}
+
+function workbookSnapshotFromApi(api: {
+  getActiveWorkbook?: () => {
+    save?: () => WorkbookPayload;
+    getSnapshot?: () => WorkbookPayload;
+  };
+}) {
+  const activeWorkbook = api.getActiveWorkbook?.();
+  return activeWorkbook?.save?.() ?? activeWorkbook?.getSnapshot?.() ?? null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

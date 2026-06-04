@@ -362,6 +362,90 @@ describe("WorkbookEditor bridge", () => {
     expect(blankCellParams).not.toHaveProperty("cancel");
   });
 
+  it("autosaves edits on newly-added Univer sheets from the live workbook snapshot", async () => {
+    vi.resetModules();
+    let beforeEditEnd: ((params: Record<string, unknown>) => void) | undefined;
+    const createWorkbook = vi.fn();
+    const liveWorkbook: WorkbookPayload = {
+      sheetOrder: ["sheet-1", "new-sheet"],
+      sheets: {
+        ...workbook.sheets,
+        "new-sheet": {
+          id: "new-sheet",
+          name: "testing sheet",
+          rowCount: 20,
+          columnCount: 8,
+          cellData: {},
+        },
+      },
+    };
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing: vi.fn() }),
+          createWorkbook,
+          getActiveWorkbook: () => ({
+            setActiveSheet: vi.fn(),
+            save: () => liveWorkbook,
+          }),
+          dispose: vi.fn(),
+          Event: { BeforeSheetEditEnd: "BeforeSheetEditEnd" },
+          addEvent: vi.fn((event, callback) => {
+            if (event === "BeforeSheetEditEnd") beforeEditEnd = callback;
+          }),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: vi.fn((config: unknown) => ({ config })),
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+    const onSelect = vi.fn();
+    const onCommitEdit = vi.fn();
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        commitPending={false}
+        onSelect={onSelect}
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+
+    beforeEditEnd?.({
+      worksheet: { getSheetId: () => "new-sheet" },
+      row: 0,
+      column: 0,
+      value: "=SUM(10,20)",
+    });
+
+    expect(onSelect).toHaveBeenCalledWith({ sheetId: "new-sheet", row: 0, col: 0 });
+    expect(onCommitEdit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetId: "new-sheet",
+        sheetName: "testing sheet",
+        address: "A1",
+        oldCell: null,
+        newCell: expect.objectContaining({ f: "=SUM(10,20)", v: null }),
+      }),
+    );
+    expect(onCommitEdit.mock.calls[0][0].workbook.sheets["new-sheet"].cellData["0"]["0"].f).toBe(
+      "=SUM(10,20)",
+    );
+  });
+
   it("builds autosave events for formula edits from Univer", () => {
     const event = workbookEditEventFromUniverEnd(
       workbook,
