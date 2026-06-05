@@ -250,9 +250,12 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
       }),
     [role, projects.data, requests.data, psxCompanies.data],
   );
-  const intelligenceLoading =
-    role === "finance_analyst" &&
-    ((projects.isLoading && !projects.data) || (requests.isLoading && !requests.data));
+  // Show skeleton until ALL key data is ready — prevents old-dashboard flash on re-navigation
+  const allDataReady =
+    projects.data !== undefined &&
+    requests.data !== undefined &&
+    psxCompanies.data !== undefined;
+  const intelligenceLoading = role === "finance_analyst" && !allDataReady;
   const startPending = createProject.isPending || convertRequest.isPending;
 
   const startModel = async (state: AnalystNoModelState) => {
@@ -493,21 +496,22 @@ function AnalystNoModelDashboard({
 
 function AnalystDashboardLoading() {
   return (
-    <div className="space-y-4">
+    <div className="animate-pulse space-y-4">
       <Card className="min-h-[220px]">
-        <div className="h-4 w-48 rounded bg-[var(--color-border-default)]" />
-        <div className="mt-5 h-8 w-80 max-w-full rounded bg-[var(--color-border-default)]" />
-        <div className="mt-4 h-4 w-full max-w-[620px] rounded bg-[var(--color-border-default)]" />
-        <div className="mt-8 h-11 w-52 rounded bg-[var(--color-brand-light)]" />
+        <div className="h-3.5 w-32 rounded-full bg-[var(--color-border-default)]" />
+        <div className="mt-4 h-7 w-72 max-w-full rounded-lg bg-[var(--color-border-default)]" />
+        <div className="mt-3 h-3.5 w-full max-w-[520px] rounded-full bg-[var(--color-border-default)]" />
+        <div className="mt-2 h-3.5 w-4/5 max-w-[420px] rounded-full bg-[var(--color-border-default)]" />
+        <div className="mt-8 h-10 w-48 rounded-lg bg-[var(--color-border-default)]" />
       </Card>
       <div className="grid gap-4 xl:grid-cols-3">
         {[1, 2, 3].map((item) => (
-          <Card key={item} className="min-h-[180px]">
-            <div className="h-4 w-36 rounded bg-[var(--color-border-default)]" />
-            <div className="mt-6 space-y-3">
-              <div className="h-3 w-full rounded bg-[var(--color-border-default)]" />
-              <div className="h-3 w-4/5 rounded bg-[var(--color-border-default)]" />
-              <div className="h-3 w-2/3 rounded bg-[var(--color-border-default)]" />
+          <Card key={item} className="min-h-[160px]">
+            <div className="h-3.5 w-28 rounded-full bg-[var(--color-border-default)]" />
+            <div className="mt-5 space-y-2.5">
+              <div className="h-3 w-full rounded-full bg-[var(--color-border-default)]" />
+              <div className="h-3 w-4/5 rounded-full bg-[var(--color-border-default)]" />
+              <div className="h-3 w-3/5 rounded-full bg-[var(--color-border-default)]" />
             </div>
           </Card>
         ))}
