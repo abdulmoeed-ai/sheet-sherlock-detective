@@ -12,7 +12,7 @@ import { RefreshCw, AlertTriangle, CheckCircle2, Activity, Globe2 } from "lucide
 export const Route = createFileRoute("/sources")({
   head: () => ({
     meta: [
-      { title: "Source Registry — Sheet Sherlock" },
+      { title: "Source Registry — F(AI)nance" },
       {
         name: "description",
         content: "Admin: source registry metadata and approved source domains.",

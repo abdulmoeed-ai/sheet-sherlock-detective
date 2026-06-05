@@ -94,7 +94,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/diagnosis/$projectId")({
   head: () => ({
     meta: [
-      { title: "Diagnosis - Sheet Sherlock" },
+      { title: "Diagnosis - F(AI)nance" },
       {
         name: "description",
         content: "Workbook-style cell diagnosis for Millat extraction review.",
@@ -638,7 +638,7 @@ function Diagnosis() {
             <button
               onClick={() => navigate({ to: "/registry" })}
               className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
-              aria-label="Back to Model Registry"
+              aria-label="Back to Workbooks"
             >
               <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
             </button>

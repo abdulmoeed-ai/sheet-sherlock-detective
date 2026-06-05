@@ -15,7 +15,7 @@ const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025"
 export const Route = createFileRoute("/registry")({
   head: () => ({
     meta: [
-      { title: "Model Registry — Sheet Sherlock" },
+      { title: "Workbooks — F(AI)nance" },
       { name: "description", content: "Silent pre-initiation lookup, version timeline, and CFO-grade decision cards." },
     ],
   }),
@@ -193,7 +193,7 @@ function Registry() {
 
   return (
     <PageShell
-      title="Model Registry Intelligence"
+      title="Workbooks"
       subtitle="Silent pre-initiation lookup, version timeline, and CFO-grade decision cards. Versioning: [TICKER]_[FY]_v[N]."
       hideProgress
     >
@@ -236,7 +236,7 @@ function Registry() {
           </label>
         </div>
         <p className="mt-3 text-right text-[11px] text-[var(--color-text-muted)]">
-          Registry lookup runs in &lt; 1s · every decision logged to audit trail
+          Workbook lookup runs in &lt; 1s · every decision logged to audit trail
         </p>
       </Card>
 
@@ -283,7 +283,7 @@ function Registry() {
                     <Badge tone="neutral">DECISION CARD</Badge>
                   </div>
                   <p className="text-[15px] font-semibold">
-                    No model exists for {selectedCompany.name} · {selectedFY}
+                    No workbook exists for {selectedCompany.name} · {selectedFY}
                   </p>
                   <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
                     Start a fresh ingestion to create version 1.
@@ -372,16 +372,16 @@ function Registry() {
         </>
       )}
 
-      {/* ── All models table ──────────────────────────────────────────────── */}
+      {/* ── All workbooks table ───────────────────────────────────────────── */}
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileClock className="h-4 w-4 text-[var(--color-brand)]" />
-            <h3 className="text-[15px] font-semibold">All models in registry</h3>
+            <h3 className="text-[15px] font-semibold">All workbooks</h3>
           </div>
           {versionedProjects.length > 0 && (
             <span className="text-[12px] text-[var(--color-text-muted)]">
-              {versionedProjects.length} model{versionedProjects.length !== 1 ? "s" : ""}
+              {versionedProjects.length} workbook{versionedProjects.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
@@ -403,7 +403,7 @@ function Registry() {
           >
             <FileClock className="mx-auto mb-2 h-8 w-8 opacity-30" />
             <p className="text-[13px] text-[var(--color-text-secondary)]">
-              No models in registry for this account.
+              No workbooks for this account.
             </p>
           </div>
         ) : (

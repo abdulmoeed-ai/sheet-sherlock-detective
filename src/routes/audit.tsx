@@ -12,7 +12,7 @@ import { auditRows } from "@/lib/mappers/workspace";
 export const Route = createFileRoute("/audit")({
   head: () => ({
     meta: [
-      { title: "Audit Trail — Sheet Sherlock" },
+      { title: "Audit Trail — F(AI)nance" },
       {
         name: "description",
         content: "Immutable audit log of every system and human action with full data lineage.",
@@ -50,7 +50,7 @@ function Audit() {
       subtitle={
         projectId
           ? "Backend audit events and archive package."
-          : "Select a project from the registry to inspect audit events."
+          : "Select a workbook to inspect audit events."
       }
       actions={
         <Button variant="secondary" onClick={exportJson} disabled={!archive.data?.id}>

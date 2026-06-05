@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { ProductLogo } from "@/components/ProductLogo";
+import { ProductWordmark } from "@/components/ProductWordmark";
 import { useLogin } from "@/hooks/use-auth";
 import { ApiError } from "@/lib/api/errors";
 
@@ -25,8 +27,11 @@ export function LoginPage() {
 
 function BrandHeader() {
   return (
-    <header className="mx-auto max-w-3xl text-center">
-      <h1 className="text-4xl font-semibold leading-none text-white sm:text-5xl">Sheet Sherlock</h1>
+    <header className="mx-auto flex max-w-3xl flex-col items-center text-center">
+      <ProductLogo className="mb-5 h-16 w-16 sm:h-20 sm:w-20" />
+      <h1 className="text-4xl font-semibold leading-none text-white sm:text-5xl">
+        <ProductWordmark aiClassName="text-[var(--color-accent-mid)]" />
+      </h1>
       <p className="mt-3 text-sm font-medium uppercase tracking-[0.18em] text-[var(--color-accent-mid)]">
         AI-Enabled Finance Command Center
       </p>

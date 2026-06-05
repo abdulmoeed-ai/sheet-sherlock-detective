@@ -12,6 +12,7 @@ import {
 import { useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import { AskAiTrigger } from "@/components/AskAiTrigger";
+import { ProductWordmark } from "@/components/ProductWordmark";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { getAccessToken } from "@/lib/auth-store";
 import { canSeeRoute, defaultRouteForRole } from "@/lib/role-access";
@@ -80,20 +81,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Sheet Sherlock — Intelligent Financial Predictions" },
+      { title: "F(AI)nance — Intelligent Financial Predictions" },
       {
         name: "description",
         content:
           "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
       },
-      { property: "og:title", content: "Sheet Sherlock — Intelligent Financial Predictions" },
+      { property: "og:title", content: "F(AI)nance — Intelligent Financial Predictions" },
       {
         property: "og:description",
         content:
           "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:title", content: "Sheet Sherlock — Intelligent Financial Predictions" },
+      { name: "twitter:title", content: "F(AI)nance — Intelligent Financial Predictions" },
       {
         name: "twitter:description",
         content:
@@ -192,7 +193,7 @@ function AuthenticatedApp() {
   if (!token || isLoading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-page)] text-[13px] text-[var(--color-text-secondary)]">
-        Loading Sheet Sherlock...
+        Loading <ProductWordmark aiClassName="text-[var(--color-brand)]" />...
       </div>
     );
   }

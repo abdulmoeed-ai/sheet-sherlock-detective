@@ -4,10 +4,10 @@ import { LoginPage } from "@/components/LoginPage";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Sheet Sherlock" },
+      { title: "Sign in — F(AI)nance" },
       {
         name: "description",
-        content: "Sign in to the Sheet Sherlock AI finance command center.",
+        content: "Sign in to the F(AI)nance AI finance command center.",
       },
     ],
   }),

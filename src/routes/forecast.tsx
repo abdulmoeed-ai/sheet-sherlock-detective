@@ -9,7 +9,7 @@ import { useSelectedProjectId } from "@/lib/project-store";
 export const Route = createFileRoute("/forecast")({
   head: () => ({
     meta: [
-      { title: "5-Year Forecast — Sheet Sherlock" },
+      { title: "5-Year Forecast — F(AI)nance" },
       { name: "description", content: "Scenario-based revenue forecasting with what-if macro sensitivity." },
     ],
   }),

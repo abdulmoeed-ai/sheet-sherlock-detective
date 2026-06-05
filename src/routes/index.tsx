@@ -18,8 +18,8 @@ import { SECTOR_PACKS } from "@/lib/sector-packs";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Sheet Sherlock" },
-      { name: "description", content: "Role-aware Sheet Sherlock dashboard backed by the API." },
+      { title: "Dashboard — F(AI)nance" },
+      { name: "description", content: "Role-aware F(AI)nance dashboard backed by the API." },
     ],
   }),
   component: Dashboard,
@@ -388,4 +388,3 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     </Card>
   );
 }
-
