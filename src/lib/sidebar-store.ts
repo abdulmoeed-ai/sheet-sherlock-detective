@@ -13,12 +13,16 @@ export const sidebarStore = {
     listeners.add(l);
     return () => listeners.delete(l);
   },
-  toggle: () => {
-    collapsed = !collapsed;
+  setCollapsed: (next: boolean) => {
+    if (collapsed === next) return;
+    collapsed = next;
     if (typeof window !== "undefined") {
       window.localStorage.setItem("sb-collapsed", collapsed ? "1" : "0");
     }
     listeners.forEach((l) => l());
+  },
+  toggle: () => {
+    sidebarStore.setCollapsed(!collapsed);
   },
 };
 

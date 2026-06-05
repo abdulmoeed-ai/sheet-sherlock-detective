@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Download,
+  GripVertical,
   History,
   Loader2,
   MessageSquare,
@@ -23,7 +24,11 @@ import {
   type SourceBoundingBox,
 } from "@/components/DiagnosisSourcePreviewModal";
 import { IconTooltip } from "@/components/IconTooltip";
-import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEditor";
+import {
+  WorkbookEditor,
+  type WorkbookEditEvent,
+  type WorkbookPayload as EditorWorkbookPayload,
+} from "@/components/WorkbookEditor";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -65,6 +70,11 @@ import {
   hasDiagnosisDraftChanges,
   workbookDraftSaveSnapshot,
 } from "@/lib/diagnosis-draft";
+import {
+  clampDiagnosisRightPanelWidth,
+  persistDiagnosisRightPanelWidth,
+  readDiagnosisRightPanelWidth,
+} from "@/lib/diagnosis-right-panel";
 import { useWorkspace } from "@/hooks/use-projects";
 import {
   useCreateComment,
@@ -78,6 +88,7 @@ import {
 } from "@/hooks/use-project-actions";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
+import { sidebarStore } from "@/lib/sidebar-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/diagnosis/$projectId")({
@@ -194,11 +205,12 @@ function Diagnosis() {
 
   useEffect(() => {
     setSelectedProjectId(projectId);
+    sidebarStore.setCollapsed(true);
   }, [projectId]);
 
   const workbookSource = workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview;
   const serverWorkbook = useMemo(() => workbookPayload(workbookSource), [workbookSource]);
-  const draftWorkbookRef = useRef<WorkbookPayload | null>(null);
+  const draftWorkbookRef = useRef<EditorWorkbookPayload | null>(null);
   const [pendingWorkbookEditCount, setPendingWorkbookEditCount] = useState(0);
   const [savingProjectVersion, setSavingProjectVersion] = useState(false);
   const [savedDraftVersion, setSavedDraftVersion] = useState<{ id: string; label: string | null } | null>(null);
@@ -215,8 +227,12 @@ function Diagnosis() {
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<"diagnosis" | "comments">("diagnosis");
+  const [rightPanelWidth, setRightPanelWidth] = useState(readDiagnosisRightPanelWidth);
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; width: number } | null>(null);
   const [draftValue, setDraftValue] = useState("");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, OptimisticCellUpdate>>({});
+  const layoutRef = useRef<HTMLDivElement | null>(null);
   const selectedCell = activeSheet
     ? optimisticCell(
         getCell(activeSheet, resolvedSelection.row, resolvedSelection.col),
@@ -278,6 +294,35 @@ function Diagnosis() {
     setPendingWorkbookEditCount(0);
     setSavedDraftVersion(null);
   }, [projectId]);
+  useEffect(() => {
+    const node = layoutRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      setLayoutWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!dragStart) return;
+
+    const handleMove = (event: PointerEvent) => {
+      const nextWidth = clampDiagnosisRightPanelWidth(
+        dragStart.width + dragStart.x - event.clientX,
+        layoutWidth ?? undefined,
+      );
+      setRightPanelWidth(nextWidth);
+      persistDiagnosisRightPanelWidth(nextWidth);
+    };
+    const handleUp = () => setDragStart(null);
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [dragStart, layoutWidth]);
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
   const rulesByCode = useMemo(() => {
     return Object.fromEntries(
@@ -463,6 +508,121 @@ function Diagnosis() {
     toast.success("Diagnosis marked ready for review");
     navigate({ to: "/review" });
   };
+  const resolvedRightPanelWidth = clampDiagnosisRightPanelWidth(
+    rightPanelWidth,
+    layoutWidth ?? undefined,
+  );
+
+  const workbookPane = (
+    <main className="h-full min-h-0 overflow-hidden">
+      {!projectId ? (
+        <EmptyState
+          title="No project selected"
+          detail="Select a project from the workspace first."
+        />
+      ) : workspace.isLoading ? (
+        <EmptyState
+          title="Loading workbook"
+          detail="Fetching the latest Millat diagnosis workbook."
+          loading
+        />
+      ) : workspace.isError ? (
+        <EmptyState
+          title="Unable to load diagnosis"
+          detail={
+            workspace.error instanceof Error ? workspace.error.message : "Workspace request failed."
+          }
+        />
+      ) : !workbook || !activeSheet ? (
+        <EmptyState
+          title="No workbook data"
+          detail="Run extraction after acknowledging the Data Mapping Rules."
+        />
+      ) : (
+        <WorkbookEditor
+          workbook={workbook}
+          activeSheetId={resolvedActiveSheetId}
+          selected={resolvedSelection}
+          commentIndicators={commentIndicators}
+          draftValue={draftValue}
+          onSelect={({ sheetId, row, col }) => {
+            setSelection({ sheetId, row, col });
+            setDraftValue("");
+          }}
+          onCommitEdit={commitWorkbookEdit}
+          commitPending={reviewCell.isPending || createComment.isPending || savingProjectVersion}
+        />
+      )}
+    </main>
+  );
+
+  const rightPanel = (
+    <aside
+      className="flex h-full min-h-0 flex-col overflow-hidden border-l bg-white"
+      style={{ borderColor: "#E3E6EA" }}
+    >
+      <div
+        className="flex h-12 items-center justify-between border-b px-4"
+        style={{ borderColor: "#E3E6EA" }}
+      >
+        <div className="flex rounded-md p-0.5" style={{ background: "#F7F8FA" }}>
+          {(["diagnosis", "comments"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setPanelTab(tab)}
+              className="h-7 rounded-md px-3 text-[12px] font-semibold capitalize"
+              style={{
+                background: panelTab === tab ? "#7B68EE" : "transparent",
+                color: panelTab === tab ? "#fff" : "#818EA0",
+              }}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+        <IconTooltip label="Close panel">
+          <button
+            onClick={() => setPanelOpen(false)}
+            className="rounded p-1 hover:bg-[#F7F8FA]"
+            aria-label="Close panel"
+          >
+            <X className="h-4 w-4 text-[#818EA0]" />
+          </button>
+        </IconTooltip>
+      </div>
+      {panelTab === "diagnosis" ? (
+        <DiagnosisPanel
+          projectId={projectId}
+          address={selectedAddress}
+          meta={selectedMeta}
+          cell={selectedCell}
+          currentUser={currentUser.data}
+          rulesByCode={rulesByCode}
+          onRevert={revertToRevision}
+          revertPending={revertCell.isPending}
+          manualHistory={workbookCellHistory.data ?? []}
+          manualHistoryPending={workbookCellHistory.isLoading}
+          onManualRevert={revertManualWorkbookRevision}
+          manualRevertPending={revertWorkbookCell.isPending}
+        />
+      ) : (
+        <CommentsPanel
+          cellComments={cellComments}
+          sheetComments={sheetComments}
+          teamMembers={commentMentionCandidates}
+          target={commentTarget}
+          targetName={targetLabel(commentTarget, selectedMeta?.label ?? selectedAddress)}
+          pending={createComment.isPending || resolveComment.isPending || reopenComment.isPending}
+          onSend={(body) => sendComment(body)}
+          onReply={(comment, body) =>
+            sendComment(body, comment.id, commentTargetFromComment(comment))
+          }
+          onToggleStatus={setCommentStatus}
+          onSelectTarget={selectCommentTarget}
+        />
+      )}
+    </aside>
+  );
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "#F7F8FA" }}>
@@ -471,10 +631,9 @@ function Diagnosis() {
         className="grid h-screen min-w-0 flex-1"
         style={{
           gridTemplateRows: "48px 1fr",
-          gridTemplateColumns: panelOpen ? "1fr 380px" : "1fr 0px",
         }}
       >
-        <div className="col-span-2 flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
+        <div className="flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
           <IconTooltip label="Back to Model Registry">
             <button
               onClick={() => navigate({ to: "/registry" })}
@@ -540,118 +699,44 @@ function Diagnosis() {
           </div>
         </div>
 
-        <main className="min-h-0 overflow-hidden" style={{ gridRow: 2, gridColumn: 1 }}>
-          {!projectId ? (
-            <EmptyState
-              title="No project selected"
-              detail="Select a project from the workspace first."
-            />
-          ) : workspace.isLoading ? (
-            <EmptyState
-              title="Loading workbook"
-              detail="Fetching the latest Millat diagnosis workbook."
-              loading
-            />
-          ) : workspace.isError ? (
-            <EmptyState
-              title="Unable to load diagnosis"
-              detail={
-                workspace.error instanceof Error
-                  ? workspace.error.message
-                  : "Workspace request failed."
-              }
-            />
-          ) : !workbook || !activeSheet ? (
-            <EmptyState
-              title="No workbook data"
-              detail="Run extraction after acknowledging the Data Mapping Rules."
-            />
+        <div
+          ref={layoutRef}
+          className="min-h-0 overflow-hidden"
+          style={{
+            display: "grid",
+            gridTemplateColumns: panelOpen
+              ? `minmax(0, 1fr) 10px ${resolvedRightPanelWidth}px`
+              : "minmax(0, 1fr)",
+          }}
+        >
+          {panelOpen ? (
+            <>
+              {workbookPane}
+              <button
+                type="button"
+                aria-label="Resize Diagnosis and Comments panel"
+                aria-orientation="vertical"
+                aria-valuenow={Math.round(resolvedRightPanelWidth)}
+                className="flex h-full cursor-col-resize items-center justify-center border-l border-r transition-colors hover:bg-[#F7F8FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7B68EE]"
+                style={{
+                  borderColor: "#E3E6EA",
+                  background: dragStart ? "#F7F8FA" : "#fff",
+                  color: "#818EA0",
+                  touchAction: "none",
+                }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  setDragStart({ x: event.clientX, width: resolvedRightPanelWidth });
+                }}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+              <div className="min-w-0 overflow-hidden">{rightPanel}</div>
+            </>
           ) : (
-            <WorkbookEditor
-              workbook={workbook}
-              activeSheetId={resolvedActiveSheetId}
-              selected={resolvedSelection}
-              commentIndicators={commentIndicators}
-              draftValue={draftValue}
-              onSelect={({ sheetId, row, col }) => {
-                setSelection({ sheetId, row, col });
-                setDraftValue("");
-              }}
-              onCommitEdit={commitWorkbookEdit}
-              commitPending={reviewCell.isPending || createComment.isPending || savingProjectVersion}
-            />
+            workbookPane
           )}
-        </main>
-
-        {panelOpen && (
-          <aside
-            className="flex min-h-0 flex-col overflow-hidden border-l bg-white"
-            style={{ gridRow: 2, gridColumn: 2, borderColor: "#E3E6EA" }}
-          >
-            <div
-              className="flex h-12 items-center justify-between border-b px-4"
-              style={{ borderColor: "#E3E6EA" }}
-            >
-              <div className="flex rounded-md p-0.5" style={{ background: "#F7F8FA" }}>
-                {(["diagnosis", "comments"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setPanelTab(tab)}
-                    className="h-7 rounded-md px-3 text-[12px] font-semibold capitalize"
-                    style={{
-                      background: panelTab === tab ? "#7B68EE" : "transparent",
-                      color: panelTab === tab ? "#fff" : "#818EA0",
-                    }}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-              <IconTooltip label="Close panel">
-                <button
-                  onClick={() => setPanelOpen(false)}
-                  className="rounded p-1 hover:bg-[#F7F8FA]"
-                  aria-label="Close panel"
-                >
-                  <X className="h-4 w-4 text-[#818EA0]" />
-                </button>
-              </IconTooltip>
-            </div>
-            {panelTab === "diagnosis" ? (
-              <DiagnosisPanel
-                projectId={projectId}
-                address={selectedAddress}
-                meta={selectedMeta}
-                cell={selectedCell}
-                currentUser={currentUser.data}
-                rulesByCode={rulesByCode}
-                onRevert={revertToRevision}
-                revertPending={revertCell.isPending}
-                manualHistory={workbookCellHistory.data ?? []}
-                manualHistoryPending={workbookCellHistory.isLoading}
-                onManualRevert={revertManualWorkbookRevision}
-                manualRevertPending={revertWorkbookCell.isPending}
-              />
-            ) : (
-              <CommentsPanel
-                cellComments={cellComments}
-                sheetComments={sheetComments}
-                teamMembers={commentMentionCandidates}
-                target={commentTarget}
-                targetName={targetLabel(commentTarget, selectedMeta?.label ?? selectedAddress)}
-                pending={
-                  createComment.isPending || resolveComment.isPending || reopenComment.isPending
-                }
-                onSend={(body) => sendComment(body)}
-                onReply={(comment, body) =>
-                  sendComment(body, comment.id, commentTargetFromComment(comment))
-                }
-                onToggleStatus={setCommentStatus}
-                onSelectTarget={selectCommentTarget}
-              />
-            )}
-          </aside>
-        )}
+        </div>
       </div>
     </div>
   );
