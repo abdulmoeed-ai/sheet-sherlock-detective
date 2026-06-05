@@ -174,6 +174,7 @@ type OptimisticCellUpdate = {
   workbookValue: string | number;
   historyEntry: Record<string, unknown>;
 };
+type PanelTab = "diagnosis" | "info" | "comments";
 
 const MAX_VISIBLE_ROWS = 90;
 const MAX_VISIBLE_COLS = 14;
@@ -213,7 +214,10 @@ function Diagnosis() {
   const draftWorkbookRef = useRef<EditorWorkbookPayload | null>(null);
   const [pendingWorkbookEditCount, setPendingWorkbookEditCount] = useState(0);
   const [savingProjectVersion, setSavingProjectVersion] = useState(false);
-  const [savedDraftVersion, setSavedDraftVersion] = useState<{ id: string; label: string | null } | null>(null);
+  const [savedDraftVersion, setSavedDraftVersion] = useState<{
+    id: string;
+    label: string | null;
+  } | null>(null);
   const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -226,7 +230,7 @@ function Diagnosis() {
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [panelTab, setPanelTab] = useState<"diagnosis" | "comments">("diagnosis");
+  const [panelTab, setPanelTab] = useState<PanelTab>("diagnosis");
   const [rightPanelWidth, setRightPanelWidth] = useState(readDiagnosisRightPanelWidth);
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; width: number } | null>(null);
@@ -242,7 +246,9 @@ function Diagnosis() {
   const selectedMeta = selectedCell?.diagnosis;
   const exportWarnings = useMemo(() => {
     if (workbook?.exportWarnings) return workbook.exportWarnings;
-    const diagnosedCells = sheetIds.flatMap((sheetId) => sheetCells(workbook?.sheets?.[sheetId])).filter((cell) => cell.diagnosis);
+    const diagnosedCells = sheetIds
+      .flatMap((sheetId) => sheetCells(workbook?.sheets?.[sheetId]))
+      .filter((cell) => cell.diagnosis);
     return buildExportWarningSummary(diagnosedCells);
   }, [workbook, sheetIds]);
   const selectedCellAddress = `${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
@@ -253,7 +259,11 @@ function Diagnosis() {
         ? queryKeys.workbookCellHistory(projectId, resolvedActiveSheetId, selectedCellAddress)
         : ["projects", "none", "workbook", "cells", "none", selectedCellAddress, "history"],
     queryFn: () =>
-      readWorkbookCellHistory(projectId as string, resolvedActiveSheetId as string, selectedCellAddress),
+      readWorkbookCellHistory(
+        projectId as string,
+        resolvedActiveSheetId as string,
+        selectedCellAddress,
+      ),
     enabled: !!projectId && !!resolvedActiveSheetId && !!selectedCell && !selectedMeta?.fieldId,
   });
   const commentTarget = useMemo(
@@ -368,7 +378,10 @@ function Diagnosis() {
       if (pendingWorkbookEditCount > 0 && workbook) {
         setSavingProjectVersion(true);
         const nextProject = await createProjectVersion(projectId, {
-          workbook: workbookDraftSaveSnapshot(draftWorkbookRef.current, workbook) as Record<string, unknown>,
+          workbook: workbookDraftSaveSnapshot(draftWorkbookRef.current, workbook) as Record<
+            string,
+            unknown
+          >,
         });
         setDraftValue("");
         draftWorkbookRef.current = null;
@@ -566,7 +579,7 @@ function Diagnosis() {
         style={{ borderColor: "#E3E6EA" }}
       >
         <div className="flex rounded-md p-0.5" style={{ background: "#F7F8FA" }}>
-          {(["diagnosis", "comments"] as const).map((tab) => (
+          {(["diagnosis", "info", "comments"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setPanelTab(tab)}
@@ -596,8 +609,14 @@ function Diagnosis() {
           address={selectedAddress}
           meta={selectedMeta}
           cell={selectedCell}
-          currentUser={currentUser.data}
           rulesByCode={rulesByCode}
+        />
+      ) : panelTab === "info" ? (
+        <InfoPanel
+          address={selectedAddress}
+          meta={selectedMeta}
+          cell={selectedCell}
+          currentUser={currentUser.data}
           onRevert={revertToRevision}
           revertPending={revertCell.isPending}
           manualHistory={workbookCellHistory.data ?? []}
@@ -678,7 +697,13 @@ function Diagnosis() {
             </span>
             <button
               onClick={saveDraft}
-              disabled={!projectId || !dirty || reviewCell.isPending || createComment.isPending || savingProjectVersion}
+              disabled={
+                !projectId ||
+                !dirty ||
+                reviewCell.isPending ||
+                createComment.isPending ||
+                savingProjectVersion
+              }
               className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
             >
@@ -747,27 +772,13 @@ function DiagnosisPanel({
   address,
   meta,
   cell,
-  currentUser,
   rulesByCode,
-  onRevert,
-  revertPending,
-  manualHistory,
-  manualHistoryPending,
-  onManualRevert,
-  manualRevertPending,
 }: {
   projectId?: string | null;
   address: string;
   meta?: DiagnosisMeta;
   cell?: CellPayload;
-  currentUser?: { id?: string | null; name?: string | null } | null;
   rulesByCode: Record<string, RuleTooltipMetadata | undefined>;
-  onRevert: (revisionId: string) => Promise<void>;
-  revertPending: boolean;
-  manualHistory: WorkbookRevisionResponse[];
-  manualHistoryPending: boolean;
-  onManualRevert: (revisionId: string) => Promise<void>;
-  manualRevertPending: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const llmReview = formatLlmReview(meta?.llmReview);
@@ -807,105 +818,34 @@ function DiagnosisPanel({
             Manual workbook entry
           </div>
           <p className="mt-1 text-[12px] leading-relaxed" style={{ color: "#818EA0" }}>
-            This cell was entered manually and was not extracted from the PDF.
+            No source preview is available because this cell was entered manually.
           </p>
         </div>
-        <section className="space-y-2 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-          <KV label="Value" value={displayValue(cell) || "-"} />
-          <KV label="Formula" value={cell.f ? `=${cell.f}` : "No"} />
-        </section>
-        <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-          <div
-            className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase"
-            style={{ color: "#818EA0" }}
-          >
-            <History className="h-3.5 w-3.5" /> History
-          </div>
-          {manualHistoryPending ? (
-            <div className="flex items-center gap-2 text-[12px]" style={{ color: "#818EA0" }}>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading history
-            </div>
-          ) : manualHistory.length === 0 ? (
-            <div className="text-[12px]" style={{ color: "#818EA0" }}>
-              No manual workbook history recorded for this cell.
-            </div>
-          ) : (
-            <div className="max-h-64 overflow-y-auto pr-1">
-              {orderedHistoryEntries(manualHistory.map(workbookRevisionHistoryEntry)).map(
-                (entry, index) => {
-                  const formatted = formatHistoryEntry(entry, { currentUser });
-                  const canRevert =
-                    typeof entry.id === "string" &&
-                    String(entry.action ?? "").toLowerCase() !== "revert";
-                  return (
-                    <div
-                      key={String(entry.id ?? index)}
-                      className="border-t py-2 text-[12px]"
-                      style={{ borderColor: "#F3F4F6", color: "#4F546B" }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="break-words font-semibold" style={{ color: "#292D34" }}>
-                            {formatted.title}
-                          </div>
-                          {(formatted.meta || formatted.note) && (
-                            <div className="mt-0.5 text-[11px]" style={{ color: "#818EA0" }}>
-                              {[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
-                            </div>
-                          )}
-                        </div>
-                        {canRevert && (
-                          <button
-                            onClick={() => onManualRevert(String(entry.id))}
-                            disabled={manualRevertPending}
-                            className="flex h-6 shrink-0 items-center gap-1 rounded border px-2 text-[11px] font-semibold disabled:opacity-50"
-                            style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
-                          >
-                            <RotateCcw className="h-3 w-3" /> Revert
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                },
-              )}
-            </div>
-          )}
-        </section>
+        <PanelEmpty
+          icon={Stethoscope}
+          title="Manual cell"
+          detail="Open Info to review the value, formula, and edit history."
+        />
       </div>
     );
   }
   return (
     <div className="flex-1 overflow-y-auto p-4">
-      <div className="mb-4">
-        <div className="text-[12px] font-bold" style={{ color: "#292D34" }}>
-          {address}
-        </div>
-        <div className="mt-1 text-[13px]" style={{ color: "#4F546B" }}>
-          {meta.label ?? "Mapped cell"}
-        </div>
-      </div>
-      <section className="space-y-2 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-        <KV label="Extracted value" value={meta.value ?? displayValue(cell) ?? "-"} />
-        <KV label="Status" value={meta.status ?? "-"} />
-        <KV
-          label="Confidence"
-          value={
-            meta.confidence === null || meta.confidence === undefined ? "-" : `${meta.confidence}%`
-          }
-        />
-        <KV label="Confidence level" value={meta.confidenceLevel ?? "-"} />
-        <KV label="Match method" value={meta.matchMethod ?? "-"} />
-        <KV label="Note" value={meta.noteReference ?? "-"} />
-        <KV label="Source" value={meta.documentFilename ?? "-"} />
-        <KV label="Page" value={meta.printedPageNumber ? String(meta.printedPageNumber) : "-"} />
-      </section>
       {previewSource && (
         <DiagnosisSourceInlinePreview
           source={previewSource}
           onExpand={() => setPreviewOpen(true)}
         />
+      )}
+      {!previewSource && (
+        <section className="rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+          <div className="text-[12px] font-semibold" style={{ color: "#292D34" }}>
+            Source preview unavailable
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed" style={{ color: "#818EA0" }}>
+            This mapped cell does not include a PDF page reference.
+          </p>
+        </section>
       )}
       <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
         <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
@@ -953,10 +893,7 @@ function DiagnosisPanel({
           </div>
         )}
         {llmReview && (
-          <div
-            className="mt-3 space-y-2 border-t pt-3"
-            style={{ borderColor: "#E5E7EB" }}
-          >
+          <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: "#E5E7EB" }}>
             <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
               AI review
             </div>
@@ -1010,49 +947,6 @@ function DiagnosisPanel({
           </div>
         )}
       </section>
-      <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
-        <div
-          className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase"
-          style={{ color: "#818EA0" }}
-        >
-          <History className="h-3.5 w-3.5" /> History
-        </div>
-        <div className="max-h-64 overflow-y-auto pr-1">
-          {orderedHistoryEntries(meta.history ?? []).map((entry, index) => {
-            const formatted = formatHistoryEntry(entry, { currentUser });
-            return (
-              <div
-                key={index}
-                className="border-t py-2 text-[12px]"
-                style={{ borderColor: "#F3F4F6", color: "#4F546B" }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="break-words font-semibold" style={{ color: "#292D34" }}>
-                      {formatted.title}
-                    </div>
-                    {(formatted.meta || formatted.note) && (
-                      <div className="mt-0.5 text-[11px]" style={{ color: "#818EA0" }}>
-                        {[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
-                      </div>
-                    )}
-                  </div>
-                  {typeof entry.id === "string" && !entry.id.endsWith("-source") && (
-                    <button
-                      onClick={() => onRevert(String(entry.id))}
-                      disabled={revertPending}
-                      className="flex h-6 shrink-0 items-center gap-1 rounded border px-2 text-[11px] font-semibold disabled:opacity-50"
-                      style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
-                    >
-                      <RotateCcw className="h-3 w-3" /> Revert
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
       {!!meta.diagnosisCandidates?.length && (
         <section
           className="mt-3 rounded-lg border p-3"
@@ -1073,6 +967,234 @@ function DiagnosisPanel({
         onOpenChange={setPreviewOpen}
         source={previewSource}
       />
+    </div>
+  );
+}
+
+function InfoPanel({
+  address,
+  meta,
+  cell,
+  currentUser,
+  onRevert,
+  revertPending,
+  manualHistory,
+  manualHistoryPending,
+  onManualRevert,
+  manualRevertPending,
+}: {
+  address: string;
+  meta?: DiagnosisMeta;
+  cell?: CellPayload;
+  currentUser?: { id?: string | null; name?: string | null } | null;
+  onRevert: (revisionId: string) => Promise<void>;
+  revertPending: boolean;
+  manualHistory: WorkbookRevisionResponse[];
+  manualHistoryPending: boolean;
+  onManualRevert: (revisionId: string) => Promise<void>;
+  manualRevertPending: boolean;
+}) {
+  if (!cell) {
+    return <PanelEmpty icon={History} title={address} detail="Select a populated workbook cell." />;
+  }
+
+  if (!meta) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mb-4">
+          <h2 className="text-[13px] font-bold" style={{ color: "#292D34" }}>
+            {address}
+          </h2>
+          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#4F546B" }}>
+            Manual workbook entry
+          </div>
+        </div>
+        <section className="space-y-2 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+          <KV label="Value" value={displayValue(cell) || "-"} />
+          <KV label="Formula" value={cell.f ? `=${cell.f}` : "No"} />
+        </section>
+        <ManualHistorySection
+          history={manualHistory}
+          pending={manualHistoryPending}
+          currentUser={currentUser}
+          onRevert={onManualRevert}
+          revertPending={manualRevertPending}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4">
+      <div className="mb-4">
+        <div className="text-[12px] font-bold" style={{ color: "#292D34" }}>
+          {address}
+        </div>
+        <div className="mt-1 text-[13px]" style={{ color: "#4F546B" }}>
+          {meta.label ?? "Mapped cell"}
+        </div>
+      </div>
+      <section className="space-y-2 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+        <KV label="Extracted value" value={meta.value ?? displayValue(cell) ?? "-"} />
+        <KV label="Status" value={meta.status ?? "-"} />
+        <KV
+          label="Confidence"
+          value={
+            meta.confidence === null || meta.confidence === undefined ? "-" : `${meta.confidence}%`
+          }
+        />
+        <KV label="Confidence level" value={meta.confidenceLevel ?? "-"} />
+        <KV label="Match method" value={meta.matchMethod ?? "-"} />
+        <KV label="Note" value={meta.noteReference ?? "-"} />
+        <KV label="Source" value={meta.documentFilename ?? "-"} />
+        <KV label="Page" value={meta.printedPageNumber ? String(meta.printedPageNumber) : "-"} />
+      </section>
+      <DiagnosisHistorySection
+        history={meta.history ?? []}
+        currentUser={currentUser}
+        onRevert={onRevert}
+        revertPending={revertPending}
+      />
+    </div>
+  );
+}
+
+function ManualHistorySection({
+  history,
+  pending,
+  currentUser,
+  onRevert,
+  revertPending,
+}: {
+  history: WorkbookRevisionResponse[];
+  pending: boolean;
+  currentUser?: { id?: string | null; name?: string | null } | null;
+  onRevert: (revisionId: string) => Promise<void>;
+  revertPending: boolean;
+}) {
+  return (
+    <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+      <HistoryHeader />
+      {pending ? (
+        <div className="flex items-center gap-2 text-[12px]" style={{ color: "#818EA0" }}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading history
+        </div>
+      ) : history.length === 0 ? (
+        <div className="text-[12px]" style={{ color: "#818EA0" }}>
+          No manual workbook history recorded for this cell.
+        </div>
+      ) : (
+        <div className="max-h-64 overflow-y-auto pr-1">
+          {orderedHistoryEntries(history.map(workbookRevisionHistoryEntry)).map((entry, index) => {
+            const formatted = formatHistoryEntry(entry, { currentUser });
+            const canRevert =
+              typeof entry.id === "string" && String(entry.action ?? "").toLowerCase() !== "revert";
+            return (
+              <HistoryEntryRow
+                key={String(entry.id ?? index)}
+                title={formatted.title}
+                meta={[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
+                canRevert={canRevert}
+                revertPending={revertPending}
+                onRevert={() => onRevert(String(entry.id))}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DiagnosisHistorySection({
+  history,
+  currentUser,
+  onRevert,
+  revertPending,
+}: {
+  history: Array<Record<string, unknown>>;
+  currentUser?: { id?: string | null; name?: string | null } | null;
+  onRevert: (revisionId: string) => Promise<void>;
+  revertPending: boolean;
+}) {
+  const entries = orderedHistoryEntries(history);
+  return (
+    <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+      <HistoryHeader />
+      {entries.length === 0 ? (
+        <div className="text-[12px]" style={{ color: "#818EA0" }}>
+          No history recorded for this cell.
+        </div>
+      ) : (
+        <div className="max-h-64 overflow-y-auto pr-1">
+          {entries.map((entry, index) => {
+            const formatted = formatHistoryEntry(entry, { currentUser });
+            return (
+              <HistoryEntryRow
+                key={String(entry.id ?? index)}
+                title={formatted.title}
+                meta={[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
+                canRevert={typeof entry.id === "string" && !String(entry.id).endsWith("-source")}
+                revertPending={revertPending}
+                onRevert={() => onRevert(String(entry.id))}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HistoryHeader() {
+  return (
+    <div
+      className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase"
+      style={{ color: "#818EA0" }}
+    >
+      <History className="h-3.5 w-3.5" /> History
+    </div>
+  );
+}
+
+function HistoryEntryRow({
+  title,
+  meta,
+  canRevert,
+  revertPending,
+  onRevert,
+}: {
+  title: string;
+  meta: string;
+  canRevert: boolean;
+  revertPending: boolean;
+  onRevert: () => void;
+}) {
+  return (
+    <div className="border-t py-2 text-[12px]" style={{ borderColor: "#F3F4F6", color: "#4F546B" }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="break-words font-semibold" style={{ color: "#292D34" }}>
+            {title}
+          </div>
+          {meta && (
+            <div className="mt-0.5 text-[11px]" style={{ color: "#818EA0" }}>
+              {meta}
+            </div>
+          )}
+        </div>
+        {canRevert && (
+          <button
+            onClick={onRevert}
+            disabled={revertPending}
+            className="flex h-6 shrink-0 items-center gap-1 rounded border px-2 text-[11px] font-semibold disabled:opacity-50"
+            style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+          >
+            <RotateCcw className="h-3 w-3" /> Revert
+          </button>
+        )}
+      </div>
     </div>
   );
 }

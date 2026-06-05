@@ -102,7 +102,7 @@ export function DiagnosisSourceInlinePreview({
 
   return (
     <section
-      className="mt-3 overflow-hidden rounded-lg border bg-white"
+      className="overflow-hidden rounded-lg border bg-white"
       style={{ borderColor: "#D8DEE8" }}
     >
       <div
@@ -141,7 +141,7 @@ export function DiagnosisSourceInlinePreview({
         </div>
       </div>
 
-      <div className="max-h-[420px] overflow-auto bg-[#F3F4F6] p-3">
+      <div className="h-[560px] min-h-[420px] max-h-[calc(100vh-180px)] overflow-auto bg-[#F3F4F6] p-3">
         <div
           className="relative mx-auto w-[min(100%,720px)] origin-top"
           style={{
@@ -586,7 +586,9 @@ export function CitationPreviewSidebar({
         <div className="min-w-0 truncate text-[11px]" style={{ color: "#4F546B" }}>
           {bbox ? (
             <>
-              <span className="font-semibold" style={{ color: "#DC2626" }}>Highlighted row</span>
+              <span className="font-semibold" style={{ color: "#DC2626" }}>
+                Highlighted row
+              </span>
               {source.sourceText ? ` · ${source.sourceText}` : ""}
             </>
           ) : (
