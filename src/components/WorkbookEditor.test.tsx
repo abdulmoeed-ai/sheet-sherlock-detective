@@ -45,6 +45,18 @@ const workbook: WorkbookPayload = {
               value: "-2,630,470",
             },
           },
+          "2": {
+            v: null,
+            f: "A1*2",
+            formulaValueStatus: "blank_precedents",
+            diagnosis: {
+              sheetName: "Inputs",
+              address: "C1",
+              editable: false,
+              formula: true,
+              value: "74",
+            },
+          },
         },
       },
     },
@@ -105,6 +117,7 @@ describe("WorkbookEditor bridge", () => {
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe("field-a1");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.f).toBe("=A1*2");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.v).toBe(-2630470);
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["2"]?.v).toBeNull();
     expect(prepared.sheets?.["sheet-1"]?.showGridlines).toBe(1);
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.s).toBeDefined();
     expect(prepared.styles).toMatchObject({
@@ -141,7 +154,7 @@ describe("WorkbookEditor bridge", () => {
     expect(sheet?.columnData?.["1"]?.w).toBeGreaterThanOrEqual(112);
   });
 
-  it("configures Univer to preserve cached formula values when loading the workbook", async () => {
+  it("configures Univer to force formula recomputation when loading the workbook", async () => {
     vi.resetModules();
     const presetSpy = vi.fn((config: unknown) => ({ config }));
     const setInitialFormulaComputing = vi.fn();
@@ -186,10 +199,10 @@ describe("WorkbookEditor bridge", () => {
     await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
     expect(presetSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        formula: { initialFormulaComputing: CalculationMode.WHEN_EMPTY },
+        formula: { initialFormulaComputing: CalculationMode.FORCED },
       }),
     );
-    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.WHEN_EMPTY);
+    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.FORCED);
   });
 
   it("converts Univer edit-end events into review-cell save events for editable inputs only", () => {

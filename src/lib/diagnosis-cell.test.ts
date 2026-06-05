@@ -194,10 +194,10 @@ describe("diagnosis cell helpers", () => {
     });
   });
 
-  it("formats LLM warnings and review metadata", () => {
+  it("formats AI warnings and review metadata", () => {
     expect(warningDetails("llm.accepted_after_validation")).toEqual({
-      label: "LLM accepted after validation",
-      description: "The configured LLM reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      label: "AI accepted after validation",
+      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
       actionable: false,
     });
     expect(warningDetails("llm.rejected_wrong_section").actionable).toBe(true);
@@ -226,7 +226,7 @@ describe("diagnosis cell helpers", () => {
   it("formats term standardization warnings and metadata", () => {
     expect(warningDetails("llm.term_standardization_requires_review")).toEqual({
       label: "Term mapping needs review",
-      description: "The configured LLM found a likely standardized financial term, but analyst review is required.",
+      description: "AI found a likely standardized financial term, but analyst review is required.",
       actionable: true,
     });
     expect(warningDetails("llm.term_standardized_after_validation").actionable).toBe(false);

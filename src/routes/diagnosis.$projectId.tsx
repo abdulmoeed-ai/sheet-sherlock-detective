@@ -28,10 +28,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
+  createProjectVersion,
   listComments,
   readMappingRules,
   readWorkbookCellHistory,
-  saveWorkbook as saveWorkbookRequest,
 } from "@/lib/api/projects";
 import type { ReviewCommentResponse, WorkbookRevisionResponse } from "@/lib/api/types";
 import {
@@ -60,6 +60,11 @@ import {
   warningDetails,
   workbookRevisionHistoryEntry,
 } from "@/lib/diagnosis-cell";
+import {
+  diagnosisDraftSaveLabel,
+  hasDiagnosisDraftChanges,
+  workbookDraftSaveSnapshot,
+} from "@/lib/diagnosis-draft";
 import { useWorkspace } from "@/hooks/use-projects";
 import {
   useCreateComment,
@@ -176,8 +181,6 @@ function Diagnosis() {
   const reopenComment = useReopenComment(projectId);
   const createExport = useCreateExcelExport(projectId);
   const downloadExport = useDownloadExcelExport(projectId);
-  const autosavePromises = useRef(new Set<Promise<unknown>>());
-  const autosaveStatusRef = useRef<"idle" | "saving" | "saved" | "error">("idle");
   const comments = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
@@ -195,6 +198,10 @@ function Diagnosis() {
 
   const workbookSource = workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview;
   const serverWorkbook = useMemo(() => workbookPayload(workbookSource), [workbookSource]);
+  const draftWorkbookRef = useRef<WorkbookPayload | null>(null);
+  const [pendingWorkbookEditCount, setPendingWorkbookEditCount] = useState(0);
+  const [savingProjectVersion, setSavingProjectVersion] = useState(false);
+  const [savedDraftVersion, setSavedDraftVersion] = useState<{ id: string; label: string | null } | null>(null);
   const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -259,7 +266,18 @@ function Diagnosis() {
     () => mentionCandidates(workspace.data?.project.teamMembers ?? [], currentUser.data),
     [currentUser.data, workspace.data?.project.teamMembers],
   );
-  const dirty = draftValue.trim() !== "";
+  const dirty = hasDiagnosisDraftChanges({ draftValue, pendingWorkbookEditCount });
+  const draftSaveLabel = diagnosisDraftSaveLabel({
+    dirty,
+    saving: savingProjectVersion,
+    savedVersionLabel: savedDraftVersion?.label,
+  });
+
+  useEffect(() => {
+    draftWorkbookRef.current = null;
+    setPendingWorkbookEditCount(0);
+    setSavedDraftVersion(null);
+  }, [projectId]);
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
   const rulesByCode = useMemo(() => {
     return Object.fromEntries(
@@ -302,6 +320,18 @@ function Diagnosis() {
     if (!projectId) return;
     const fieldId = selectedMeta?.fieldId;
     try {
+      if (pendingWorkbookEditCount > 0 && workbook) {
+        setSavingProjectVersion(true);
+        const nextProject = await createProjectVersion(projectId, {
+          workbook: workbookDraftSaveSnapshot(draftWorkbookRef.current, workbook) as Record<string, unknown>,
+        });
+        setDraftValue("");
+        draftWorkbookRef.current = null;
+        setPendingWorkbookEditCount(0);
+        setSavedDraftVersion({ id: nextProject.id, label: nextProject.projectLabel ?? null });
+        toast.success(`Draft saved as ${nextProject.projectLabel ?? "a new version"}`);
+        return;
+      }
       if (draftValue.trim() && fieldId) {
         const optimisticUpdate = buildOptimisticCellUpdate({
           fieldId,
@@ -326,6 +356,8 @@ function Diagnosis() {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }
       toast.error(error instanceof Error ? error.message : "Unable to save draft");
+    } finally {
+      setSavingProjectVersion(false);
     }
   };
 
@@ -391,62 +423,13 @@ function Diagnosis() {
             currentUser: currentUser.data,
           })
         : null;
-    try {
-      if (fieldId && optimisticUpdate) {
-        setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
-      }
-      await trackAutosave(
-        saveWorkbookRequest(projectId, {
-          workbook: event.workbook as Record<string, unknown>,
-          action: "edit",
-          sheetId: event.sheetId,
-          sheetName: event.sheetName,
-          cellAddress: event.address,
-          fieldId,
-          oldCell: (event.oldCell as Record<string, unknown> | null | undefined) ?? null,
-          newCell: (event.newCell as Record<string, unknown> | null | undefined) ?? null,
-        }),
-      );
-      if (!sheetIds.includes(event.sheetId)) {
-        await workspace.refetch();
-      }
-      if (!fieldId && event.sheetId === resolvedActiveSheetId && event.address === selectedCellAddress) {
-        await workbookCellHistory.refetch();
-      }
-      if (fieldId) {
-        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
-      }
-      toast.success(`${event.sheetName}!${event.address} saved`);
-    } catch (error) {
-      if (fieldId) {
-        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
-      }
-      toast.error(error instanceof Error ? error.message : "Unable to save workbook edit");
+    if (fieldId && optimisticUpdate) {
+      setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
     }
-  };
-
-  const trackAutosave = async <T,>(promise: Promise<T>) => {
-    setAutosaveStatusIfChanged("saving");
-    autosavePromises.current.add(promise);
-    try {
-      const result = await promise;
-      setAutosaveStatusIfChanged("saved");
-      return result;
-    } catch (error) {
-      setAutosaveStatusIfChanged("error");
-      throw error;
-    } finally {
-      autosavePromises.current.delete(promise);
-    }
-  };
-
-  const setAutosaveStatusIfChanged = (status: "idle" | "saving" | "saved" | "error") => {
-    if (autosaveStatusRef.current === status) return;
-    autosaveStatusRef.current = status;
-  };
-
-  const flushAutosaves = async () => {
-    await Promise.all(Array.from(autosavePromises.current));
+    draftWorkbookRef.current = event.workbook;
+    setPendingWorkbookEditCount((count) => count + 1);
+    setSavedDraftVersion(null);
+    toast.success(`${event.sheetName}!${event.address} added to draft`);
   };
 
   const exportWorkbook = async () => {
@@ -459,7 +442,6 @@ function Diagnosis() {
       if (!proceed) return;
     }
     try {
-      await flushAutosaves();
       const created = await createExport.mutateAsync();
       const blob = await downloadExport.mutateAsync(created.id);
       const url = window.URL.createObjectURL(blob);
@@ -532,13 +514,16 @@ function Diagnosis() {
               )}
               Export to Excel
             </button>
+            <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
+              {draftSaveLabel}
+            </span>
             <button
               onClick={saveDraft}
-              disabled={!projectId || !dirty || reviewCell.isPending || createComment.isPending}
+              disabled={!projectId || !dirty || reviewCell.isPending || createComment.isPending || savingProjectVersion}
               className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
             >
-              {reviewCell.isPending || createComment.isPending ? (
+              {reviewCell.isPending || createComment.isPending || savingProjectVersion ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Save className="h-3.5 w-3.5" />
@@ -593,7 +578,7 @@ function Diagnosis() {
                 setDraftValue("");
               }}
               onCommitEdit={commitWorkbookEdit}
-              commitPending={reviewCell.isPending || createComment.isPending}
+              commitPending={reviewCell.isPending || createComment.isPending || savingProjectVersion}
             />
           )}
         </main>
@@ -888,13 +873,11 @@ function DiagnosisPanel({
             style={{ borderColor: "#E5E7EB" }}
           >
             <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
-              LLM review
+              AI review
             </div>
             <KV label="Decision" value={llmReview.decision} />
             <KV label="Validation" value={llmReview.validationStatus} />
             <KV label="Recommended value" value={llmReview.recommendedValue} />
-            <KV label="Provider" value={llmReview.provider} />
-            <KV label="Model" value={llmReview.model} />
             <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
               {llmReview.reason}
             </div>
@@ -923,8 +906,6 @@ function DiagnosisPanel({
             <KV label="Canonical term" value={termStandardization.canonicalFinancialTerm} />
             <KV label="Validation" value={termStandardization.validationStatus} />
             <KV label="Confidence" value={termStandardization.confidence} />
-            <KV label="Provider" value={termStandardization.provider} />
-            <KV label="Model" value={termStandardization.model} />
             <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
               {termStandardization.reason}
             </div>

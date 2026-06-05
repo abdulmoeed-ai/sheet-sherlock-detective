@@ -161,6 +161,10 @@ export interface WorkbookSaveInput {
   newCell?: Record<string, unknown> | null;
 }
 
+export interface ProjectVersionCreateInput {
+  workbook?: Record<string, unknown> | null;
+}
+
 export interface WorkbookRevisionResponse {
   id: string;
   projectId: string;

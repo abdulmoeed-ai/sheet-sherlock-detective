@@ -136,50 +136,50 @@ export function workbookRevisionHistoryEntry(revision: {
 export function warningDetails(warning: string) {
   if (warning === "llm.accepted_after_validation") {
     return {
-      label: "LLM accepted after validation",
-      description: "The configured LLM reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      label: "AI accepted after validation",
+      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
       actionable: false,
     };
   }
   if (warning === "llm.recommended_zero_dash") {
     return {
-      label: "LLM recommended zero",
-      description: "The configured LLM recommended zero from dash or nil source evidence and deterministic checks accepted it.",
+      label: "AI recommended zero",
+      description: "AI recommended zero from dash or nil source evidence and deterministic checks accepted it.",
       actionable: false,
     };
   }
   if (warning === "llm.rejected_wrong_section") {
     return {
-      label: "LLM rejected mapping",
-      description: "The configured LLM rejected this mapping, so an analyst should review the cell.",
+      label: "AI rejected mapping",
+      description: "AI rejected this mapping, so an analyst should review the cell.",
       actionable: true,
     };
   }
   if (warning === "llm.requires_analyst_review") {
     return {
-      label: "LLM review unresolved",
-      description: "The configured LLM could not safely accept this mapping; analyst review is required.",
+      label: "AI review unresolved",
+      description: "AI could not safely accept this mapping; analyst review is required.",
       actionable: true,
     };
   }
   if (warning === "llm.term_standardized_after_validation") {
     return {
-      label: "LLM standardized term",
-      description: "The configured LLM standardized the financial term and deterministic checks accepted the mapping.",
+      label: "AI standardized term",
+      description: "AI standardized the financial term and deterministic checks accepted the mapping.",
       actionable: false,
     };
   }
   if (warning === "llm.term_standardization_requires_review") {
     return {
       label: "Term mapping needs review",
-      description: "The configured LLM found a likely standardized financial term, but analyst review is required.",
+      description: "AI found a likely standardized financial term, but analyst review is required.",
       actionable: true,
     };
   }
   if (warning === "llm.term_standardization_rejected") {
     return {
       label: "Term mapping rejected",
-      description: "The configured LLM proposed a term mapping that failed deterministic validation.",
+      description: "AI proposed a term mapping that failed deterministic validation.",
       actionable: true,
     };
   }

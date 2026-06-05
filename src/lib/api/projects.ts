@@ -8,6 +8,7 @@ import type {
   ForecastRunResponse,
   MappingRulesSummaryResponse,
   ModelArchiveResponse,
+  ProjectVersionCreateInput,
   ProjectResponse,
   ReviewCommentInput,
   ReviewCommentResponse,
@@ -42,6 +43,13 @@ export function createProject(input: {
 
 export function readProject(projectId: string) {
   return apiFetch<ProjectResponse>(`/api/projects/${projectId}`);
+}
+
+export function createProjectVersion(projectId: string, input: ProjectVersionCreateInput = {}) {
+  return apiFetch<ProjectResponse>(`/api/projects/${projectId}/versions`, {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function readWorkspace(projectId: string) {

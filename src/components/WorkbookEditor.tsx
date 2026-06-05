@@ -27,6 +27,7 @@ export type WorkbookCellMeta = {
 export type WorkbookCellPayload = {
   v?: unknown;
   f?: string;
+  formulaValueStatus?: string;
   diagnosis?: WorkbookCellMeta;
   s?: string;
 };
@@ -145,7 +146,7 @@ export function WorkbookEditor({
             UniverSheetsCorePreset({
               container: containerRef.current,
               formula: {
-                initialFormulaComputing: CalculationMode.WHEN_EMPTY,
+                initialFormulaComputing: CalculationMode.FORCED,
               },
             }),
           ],
@@ -167,7 +168,7 @@ export function WorkbookEditor({
           };
           addEvent?: (event: unknown, callback: (params: Record<string, unknown>) => void) => void;
         };
-        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.WHEN_EMPTY);
+        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.FORCED);
         eventApi.createWorkbook(preparedWorkbook, { makeCurrent: true });
         if (activeSheetId) {
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
@@ -541,7 +542,12 @@ function styledCellData(
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
-      if (formula && cell.diagnosis && "value" in cell.diagnosis) {
+      if (
+        formula &&
+        cell.diagnosis &&
+        "value" in cell.diagnosis &&
+        cell.formulaValueStatus !== "blank_precedents"
+      ) {
         preparedCell.v = workbookDisplayValue(cell.diagnosis.value);
       }
       next[rowKey][colKey] = preparedCell;

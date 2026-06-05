@@ -15,7 +15,6 @@ import type {
 } from "@/lib/api/types";
 import {
   effectiveExtractionPercent,
-  extractionElapsedLabel,
   extractionFailureMessage,
   latestExtractionEvent,
   mergeExtractionEvents,
@@ -214,17 +213,22 @@ function Ingestion() {
 
   const uploadPending =
     uploadDocuments.isPending || startExtractionMutation.isPending || extractionPending;
+  const showUploadPanel = !uploadPending && extractionProgress === null;
+  const visibleEvents = visibleExtractionEvents(extractionEvents);
+  const showProgressWorkbench =
+    !!extractionProgress &&
+    !(extractionProgress.status.toLowerCase() === "queued" && visibleEvents.length === 0);
   const uploadSummary = uploadProgressSummary(selectedUploads);
   const progressModel = useMemo(
     () =>
       buildIngestionProgressModel({
         uploadSummary,
         extractionProgress,
-        extractionEvents,
+        extractionEvents: visibleEvents,
         extractionPending,
         extractionError,
       }),
-    [uploadSummary, extractionProgress, extractionEvents, extractionPending, extractionError],
+    [uploadSummary, extractionProgress, visibleEvents, extractionPending, extractionError],
   );
 
   const refreshExtractedProject = async (id: string) => {
@@ -251,150 +255,150 @@ function Ingestion() {
       hideProgress
     >
       <div className="pb-24">
-        <IngestionProgressWorkbench
-          model={progressModel}
-          events={extractionEvents}
-          job={extractionProgress}
-        />
-
-        <div className="mb-5 rounded-lg border bg-white p-5" style={{ borderColor: "#D8DEE8" }}>
-          <div
-            className="mb-4 text-[13px] font-semibold"
-            style={{ color: "var(--color-text-primary)" }}
-          >
-            Upload PSX Annual Report / Filing
-          </div>
-
-          {!selectedUploads.length ? (
-            <label
-              className="block cursor-pointer rounded-[10px] px-6 py-9 text-center transition-colors"
-              style={{ border: "2px dashed var(--color-brand)", background: "transparent" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--color-tag-bg)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <CloudUpload
-                className="mx-auto h-7 w-7"
-                style={{ color: "var(--color-text-muted)" }}
-              />
-              <div className="mt-3 text-[14px]">
-                <span className="font-bold" style={{ color: "var(--color-brand)" }}>
-                  Click to upload
-                </span>{" "}
-                <span style={{ color: "var(--color-text-secondary)" }}>or drag and drop</span>
-              </div>
-              <div className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                Select one or more PDF annual reports (max. 50MB each)
-              </div>
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                accept="application/pdf,.pdf"
-                onChange={(e) => {
-                  handleFileSelection(e.target.files);
-                  e.currentTarget.value = "";
-                }}
-              />
-            </label>
-          ) : (
-            <div className="space-y-2">
-              {selectedUploads.map((item) => (
-                <div
-                  key={fileKey(item.file)}
-                  className="flex items-center gap-3 rounded-lg border px-4 py-3"
-                  style={{ borderColor: "var(--color-border-default)" }}
-                >
-                  <FileText
-                    className="h-8 w-8 rounded-md p-1.5"
-                    style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="truncate text-[14px] font-medium"
-                      style={{ color: "var(--color-text-primary)" }}
-                    >
-                      {item.file.name}
-                    </div>
-                    <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                      {(item.file.size / (1024 * 1024)).toFixed(1)} MB · {uploadStatusLabel(item)}
-                    </div>
-                    {item.status === "failed" && item.message ? (
-                      <div className="mt-1 text-[11px]" style={{ color: "var(--color-danger)" }}>
-                        {item.message}
-                      </div>
-                    ) : null}
-                  </div>
-                  {item.status === "uploading" ? (
-                    <Loader2
-                      className="h-4 w-4 animate-spin"
-                      style={{ color: "var(--color-brand)" }}
-                    />
-                  ) : (
-                    <IconTooltip label="Remove PDF">
-                      <button
-                        onClick={() => removeSelectedFile(item.file)}
-                        disabled={uploadPending}
-                        className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
-                        aria-label="Remove PDF"
-                      >
-                        <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
-                      </button>
-                    </IconTooltip>
-                  )}
-                </div>
-              ))}
-              <div className="flex flex-wrap items-center gap-2">
-                <label
-                  className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-[12px] font-semibold"
-                  style={{
-                    borderColor: "var(--color-border-default)",
-                    color: "var(--color-brand)",
-                  }}
-                >
-                  Add more PDFs
-                  <input
-                    type="file"
-                    multiple
-                    className="hidden"
-                    accept="application/pdf,.pdf"
-                    onChange={(e) => {
-                      handleFileSelection(e.target.files);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={() => setSelectedUploads([])}
-                  disabled={uploadPending}
-                  className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
-                  style={{
-                    borderColor: "var(--color-border-default)",
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
-
-          {rejectedFiles.length ? (
+        {showUploadPanel ? (
+          <div className="mb-5 rounded-lg border bg-white p-5" style={{ borderColor: "#D8DEE8" }}>
             <div
-              className="mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-[12px]"
-              style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}
+              className="mb-4 text-[13px] font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
             >
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                Rejected non-PDF file{rejectedFiles.length === 1 ? "" : "s"}:{" "}
-                {rejectedFiles.join(", ")}
-              </span>
+              Upload PSX Annual Report / Filing
             </div>
-          ) : null}
-        </div>
+
+            {!selectedUploads.length ? (
+              <label
+                className="block cursor-pointer rounded-[10px] px-6 py-9 text-center transition-colors"
+                style={{ border: "2px dashed var(--color-brand)", background: "transparent" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--color-tag-bg)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <CloudUpload
+                  className="mx-auto h-7 w-7"
+                  style={{ color: "var(--color-text-muted)" }}
+                />
+                <div className="mt-3 text-[14px]">
+                  <span className="font-bold" style={{ color: "var(--color-brand)" }}>
+                    Click to upload
+                  </span>{" "}
+                  <span style={{ color: "var(--color-text-secondary)" }}>or drag and drop</span>
+                </div>
+                <div className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                  Select one or more PDF annual reports (max. 50MB each)
+                </div>
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => {
+                    handleFileSelection(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            ) : (
+              <div className="space-y-2">
+                {selectedUploads.map((item) => (
+                  <div
+                    key={fileKey(item.file)}
+                    className="flex items-center gap-3 rounded-lg border px-4 py-3"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <FileText
+                      className="h-8 w-8 rounded-md p-1.5"
+                      style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="truncate text-[14px] font-medium"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        {item.file.name}
+                      </div>
+                      <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                        {(item.file.size / (1024 * 1024)).toFixed(1)} MB · {uploadStatusLabel(item)}
+                      </div>
+                      {item.status === "failed" && item.message ? (
+                        <div className="mt-1 text-[11px]" style={{ color: "var(--color-danger)" }}>
+                          {item.message}
+                        </div>
+                      ) : null}
+                    </div>
+                    {item.status === "uploading" ? (
+                      <Loader2
+                        className="h-4 w-4 animate-spin"
+                        style={{ color: "var(--color-brand)" }}
+                      />
+                    ) : (
+                      <IconTooltip label="Remove PDF">
+                        <button
+                          onClick={() => removeSelectedFile(item.file)}
+                          disabled={uploadPending}
+                          className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
+                          aria-label="Remove PDF"
+                        >
+                          <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
+                        </button>
+                      </IconTooltip>
+                    )}
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <label
+                    className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-[12px] font-semibold"
+                    style={{
+                      borderColor: "var(--color-border-default)",
+                      color: "var(--color-brand)",
+                    }}
+                  >
+                    Add more PDFs
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => {
+                        handleFileSelection(e.target.files);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <button
+                    onClick={() => setSelectedUploads([])}
+                    disabled={uploadPending}
+                    className="h-8 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+                    style={{
+                      borderColor: "var(--color-border-default)",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {rejectedFiles.length ? (
+              <div
+                className="mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-[12px]"
+                style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Rejected non-PDF file{rejectedFiles.length === 1 ? "" : "s"}:{" "}
+                  {rejectedFiles.join(", ")}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {showProgressWorkbench ? (
+          <IngestionProgressWorkbench model={progressModel} events={visibleEvents} job={extractionProgress} />
+        ) : null}
       </div>
 
       {rerunModalOpen && (
@@ -408,10 +412,6 @@ function Ingestion() {
       <StickyFooter
         fileCount={selectedUploads.length}
         uploadPending={uploadPending}
-        uploadSummary={uploadSummary}
-        extractionProgress={extractionProgress}
-        extractionEvents={extractionEvents}
-        extractionError={extractionError}
         hasProject={!!projectId}
         onStart={startIngestion}
       />
@@ -438,13 +438,26 @@ function uploadProgressSummary(items: SelectedUpload[]) {
   return { total, uploaded, uploading, failed };
 }
 
+function visibleExtractionEvents(events: ExtractionProgressEventResponse[]) {
+  return events.filter((event) => !isWorkerConnectionWarning(event));
+}
+
+function isWorkerConnectionWarning(event: ExtractionProgressEventResponse) {
+  return (
+    event.status === "warning" &&
+    event.stage === "queued" &&
+    (event.title.toLowerCase().includes("worker not connected") ||
+      event.message.toLowerCase().includes("no rq extraction worker"))
+  );
+}
+
 type IngestionProgressModel = ReturnType<typeof buildIngestionProgressModel>;
 
 const EXTRACTION_STEPS = [
   { stage: "queued", label: "Queued", detail: "Job accepted by backend." },
   { stage: "document_loading", label: "Documents", detail: "Loading uploaded PDFs." },
   { stage: "deterministic_row_parsing", label: "Parser", detail: "Extracting deterministic rows." },
-  { stage: "gemini_matching", label: "LLM mapping", detail: "Reviewing ambiguous terms and rows." },
+  { stage: "gemini_matching", label: "AI mapping", detail: "Reviewing ambiguous terms and rows." },
   { stage: "cell_confidence_scoring", label: "Confidence", detail: "Scoring mapped cells." },
   { stage: "completed", label: "Done", detail: "Diagnosis is ready." },
 ] as const;
@@ -478,18 +491,31 @@ function buildIngestionProgressModel({
           ? "ready"
           : "idle";
   const currentStage = latestEvent?.stage ?? extractionProgress?.status ?? "upload";
-  const elapsedLabel = extractionElapsedLabel(extractionProgress, extractionEvents);
   const title = failedMessage
     ? "Extraction needs attention"
-    : (latestEvent?.title ??
+    : (sanitizeExtractionText(latestEvent?.title) ??
       (extractionProgress ? extractionProgress.message : "Ready for source PDFs"));
   const message = failedMessage
-    ? `${failedMessage}. Please try again after checking the uploaded PDF and backend worker.`
-    : (latestEvent?.message ??
+    ? `${failedMessage}. Please try again after checking the uploaded PDF.`
+    : (sanitizeExtractionText(latestEvent?.message) ??
       (extractionProgress?.status.toLowerCase() === "queued"
-        ? "Waiting for the extraction worker to pick up the queued job."
+        ? "Preparing extraction."
         : extractionProgress?.message || "Upload source PDFs, then start extraction."));
-  return { percent, status, currentStage, title, message, latestEvent, elapsedLabel };
+  return { percent, status, currentStage, title, message, latestEvent };
+}
+
+function sanitizeExtractionText(value: string | null | undefined) {
+  if (!value) return value;
+  return value
+    .replace(/Gemini/gi, "AI")
+    .replace(/\bLLM\b/g, "AI")
+    .replace(/\bRQ\b/g, "")
+    .replace(/\bRedis\b/gi, "")
+    .replace(/`?uv run python -m app\.services\.extraction\.worker`?/gi, "")
+    .replace(/\bbackend worker\b/gi, "extraction service")
+    .replace(/\bextraction worker\b/gi, "extraction service")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function IngestionProgressWorkbench({
@@ -517,19 +543,6 @@ function IngestionProgressWorkbench({
             </p>
           </div>
           <div className="flex gap-2">
-            {model.elapsedLabel ? (
-              <div
-                className="rounded-md border px-3 py-2 text-right"
-                style={{ borderColor: "#E1E7F0" }}
-              >
-                <div className="text-[11px] font-semibold uppercase" style={{ color: "#788397" }}>
-                  Elapsed
-                </div>
-                <div className="tnum text-[20px] font-semibold" style={{ color: "#202633" }}>
-                  {model.elapsedLabel}
-                </div>
-              </div>
-            ) : null}
             <div
               className="rounded-md border px-3 py-2 text-right"
               style={{ borderColor: "#E1E7F0" }}
@@ -566,10 +579,10 @@ function IngestionProgressWorkbench({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-[14px] font-semibold" style={{ color: "#202633" }}>
-              Live backend events
+              Extraction events
             </h2>
             <p className="mt-0.5 text-[12px]" style={{ color: "#788397" }}>
-              These rows are replayed from the extraction event store.
+              Recent extraction activity.
             </p>
           </div>
           <Radio
@@ -591,8 +604,7 @@ function IngestionProgressWorkbench({
             className="rounded-md border px-3 py-3 text-[12px] leading-5"
             style={{ borderColor: "#E1E7F0", color: "#586174" }}
           >
-            No backend extraction events have arrived yet. If the job remains queued, confirm the
-            Redis/RQ extraction worker is running.
+            No backend extraction events have arrived yet.
           </div>
         )}
       </div>
@@ -653,15 +665,17 @@ function ExtractionStepTile({
 function ExtractionEventRow({ event }: { event: ExtractionProgressEventResponse }) {
   const tone =
     event.status === "failed" ? "#DC2626" : event.status === "warning" ? "#B45309" : "#2563EB";
+  const title = sanitizeExtractionText(event.title);
+  const message = sanitizeExtractionText(event.message);
   return (
     <div className="border-t py-2.5 first:border-t-0" style={{ borderColor: "#EEF2F6" }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] font-semibold" style={{ color: "#202633" }}>
-            {event.title}
+            {title}
           </div>
           <div className="mt-0.5 text-[11px] leading-4" style={{ color: "#586174" }}>
-            {event.message}
+            {message}
           </div>
         </div>
         <div className="shrink-0 text-right">
@@ -779,113 +793,19 @@ function RerunExtractionModal({
 function StickyFooter({
   fileCount,
   uploadPending,
-  uploadSummary,
-  extractionProgress,
-  extractionEvents,
-  extractionError,
   hasProject,
   onStart,
 }: {
   fileCount: number;
   uploadPending: boolean;
-  uploadSummary: ReturnType<typeof uploadProgressSummary>;
-  extractionProgress: ExtractionJobResponse | null;
-  extractionEvents: ExtractionProgressEventResponse[];
-  extractionError: string | null;
   hasProject: boolean;
   onStart: () => void;
 }) {
-  const showProgress = uploadPending || extractionProgress;
-  const uploadPercent = uploadSummary.total
-    ? Math.round((uploadSummary.uploaded / uploadSummary.total) * 100)
-    : 0;
-  const progressPercent = extractionProgress
-    ? effectiveExtractionPercent(extractionProgress, extractionEvents, uploadPercent)
-    : uploadPercent;
-  const failure = extractionError ?? extractionFailureMessage(extractionProgress);
-  const latestEvent = latestExtractionEvent(extractionEvents);
-  const progressLabel = failure
-    ? `Extraction failed: ${failure}`
-    : extractionProgress
-      ? latestEvent?.message || extractionProgress.message || "Extracting reports."
-      : uploadSummary.failed
-        ? `Upload failed: ${uploadSummary.failed}`
-        : uploadSummary.uploading
-          ? `Uploading ${uploadSummary.uploaded + 1} of ${uploadSummary.total}: ${uploadSummary.uploading}`
-          : uploadSummary.total
-            ? `${uploadSummary.uploaded} of ${uploadSummary.total} report uploads complete`
-            : "";
-
   return (
     <div
-      className="fixed bottom-0 left-[240px] right-0 z-20 flex min-h-16 items-center justify-between gap-6 border-t bg-white px-8 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.06)]"
+      className="fixed bottom-0 left-[240px] right-0 z-20 flex min-h-16 items-center justify-end border-t bg-white px-8 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.06)]"
       style={{ borderColor: "var(--color-border-default)" }}
     >
-      {!hasProject ? (
-        <div className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
-          Select or create a project before uploading reports.
-        </div>
-      ) : (
-        <div className="min-w-0 flex-1">
-          {showProgress && progressLabel ? (
-            <div className="max-w-xl">
-              <div className="mb-1 flex items-center justify-between gap-3 text-[12px]">
-                <span
-                  className="truncate font-medium"
-                  style={{ color: failure ? "var(--color-danger)" : "var(--color-text-primary)" }}
-                >
-                  {progressLabel}
-                </span>
-                <span className="shrink-0 tnum" style={{ color: "var(--color-text-muted)" }}>
-                  {progressPercent}%
-                </span>
-              </div>
-              <div
-                className="h-1.5 overflow-hidden rounded-full"
-                style={{ background: "var(--color-border-default)" }}
-              >
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${progressPercent}%`,
-                    background: failure ? "var(--color-danger)" : "var(--color-brand)",
-                  }}
-                />
-              </div>
-              {extractionEvents.length ? (
-                <div className="mt-2 max-h-24 overflow-y-auto rounded-md border bg-white px-2 py-1.5">
-                  {extractionEvents.slice(-4).map((event) => (
-                    <div
-                      key={event.eventId}
-                      className="flex items-start justify-between gap-3 py-1 text-[11px]"
-                      style={{ color: "var(--color-text-secondary)" }}
-                    >
-                      <div className="min-w-0">
-                        <span
-                          className="font-semibold"
-                          style={{ color: "var(--color-text-primary)" }}
-                        >
-                          {event.title}
-                        </span>
-                        <span className="ml-1">{event.message}</span>
-                        {event.ruleCodes.length ? (
-                          <span className="ml-1 font-semibold">{event.ruleCodes.join(", ")}</span>
-                        ) : null}
-                      </div>
-                      <span
-                        className="shrink-0 uppercase"
-                        style={{ color: "var(--color-text-muted)" }}
-                      >
-                        {event.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      )}
       <button
         onClick={onStart}
         disabled={!hasProject || !fileCount || uploadPending}
