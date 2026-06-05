@@ -18,4 +18,6 @@ export const queryKeys = {
   latestArchive: (projectId: string) => ["projects", projectId, "archive", "latest"] as const,
   analysts: ["users", "analysts"] as const,
   psxCompanies: ["psx", "companies"] as const,
+  askAnalystOverview: (symbol: string | null | undefined, name: string) =>
+    ["ask-analyst", "overview", symbol ?? "", name] as const,
 };
