@@ -19,6 +19,12 @@ import {
   Database,
   Wrench,
   ArrowUpRight,
+  History,
+  Globe,
+  Plus,
+  ExternalLink,
+  Clock,
+  TableProperties,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
@@ -27,7 +33,7 @@ import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useWorkspace } from "@/hooks/use-projects";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import {
-  DiagnosisSourcePreviewModal,
+  CitationPreviewSidebar,
   type DiagnosisSourcePreview,
 } from "@/components/DiagnosisSourcePreviewModal";
 import { IconTooltip } from "@/components/IconTooltip";
@@ -74,19 +80,46 @@ type Msg =
     }
   | { id: string; role: "ai"; kind: "status"; steps: string[] };
 
+type SavedChat = {
+  id: string;
+  title: string;
+  date: string;
+  messages: Msg[];
+  context: string;
+};
+
+const CHAT_STORAGE_KEY = "ask-ai-chat-history";
+const MAX_SAVED_CHATS = 20;
+
 const SUGGESTIONS = [
   "Analyse Millat Tractors' financial strength for the next 5 years",
   "Why doesn't my balance sheet balance?",
   "What are the key assumptions driving the FY2025 forecast?",
 ];
 
+const DIAGNOSIS_SUGGESTIONS = [
+  "Why doesn't my balance sheet balance?",
+  "Explain the key drivers of revenue in this model",
+  "What are the biggest risks in this financial model?",
+];
+
 export function AskAiTrigger() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const [previewSource, setPreviewSource] = useState<DiagnosisSourcePreview | null>(null);
+  const [buttonY, setButtonY] = useState<number | null>(null);
+  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "[]") as SavedChat[];
+    } catch {
+      return [];
+    }
+  });
+
   const cycle = useCycle();
   const routePath = useRouterState({ select: (s) => s.location.pathname });
   const projectId = useSelectedProjectId();
@@ -98,6 +131,10 @@ export function AskAiTrigger() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamIdRef = useRef<string | null>(null);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
+  const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
+
+  const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
+  const suggestions = isDiagnosisRoute ? DIAGNOSIS_SUGGESTIONS : SUGGESTIONS;
 
   const abortStream = () => {
     activeStreamIdRef.current = null;
@@ -124,8 +161,65 @@ export function AskAiTrigger() {
     period: workspace.data?.project.fiscalYear ?? cycle.period,
     sector: workspace.data?.project.sector ?? cycle.sector,
     documentCount: workspace.data?.documents.length,
+    isDiagnosis: isDiagnosisRoute,
   });
   const expandedLeft = sidebarCollapsed ? 0 : SIDEBAR_WIDTH;
+
+  const saveCurrentChat = () => {
+    if (messages.length === 0) return;
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    if (!firstUserMsg) return;
+    const chat: SavedChat = {
+      id: chatSessionIdRef.current,
+      title: firstUserMsg.text.slice(0, 80),
+      date: new Date().toISOString(),
+      messages,
+      context,
+    };
+    setSavedChats((prev) => {
+      const updated = [chat, ...prev.filter((c) => c.id !== chat.id)].slice(0, MAX_SAVED_CHATS);
+      try {
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const startNewChat = () => {
+    saveCurrentChat();
+    setMessages([]);
+    setInput("");
+    setShowHistory(false);
+    chatSessionIdRef.current = `chat-${Date.now()}`;
+  };
+
+  const loadChat = (chat: SavedChat) => {
+    setMessages(chat.messages);
+    chatSessionIdRef.current = chat.id;
+    setShowHistory(false);
+  };
+
+  // Draggable button handlers
+  const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const currentY = buttonY ?? window.innerHeight / 2;
+    dragStateRef.current = { dragging: false, startY: e.clientY, startButtonY: currentY };
+  };
+
+  const handleButtonPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const dy = e.clientY - dragStateRef.current.startY;
+    if (!dragStateRef.current.dragging && Math.abs(dy) < 5) return;
+    dragStateRef.current.dragging = true;
+    const newY = Math.max(48, Math.min(window.innerHeight - 48, dragStateRef.current.startButtonY + dy));
+    setButtonY(newY);
+  };
+
+  const handleButtonPointerUp = () => {
+    if (!dragStateRef.current.dragging) {
+      setOpen(true);
+    }
+    dragStateRef.current.dragging = false;
+  };
 
   const onPickFile = (file: File) => {
     const sizeKB = (file.size / 1024).toFixed(0);
@@ -141,8 +235,7 @@ export function AskAiTrigger() {
         id: `a-${Date.now()}`,
         role: "ai",
         kind: "text",
-        text:
-          "PDF uploads are handled by the project upload flow. Once the document is indexed, Ask Sherlock will cite it from the backend evidence stream.",
+        text: "PDF uploads are handled by the project upload flow. Once the document is indexed, Ask Sherlock will cite it from the backend evidence stream.",
       },
     ]);
   };
@@ -280,12 +373,16 @@ export function AskAiTrigger() {
     <>
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onPointerDown={handleButtonPointerDown}
+          onPointerMove={handleButtonPointerMove}
+          onPointerUp={handleButtonPointerUp}
           aria-label="Open Ask AI"
-          className="group fixed right-4 top-1/2 z-40 flex h-12 items-center gap-2 rounded-full border bg-white/95 px-3 shadow-[0_18px_45px_-22px_rgba(31,41,55,0.75)] backdrop-blur transition hover:-translate-y-0.5 hover:border-[var(--color-brand)] hover:shadow-[0_20px_48px_-20px_rgba(123,104,238,0.55)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
+          className="group fixed right-4 z-40 flex h-12 cursor-grab items-center gap-2 rounded-full border bg-white/95 px-3 shadow-[0_18px_45px_-22px_rgba(31,41,55,0.75)] backdrop-blur transition hover:border-[var(--color-brand)] hover:shadow-[0_20px_48px_-20px_rgba(123,104,238,0.55)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2 active:cursor-grabbing"
           style={{
+            top: buttonY !== null ? `${buttonY}px` : "50%",
             transform: "translateY(-50%)",
             borderColor: "var(--color-border-default)",
+            touchAction: "none",
           }}
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--color-brand) text-white">
@@ -297,8 +394,8 @@ export function AskAiTrigger() {
 
       {open && (
         <aside
-          className={`fixed right-0 top-0 z-50 flex h-screen max-w-full flex-col overflow-hidden bg-[var(--color-page)] slide-in-right ${
-            expanded ? "" : "w-[430px]"
+          className={`fixed right-0 top-0 z-50 flex h-screen max-w-full overflow-hidden bg-[var(--color-page)] slide-in-right ${
+            expanded ? "flex-row" : "flex-col w-[430px]"
           }`}
           style={{
             left: expanded ? expandedLeft : undefined,
@@ -307,6 +404,44 @@ export function AskAiTrigger() {
             boxShadow: "-24px 0 64px -32px rgba(17,24,39,0.45)",
           }}
         >
+          {/* Expanded mode: integrated left history column */}
+          {expanded && showHistory && (
+            <div
+              className="flex h-full w-[268px] shrink-0 flex-col border-r"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              <div
+                className="flex h-14 shrink-0 items-center justify-between border-b px-4"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  History
+                </span>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)]"
+                  aria-label="Close history"
+                >
+                  <X className="h-4 w-4 text-[var(--color-text-muted)]" />
+                </button>
+              </div>
+              <div className="shrink-0 px-3 pb-2 pt-3">
+                <button
+                  onClick={startNewChat}
+                  className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
+                  style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
+                >
+                  <Plus className="h-4 w-4 text-[var(--color-brand)]" />
+                  New chat
+                </button>
+              </div>
+              <HistoryChatList savedChats={savedChats} onLoadChat={loadChat} />
+            </div>
+          )}
+
+          {/* Main chat column — always rendered */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Header */}
           <div
             className="flex min-h-16 items-center justify-between border-b bg-white/95 px-5 backdrop-blur"
             style={{ borderColor: "var(--color-border-default)" }}
@@ -320,23 +455,65 @@ export function AskAiTrigger() {
                   <span className="truncate text-[15px] font-semibold text-[var(--color-text-primary)]">
                     Ask Sherlock
                   </span>
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-success-fg)]"
-                    style={{
-                      borderColor: "var(--color-success-border)",
-                      background: "var(--color-success-bg)",
-                    }}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-                    Live
-                  </span>
+                  {isDiagnosisRoute && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        borderColor: "rgba(123,104,238,0.3)",
+                        background: "rgba(123,104,238,0.08)",
+                        color: "var(--color-brand)",
+                      }}
+                    >
+                      <TableProperties className="h-2.5 w-2.5" />
+                      Diagnosis model
+                    </span>
+                  )}
+                  {!isDiagnosisRoute && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-success-fg)]"
+                      style={{
+                        borderColor: "var(--color-success-border)",
+                        background: "var(--color-success-bg)",
+                      }}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+                      Live
+                    </span>
+                  )}
                 </div>
                 <div className="truncate text-[11px] text-[var(--color-text-muted)]">
-                  Financial model Q&A with cited evidence
+                  {isDiagnosisRoute
+                    ? "Context set to open diagnosis workbook"
+                    : "Financial model Q&A with cited evidence"}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <IconTooltip label="New chat">
+                  <button
+                    onClick={startNewChat}
+                    className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                    aria-label="New chat"
+                  >
+                    <Plus className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                  </button>
+                </IconTooltip>
+              )}
+              <IconTooltip label={showHistory ? "Back to chat" : "Past conversations"}>
+                <button
+                  onClick={() => setShowHistory((v) => !v)}
+                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                  aria-label={showHistory ? "Back to chat" : "Past conversations"}
+                >
+                  <History
+                    className="h-[18px] w-[18px]"
+                    style={{
+                      color: showHistory ? "var(--color-brand)" : "var(--color-text-muted)",
+                    }}
+                  />
+                </button>
+              </IconTooltip>
               <IconTooltip label={expanded ? "Collapse chat" : "Expand chat"}>
                 <button
                   onClick={() => setExpanded((value) => !value)}
@@ -344,15 +521,9 @@ export function AskAiTrigger() {
                   aria-label={expanded ? "Collapse chat" : "Expand chat"}
                 >
                   {expanded ? (
-                    <Minimize2
-                      className="h-[18px] w-[18px]"
-                      style={{ color: "var(--color-text-muted)" }}
-                    />
+                    <Minimize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
                   ) : (
-                    <Maximize2
-                      className="h-[18px] w-[18px]"
-                      style={{ color: "var(--color-text-muted)" }}
-                    />
+                    <Maximize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
                   )}
                 </button>
               </IconTooltip>
@@ -360,6 +531,7 @@ export function AskAiTrigger() {
                 <button
                   onClick={() => {
                     abortStream();
+                    saveCurrentChat();
                     setOpen(false);
                   }}
                   className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
@@ -371,197 +543,247 @@ export function AskAiTrigger() {
             </div>
           </div>
 
-          <div className="mx-4 mt-3 shrink-0">
-            <ContextSummary context={context} />
-          </div>
-
-          <div
-            ref={scrollRef}
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4"
-          >
-            {messages.length === 0 && (
-              <div className={`mx-auto w-full space-y-3 ${expanded ? "max-w-[80%]" : ""}`}>
-                <div
-                  className="rounded-xl border bg-white p-4 shadow-sm"
-                  style={{ borderColor: "var(--color-border-default)" }}
-                >
-                  <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                    <Sparkles className="h-4 w-4 text-[var(--color-brand)]" />
-                    Start with a model-aware prompt
-                  </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-                    Ask about uploaded PDFs, accepted cells, source-ingestion fields, or the screen
-                    you are reviewing.
-                  </p>
-                </div>
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => void send(s)}
-                    disabled={asking}
-                    className="group flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border bg-white px-3.5 py-3 text-left text-[13px] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-tag-bg)] disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{
-                      borderColor: "var(--color-border-default)",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    <span className="min-w-0">{s}</span>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {messages.map((m) => {
-              if (m.role === "user") {
-                return (
-                  <div key={m.id} className="mx-auto flex w-full max-w-[1180px] justify-end">
-                    <div
-                      className={`group flex flex-col items-end gap-1 ${
-                        expanded ? "max-w-[72%]" : "max-w-[86%]"
-                      }`}
-                    >
-                      <div
-                        className="rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed text-white shadow-[0_12px_28px_-18px_rgba(123,104,238,0.9)]"
-                        style={{
-                          background: "var(--color-brand)",
-                          borderRadius: "16px 16px 4px 16px",
-                        }}
-                      >
-                        {m.attachment && (
-                          <div
-                            className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
-                            style={{ background: "rgba(255,255,255,0.18)" }}
-                          >
-                            <FileIcon className="h-3.5 w-3.5" />
-                            <span className="font-semibold">{m.attachment.name}</span>
-                            <span className="opacity-70">· {m.attachment.size}</span>
-                          </div>
-                        )}
-                        {m.text}
-                      </div>
-                      <CopyButton
-                        text={m.text}
-                        className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                      />
-                    </div>
-                  </div>
-                );
-              }
-              if (m.kind === "text") {
-                return (
-                  <AiBubble key={m.id} copyText={m.text} expanded={expanded}>
-                    <MarkdownContent markdown={m.text} />
-                  </AiBubble>
-                );
-              }
-              if (m.kind === "stream") {
-                return (
-                  <StreamingAiBubble
-                    key={m.id}
-                    message={m}
-                    expanded={expanded}
-                    projectId={projectId}
-                    onPreviewSource={setPreviewSource}
-                  />
-                );
-              }
-              if (m.kind === "status") {
-                return <StatusStream key={m.id} steps={m.steps} />;
-              }
-              return null;
-            })}
-          </div>
-
-          <div
-            className="border-t bg-white/95 p-3 backdrop-blur"
-            style={{ borderColor: "var(--color-border-default)" }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onPickFile(file);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-              }}
-            />
+          {/* Tab bar — non-expanded mode only */}
+          {!expanded && (
             <div
-              className={expanded ? "mx-auto max-w-[1180px]" : ""}
-            >
-            <div
-              className="rounded-2xl border bg-white p-2 shadow-[0_12px_34px_-24px_rgba(17,24,39,0.55)] focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[rgba(123,104,238,0.14)]"
+              className="flex shrink-0 border-b"
               style={{ borderColor: "var(--color-border-default)" }}
             >
-              <label htmlFor="ask-ai-input" className="sr-only">
-                Ask AI prompt
-              </label>
-              <textarea
-                id="ask-ai-input"
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  const action = getAskAiPromptKeyAction(e);
-                  if (action === "submit") {
-                    e.preventDefault();
-                    void send(input);
-                  }
-                }}
-                placeholder="Ask about a PDF, cell, assumption, or source citation..."
-                rows={1}
-                className="max-h-[136px] min-h-11 w-full resize-none overflow-hidden bg-transparent px-2 py-2 text-[13px] leading-5 text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-placeholder)]"
-              />
+              {(["Chat", "History"] as const).map((tab) => {
+                const active = tab === "History" ? showHistory : !showHistory;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setShowHistory(tab === "History")}
+                    className="flex-1 py-2.5 text-[13px] font-medium transition"
+                    style={{
+                      color: active ? "var(--color-brand)" : "var(--color-text-muted)",
+                      borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
+                    }}
+                  >
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Non-expanded History tab content */}
+          {!expanded && showHistory ? (
+            <>
+              <div className="shrink-0 px-3 pb-2 pt-3">
+                <button
+                  onClick={startNewChat}
+                  className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
+                  style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
+                >
+                  <Plus className="h-4 w-4 text-[var(--color-brand)]" />
+                  New chat
+                </button>
+              </div>
+              <HistoryChatList savedChats={savedChats} onLoadChat={loadChat} />
+            </>
+          ) : (
+            <>
+              <div className="mx-4 mt-3 shrink-0">
+                <ContextSummary context={context} isDiagnosis={isDiagnosisRoute} />
+              </div>
+
               <div
-                className="mt-1 flex items-center justify-between gap-2 border-t pt-2"
-                style={{ borderColor: "var(--color-border-default)" }}
+                ref={scrollRef}
+                className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4"
               >
-                <div className="flex items-center gap-1.5">
-                  <IconTooltip label="Attach PDF">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Attach PDF"
-                      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                {messages.length === 0 && (
+                  <div className={`mx-auto w-full space-y-2 ${expanded ? "max-w-[80%]" : ""}`}>
+                    <div
+                      className="rounded-xl border bg-white p-4 shadow-sm"
                       style={{ borderColor: "var(--color-border-default)" }}
                     >
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-                  </IconTooltip>
-                  <span className="hidden text-[11px] text-[var(--color-text-muted)] sm:inline">
-                    Enter to send · Shift+Enter for new line
-                  </span>
-                </div>
-                <IconTooltip label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}>
-                  <button
-                    type="button"
-                    onClick={() => void send(input)}
-                    disabled={!input.trim() || asking}
-                    className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
-                    style={{ background: "var(--color-brand)" }}
-                    aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
-                  >
-                    {asking ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </button>
-                </IconTooltip>
+                      <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                        <Sparkles className="h-4 w-4 text-[var(--color-brand)]" />
+                        {isDiagnosisRoute
+                          ? "Ask about this diagnosis model"
+                          : "Start with a model-aware prompt"}
+                      </div>
+                      <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                        {isDiagnosisRoute
+                          ? "Context is set to the open diagnosis workbook. Ask about balance sheet, drivers, assumptions, or any cell in the model."
+                          : "Ask about uploaded PDFs, accepted cells, source-ingestion fields, or the screen you are reviewing."}
+                      </p>
+                    </div>
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => void send(s)}
+                        disabled={asking}
+                        className="group flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border bg-white px-3.5 py-3 text-left text-[13px] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-tag-bg)] disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{
+                          borderColor: "var(--color-border-default)",
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        <span className="min-w-0">{s}</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {messages.map((m) => {
+                  if (m.role === "user") {
+                    return (
+                      <div key={m.id} className="mx-auto flex w-full max-w-[1180px] justify-end">
+                        <div
+                          className={`group flex flex-col items-end gap-1 ${
+                            expanded ? "max-w-[72%]" : "max-w-[86%]"
+                          }`}
+                        >
+                          <div
+                            className="rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed text-white shadow-[0_12px_28px_-18px_rgba(123,104,238,0.9)]"
+                            style={{
+                              background: "var(--color-brand)",
+                              borderRadius: "16px 16px 4px 16px",
+                            }}
+                          >
+                            {m.attachment && (
+                              <div
+                                className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
+                                style={{ background: "rgba(255,255,255,0.18)" }}
+                              >
+                                <FileIcon className="h-3.5 w-3.5" />
+                                <span className="font-semibold">{m.attachment.name}</span>
+                                <span className="opacity-70">· {m.attachment.size}</span>
+                              </div>
+                            )}
+                            {m.text}
+                          </div>
+                          <CopyButton
+                            text={m.text}
+                            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (m.kind === "text") {
+                    return (
+                      <AiBubble key={m.id} copyText={m.text} expanded={expanded}>
+                        <MarkdownContent markdown={m.text} />
+                      </AiBubble>
+                    );
+                  }
+                  if (m.kind === "stream") {
+                    return (
+                      <StreamingAiBubble
+                        key={m.id}
+                        message={m}
+                        expanded={expanded}
+                        projectId={projectId}
+                        onPreviewSource={setPreviewSource}
+                      />
+                    );
+                  }
+                  if (m.kind === "status") {
+                    return <StatusStream key={m.id} steps={m.steps} />;
+                  }
+                  return null;
+                })}
               </div>
-            </div>
-            </div>
-          </div>
+
+              <div
+                className="border-t bg-white/95 p-3 backdrop-blur"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onPickFile(file);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                />
+                <div className={expanded ? "mx-auto max-w-[1180px]" : ""}>
+                  <div
+                    className="rounded-2xl border bg-white p-2 shadow-[0_12px_34px_-24px_rgba(17,24,39,0.55)] focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[rgba(123,104,238,0.14)]"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <label htmlFor="ask-ai-input" className="sr-only">
+                      Ask AI prompt
+                    </label>
+                    <textarea
+                      id="ask-ai-input"
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        const action = getAskAiPromptKeyAction(e);
+                        if (action === "submit") {
+                          e.preventDefault();
+                          void send(input);
+                        }
+                      }}
+                      placeholder={
+                        isDiagnosisRoute
+                          ? "Ask about this model, a cell, or an assumption..."
+                          : "Ask about a PDF, cell, assumption, or source citation..."
+                      }
+                      rows={1}
+                      className="max-h-[136px] min-h-11 w-full resize-none overflow-hidden bg-transparent px-2 py-2 text-[13px] leading-5 text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-placeholder)]"
+                    />
+                    <div
+                      className="mt-1 flex items-center justify-between gap-2 border-t pt-2"
+                      style={{ borderColor: "var(--color-border-default)" }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <IconTooltip label="Attach PDF">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Attach PDF"
+                            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                            style={{ borderColor: "var(--color-border-default)" }}
+                          >
+                            <Paperclip className="h-4 w-4" />
+                          </button>
+                        </IconTooltip>
+                        <span className="hidden text-[11px] text-[var(--color-text-muted)] sm:inline">
+                          Enter to send · Shift+Enter for new line
+                        </span>
+                      </div>
+                      <IconTooltip label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}>
+                        <button
+                          type="button"
+                          onClick={() => void send(input)}
+                          disabled={!input.trim() || asking}
+                          className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
+                          style={{ background: "var(--color-brand)" }}
+                          aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
+                        >
+                          {asking ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </button>
+                      </IconTooltip>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          </div>{/* end main chat column */}
         </aside>
       )}
-      <DiagnosisSourcePreviewModal
-        open={previewSource !== null}
+
+      <CitationPreviewSidebar
         source={previewSource}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) setPreviewSource(null);
-        }}
+        askAiExpanded={expanded}
+        expandedLeft={expandedLeft}
+        onClose={() => setPreviewSource(null)}
       />
     </>
   );
@@ -666,20 +888,18 @@ function CollapsibleSection({
   );
 }
 
-function SummaryChip({ label }: { label: string }) {
-  return (
-    <span className="max-w-[180px] truncate rounded-full bg-[var(--color-table-header)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">
-      {label}
-    </span>
-  );
-}
-
-function ContextSummary({ context }: { context: string }) {
+function ContextSummary({ context, isDiagnosis }: { context: string; isDiagnosis: boolean }) {
   const parts = context.split(" · ").filter(Boolean);
   return (
     <CollapsibleSection
-      icon={<Database className="h-3.5 w-3.5 text-[var(--color-brand)]" />}
-      title="Project context"
+      icon={
+        isDiagnosis ? (
+          <TableProperties className="h-3.5 w-3.5 text-[var(--color-brand)]" />
+        ) : (
+          <Database className="h-3.5 w-3.5 text-[var(--color-brand)]" />
+        )
+      }
+      title={isDiagnosis ? "Diagnosis model context" : "Project context"}
       meta={`${parts.length} signals`}
       defaultOpen={false}
       summary={
@@ -743,20 +963,18 @@ function StreamingAiBubble({
 
         {answer ? (
           <div className="min-w-0 overflow-visible break-words">
-            <MarkdownContent
-              markdown={answer}
-              renderCitation={(index) => (
-                <InlineCitationBadge
-                  index={index}
-                  citations={citations}
-                  projectId={projectId}
-                  onPreviewSource={onPreviewSource}
-                />
-              )}
-            />
+            <MarkdownContent markdown={answer} renderCitation={() => null} />
             {claimSourceGroups.length > 0 && (
               <GroupedSourcePills
                 groups={claimSourceGroups}
+                citations={citations}
+                projectId={projectId}
+                onPreviewSource={onPreviewSource}
+              />
+            )}
+            {/* Citations list at bottom — ChatGPT style */}
+            {message.done && citations.length > 0 && (
+              <SourcesList
                 citations={citations}
                 projectId={projectId}
                 onPreviewSource={onPreviewSource}
@@ -781,6 +999,177 @@ function StreamingAiBubble({
     </AiBubble>
   );
 }
+
+// ─── Sources — ChatGPT pill with clickable stacked bubbles ──────────────────
+
+function SourcesList({
+  citations,
+  projectId,
+  onPreviewSource,
+}: {
+  citations: Array<Record<string, unknown>>;
+  projectId: string | null;
+  onPreviewSource: (source: DiagnosisSourcePreview) => void;
+}) {
+  if (citations.length === 0) return null;
+
+  const visible = citations.slice(0, 5);
+  const overflow = citations.length - visible.length;
+
+  return (
+    <div className="mt-3">
+      <div
+        className="inline-flex items-center gap-2.5 rounded-2xl border px-3 py-2"
+        style={{
+          background: "var(--color-tag-bg)",
+          borderColor: "var(--color-border-default)",
+        }}
+      >
+        {/* Stacked clickable bubbles */}
+        <div className="flex items-center">
+          {visible.map((citation, i) => (
+            <SourceBubble
+              key={String(citation.index ?? i)}
+              citation={citation}
+              stackIndex={i}
+              totalVisible={visible.length}
+              projectId={projectId}
+              onPreviewSource={onPreviewSource}
+            />
+          ))}
+          {overflow > 0 && (
+            <div
+              className="relative flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold"
+              style={{
+                marginLeft: "-7px",
+                zIndex: 0,
+                background: "var(--color-page)",
+                borderColor: "var(--color-page)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              +{overflow}
+            </div>
+          )}
+        </div>
+
+        <span
+          className="text-[12px] font-medium"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          {citations.length} source{citations.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SourceBubble({
+  citation,
+  stackIndex,
+  totalVisible,
+  projectId,
+  onPreviewSource,
+}: {
+  citation: Record<string, unknown>;
+  stackIndex: number;
+  totalVisible: number;
+  projectId: string | null;
+  onPreviewSource: (source: DiagnosisSourcePreview) => void;
+}) {
+  const preview = getAskAiCitationPreview(citation);
+  const title = getAskAiCitationTitle(citation);
+  const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
+
+  const kind = String(citation.kind ?? "");
+  const label =
+    kind === "model"
+      ? "M"
+      : kind === "uploaded_pdf"
+        ? "P"
+        : String(citation.sourceName ?? "W").charAt(0).toUpperCase();
+
+  const bg =
+    kind === "model"
+      ? "var(--color-brand)"
+      : kind === "uploaded_pdf"
+        ? "var(--color-danger)"
+        : "var(--color-brand)";
+
+  const bubble = (
+    <div
+      className="flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold text-white"
+      style={{
+        background: bg,
+        borderColor: "var(--color-tag-bg)",
+        marginLeft: stackIndex > 0 ? "-7px" : "0",
+        position: "relative",
+        zIndex: totalVisible - stackIndex,
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  if (preview?.type === "external_url") {
+    return (
+      <IconTooltip label={title}>
+        <a
+          href={preview.url}
+          target="_blank"
+          rel="noreferrer"
+          className="cursor-pointer transition hover:opacity-80"
+          aria-label={title}
+        >
+          {bubble}
+        </a>
+      </IconTooltip>
+    );
+  }
+
+  if (preview?.type === "document_page" && projectId) {
+    return (
+      <IconTooltip label={title}>
+        <button
+          type="button"
+          onClick={() =>
+            onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))
+          }
+          className="cursor-pointer transition hover:opacity-80"
+          aria-label={title}
+        >
+          {bubble}
+        </button>
+      </IconTooltip>
+    );
+  }
+
+  return (
+    <IconTooltip label={title}>
+      <div>{bubble}</div>
+    </IconTooltip>
+  );
+}
+
+
+function citationSubline(citation: Record<string, unknown>): string {
+  if (citation.kind === "uploaded_pdf") {
+    const page = citation.pageNumber ?? citation.page ?? citation.pdfPageIndex;
+    return page ? `p. ${String(page)}` : String(citation.filename ?? "");
+  }
+  if (citation.kind === "model") {
+    const ref = [citation.sheetName, citation.cellReference].filter(Boolean).map(String).join(" · ");
+    return ref || String(citation.period ?? "");
+  }
+  if (typeof citation.url === "string" && citation.url) {
+    try {
+      return new URL(citation.url).hostname.replace(/^www\./, "");
+    } catch {}
+  }
+  return String(citation.sourceName ?? "");
+}
+
+// ─── Forecast snapshot ───────────────────────────────────────────────────────
 
 function ForecastSnapshot({ visuals }: { visuals: AskAiForecastVisuals }) {
   const charts = visuals.chartSeries.slice(0, 4);
@@ -986,8 +1375,8 @@ function InlineCitationBadge({
                 className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold text-[var(--color-brand)]"
                 style={{ borderColor: "rgba(123,104,238,0.28)" }}
               >
-                Open website
-                <ArrowUpRight className="h-3 w-3" />
+                Open in new tab
+                <ExternalLink className="h-3 w-3" />
               </a>
             )}
             {preview?.type === "document_page" && projectId && (
@@ -1012,6 +1401,8 @@ function InlineCitationBadge({
     </span>
   );
 }
+
+// ─── Evidence strip ──────────────────────────────────────────────────────────
 
 function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
   const sourceEvents = activity.filter(
@@ -1040,7 +1431,7 @@ function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
         </span>
         {pdfCount > 0 && <EvidenceChip label={`${pdfCount} PDF${pdfCount === 1 ? "" : "s"}`} />}
         {evidenceCount > 0 && <EvidenceChip label={`${evidenceCount} evidence matches`} />}
-        {webCount > 0 && <EvidenceChip label={`${webCount} approved web sources`} />}
+        {webCount > 0 && <EvidenceChip label={`${webCount} web sources`} />}
         {latestStatus && (
           <span className="ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
             {statusTitle(latestStatus.stage)} · {latestStatus.percent}%
@@ -1052,27 +1443,35 @@ function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
           {latestStatus.message}
         </div>
       )}
-      {webEvents.length > 0 && <WebSearchTrace events={webEvents} />}
+      {webEvents.length > 0 && <ExternalSourceCards events={webEvents} />}
     </div>
   );
 }
 
-function WebSearchTrace({ events }: { events: Array<Extract<StreamActivityEvent, { type: "source" }>> }) {
-  const queries = uniqueStrings(events.flatMap((event) => event.queries ?? []));
+// ─── External source cards — ChatGPT style ───────────────────────────────────
+
+function ExternalSourceCards({
+  events,
+}: {
+  events: Array<Extract<StreamActivityEvent, { type: "source" }>>;
+}) {
   const links = uniqueWebLinks(events.flatMap((event) => event.items ?? []));
-  if (queries.length === 0 && links.length === 0) return null;
+  const queries = uniqueStrings(events.flatMap((event) => event.queries ?? []));
+
+  if (links.length === 0 && queries.length === 0) return null;
 
   return (
-    <div className="mt-2 border-t pt-2" style={{ borderColor: "var(--color-border-default)" }}>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-        Web searches
-      </div>
+    <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--color-border-default)" }}>
       {queries.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)] self-center mr-1">
+            Searched
+          </span>
           {queries.map((query) => (
             <span
               key={query}
-              className="max-w-full truncate rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]"
+              className="max-w-[180px] truncate rounded-full border bg-white px-2.5 py-1 text-[10px] font-medium text-[var(--color-text-secondary)]"
+              style={{ borderColor: "var(--color-border-default)" }}
               title={query}
             >
               {query}
@@ -1081,19 +1480,29 @@ function WebSearchTrace({ events }: { events: Array<Extract<StreamActivityEvent,
         </div>
       )}
       {links.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           {links.map((link) => (
             <a
               key={link.url}
               href={link.url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex max-w-full items-center gap-1 rounded-md border bg-white px-2 py-1 text-[10px] font-semibold text-[var(--color-brand)]"
-              style={{ borderColor: "rgba(123,104,238,0.28)" }}
+              className="group flex items-start gap-2 rounded-xl border bg-white p-2.5 text-left transition hover:border-[var(--color-brand)] hover:shadow-sm"
+              style={{ borderColor: "var(--color-border-default)" }}
               title={link.url}
             >
-              <span className="truncate">{link.title}</span>
-              <ArrowUpRight className="h-3 w-3 shrink-0" />
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--color-tag-bg)] group-hover:bg-[rgba(123,104,238,0.1)]">
+                <Globe className="h-3.5 w-3.5 text-[var(--color-brand)]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
+                  {link.title}
+                </div>
+                <div className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
+                  {link.domain}
+                </div>
+              </div>
+              <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
             </a>
           ))}
         </div>
@@ -1114,15 +1523,21 @@ function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
-function uniqueWebLinks(items: Array<Record<string, unknown>>): Array<{ title: string; url: string }> {
-  const links: Array<{ title: string; url: string }> = [];
+function uniqueWebLinks(
+  items: Array<Record<string, unknown>>,
+): Array<{ title: string; url: string; domain: string }> {
+  const links: Array<{ title: string; url: string; domain: string }> = [];
   const seen = new Set<string>();
   for (const item of items) {
     const url = typeof item.url === "string" ? item.url.trim() : "";
     if (!url || seen.has(url)) continue;
     seen.add(url);
     const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : url;
-    links.push({ title, url });
+    let domain = url;
+    try {
+      domain = new URL(url).hostname.replace(/^www\./, "");
+    } catch {}
+    links.push({ title, url, domain });
   }
   return links.slice(0, 6);
 }
@@ -1153,6 +1568,7 @@ function citationMeta(citation: Record<string, unknown>): string {
   }
   return [citation.sourceName, citation.date, citation.url].filter(Boolean).map(String).join(" · ");
 }
+// citationMeta kept for InlineCitationBadge tooltip
 
 function buildCitationPreviewSource({
   citation,
@@ -1178,11 +1594,13 @@ function buildCitationPreviewSource({
   };
 }
 
+// ─── Current event panel ─────────────────────────────────────────────────────
+
 function CurrentEventPanel({
   summary,
   message,
 }: {
-  summary: AskAiReasoningSummary;
+  summary: ReturnType<typeof buildAskAiReasoningSummary>;
   message: Extract<Msg, { kind: "stream" }>;
 }) {
   const current = currentStreamEvent(message);
@@ -1337,6 +1755,8 @@ function sourceTitle(kind: string): string {
   return "Evidence source";
 }
 
+// ─── Copy button ─────────────────────────────────────────────────────────────
+
 function CopyButton({ text, className = "" }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -1363,6 +1783,8 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
     </IconTooltip>
   );
 }
+
+// ─── Status stream ────────────────────────────────────────────────────────────
 
 function StatusStream({ steps }: { steps: string[] }) {
   const [done, setDone] = useState(0);
@@ -1414,6 +1836,8 @@ function StatusStream({ steps }: { steps: string[] }) {
   );
 }
 
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
 function screenNameForPath(path: string): string {
   const clean = path.replace(/^\/+/, "") || "Dashboard";
   return clean
@@ -1433,6 +1857,7 @@ function projectContextLabel(input: {
   period: string | null | undefined;
   sector: string | null | undefined;
   documentCount: number | undefined;
+  isDiagnosis: boolean;
 }): string {
   const parts = [
     input.period || "Current period",
@@ -1442,7 +1867,80 @@ function projectContextLabel(input: {
   if (typeof input.documentCount === "number") {
     parts.push(`${input.documentCount} PDF${input.documentCount === 1 ? "" : "s"}`);
   }
+  if (input.isDiagnosis) {
+    parts.push("Diagnosis workbook open");
+  }
   return parts.join(" · ");
+}
+
+function HistoryChatList({
+  savedChats,
+  onLoadChat,
+}: {
+  savedChats: SavedChat[];
+  onLoadChat: (chat: SavedChat) => void;
+}) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      {savedChats.length === 0 ? (
+        <div className="px-2 py-8 text-center">
+          <History className="mx-auto mb-2 h-8 w-8 text-[var(--color-text-muted)]" />
+          <div className="text-[12px] text-[var(--color-text-muted)]">No past conversations</div>
+        </div>
+      ) : (
+        groupChatsByDate(savedChats).map((group) => (
+          <div key={group.label} className="mb-2">
+            <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {group.label}
+            </div>
+            {group.chats.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() => onLoadChat(chat)}
+                className="group flex w-full items-center rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--color-tag-bg)]"
+              >
+                <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
+                  {chat.title}
+                </span>
+              </button>
+            ))}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function groupChatsByDate(chats: SavedChat[]): Array<{ label: string; chats: SavedChat[] }> {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const groups: Array<{ label: string; test: (ms: number) => boolean }> = [
+    { label: "Today", test: (ms) => ms >= startOfToday },
+    { label: "Yesterday", test: (ms) => ms >= startOfToday - 86400000 },
+    { label: "Previous 7 days", test: (ms) => ms >= startOfToday - 7 * 86400000 },
+    { label: "Previous 30 days", test: (ms) => ms >= startOfToday - 30 * 86400000 },
+    { label: "Older", test: () => true },
+  ];
+  const result: Array<{ label: string; chats: SavedChat[] }> = [];
+  const remaining = [...chats];
+  for (const group of groups) {
+    const matched = remaining.filter((c) => group.test(new Date(c.date).getTime()));
+    matched.forEach((c) => remaining.splice(remaining.indexOf(c), 1));
+    if (matched.length > 0) result.push({ label: group.label, chats: matched });
+  }
+  return result;
+}
+
+function formatChatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function useGlobalToast() {
