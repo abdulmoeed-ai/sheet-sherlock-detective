@@ -25,11 +25,14 @@ import {
   ExternalLink,
   Clock,
   TableProperties,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useCycle } from "@/lib/cycle-store";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { SIDEBAR_WIDTH, useSidebarCollapsed } from "@/lib/sidebar-store";
 import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
+import { useAskAiSessions } from "@/hooks/use-ask-ai-sessions";
 import { useWorkspace } from "@/hooks/use-projects";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import {
@@ -54,8 +57,11 @@ import {
   type StreamActivityEvent,
 } from "@/lib/ask-ai-reasoning";
 import { normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
+import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
 import { userFacingAskAiWarnings } from "@/lib/ask-ai-warnings";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import type { AskAiMsg as Msg } from "@/lib/ask-ai-message-types";
+import type { AskAiChatSessionSummary } from "@/lib/api/types";
 import type {
   AskAiClaimSourceGroup,
   AskAiFinalResponse,
@@ -63,33 +69,6 @@ import type {
   AskAiSourceEvent,
   AskAiStatusEvent,
 } from "@/lib/api/ask-ai-stream";
-
-type Msg =
-  | { id: string; role: "user"; text: string; attachment?: { name: string; size: string } }
-  | { id: string; role: "ai"; kind: "text"; text: string }
-  | {
-      id: string;
-      role: "ai";
-      kind: "stream";
-      text: string;
-      activity: StreamActivityEvent[];
-      approaches: string[];
-      final?: AskAiFinalResponse;
-      done: boolean;
-      error?: string | null;
-    }
-  | { id: string; role: "ai"; kind: "status"; steps: string[] };
-
-type SavedChat = {
-  id: string;
-  title: string;
-  date: string;
-  messages: Msg[];
-  context: string;
-};
-
-const CHAT_STORAGE_KEY = "ask-ai-chat-history";
-const MAX_SAVED_CHATS = 20;
 
 const SUGGESTIONS = [
   "Analyse Millat Tractors' financial strength for the next 5 years",
@@ -112,19 +91,17 @@ export function AskAiTrigger() {
   const [asking, setAsking] = useState(false);
   const [previewSource, setPreviewSource] = useState<DiagnosisSourcePreview | null>(null);
   const [buttonY, setButtonY] = useState<number | null>(null);
-  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "[]") as SavedChat[];
-    } catch {
-      return [];
-    }
-  });
+  const [activeSession, setActiveSession] = useState<AskAiChatSessionSummary | null>(null);
 
   const cycle = useCycle();
   const routePath = useRouterState({ select: (s) => s.location.pathname });
   const projectId = useSelectedProjectId();
+  const activeProjectId = activeSession?.projectId ?? projectId;
+  const activeRoutePath = activeSession?.routePath ?? routePath;
+  const activeScreenName = activeSession?.screenName ?? screenNameForPath(routePath);
   const sidebarCollapsed = useSidebarCollapsed();
-  const askAi = useAskAiStream(projectId);
+  const askAi = useAskAiStream(activeProjectId);
+  const sessionsApi = useAskAiSessions();
   const workspace = useWorkspace(projectId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,47 +133,48 @@ export function AskAiTrigger() {
 
   useEffect(() => () => abortStream(), []);
 
+  useEffect(() => {
+    if (open) void sessionsApi.refreshSessions();
+  }, [open]);
+
   const context = projectContextLabel({
-    company: workspace.data?.project.companyName ?? cycle.company,
-    period: workspace.data?.project.fiscalYear ?? cycle.period,
+    company: activeSession?.companyName ?? workspace.data?.project.companyName ?? cycle.company,
+    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear ?? cycle.period,
     sector: workspace.data?.project.sector ?? cycle.sector,
     documentCount: workspace.data?.documents.length,
     isDiagnosis: isDiagnosisRoute,
   });
   const expandedLeft = sidebarCollapsed ? 0 : SIDEBAR_WIDTH;
 
-  const saveCurrentChat = () => {
-    if (messages.length === 0) return;
-    const firstUserMsg = messages.find((m) => m.role === "user");
-    if (!firstUserMsg) return;
-    const chat: SavedChat = {
-      id: chatSessionIdRef.current,
-      title: firstUserMsg.text.slice(0, 80),
-      date: new Date().toISOString(),
-      messages,
-      context,
-    };
-    setSavedChats((prev) => {
-      const updated = [chat, ...prev.filter((c) => c.id !== chat.id)].slice(0, MAX_SAVED_CHATS);
-      try {
-        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  };
-
   const startNewChat = () => {
-    saveCurrentChat();
     setMessages([]);
     setInput("");
     setShowHistory(false);
+    setActiveSession(null);
     chatSessionIdRef.current = `chat-${Date.now()}`;
   };
 
-  const loadChat = (chat: SavedChat) => {
-    setMessages(chat.messages);
-    chatSessionIdRef.current = chat.id;
+  const loadChat = async (chat: AskAiChatSessionSummary) => {
+    const session = await sessionsApi.loadSession(chat.id);
+    setMessages(askAiSessionToMessages(session));
+    chatSessionIdRef.current = session.id;
+    setActiveSession(session);
     setShowHistory(false);
+  };
+
+  const renameChat = async (chat: AskAiChatSessionSummary) => {
+    const title = window.prompt("Rename Ask AI thread", chat.title ?? "");
+    if (!title?.trim()) return;
+    const updated = await sessionsApi.renameSession(chat.id, title.trim());
+    if (activeSession?.id === updated.id) setActiveSession(updated);
+    await sessionsApi.refreshSessions();
+  };
+
+  const deleteChat = async (chat: AskAiChatSessionSummary) => {
+    if (!window.confirm("Permanently delete this Ask AI thread? This cannot be undone.")) return;
+    await sessionsApi.deleteSession(chat.id);
+    if (activeSession?.id === chat.id) startNewChat();
+    await sessionsApi.refreshSessions();
   };
 
   // Draggable button handlers
@@ -247,7 +225,7 @@ export function AskAiTrigger() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
 
-    if (!projectId) {
+    if (!activeProjectId) {
       setMessages((m) => [
         ...m,
         {
@@ -274,8 +252,8 @@ export function AskAiTrigger() {
         {
           question: text,
           sessionId: chatSessionIdRef.current,
-          routePath,
-          screenName: screenNameForPath(routePath),
+          routePath: activeRoutePath,
+          screenName: activeScreenName,
           documentIds: cycle.documentIds,
           filters: { cycleStatus: cycle.status, period: cycle.period, company: cycle.company },
           includeExternalSources: shouldUseExternalSources(text),
@@ -286,7 +264,10 @@ export function AskAiTrigger() {
           onApproach: (event) =>
             updateStreamMessage(aiId, { type: "approach", summary: event.summary }),
           onToken: (event) => updateStreamMessage(aiId, { type: "token", delta: event.delta }),
-          onFinal: (event) => updateStreamMessage(aiId, { type: "final", final: event }),
+          onFinal: (event) => {
+            if (event.sessionId) chatSessionIdRef.current = event.sessionId;
+            updateStreamMessage(aiId, { type: "final", final: event });
+          },
           onError: (event) => {
             streamError = true;
             updateStreamMessage(aiId, { type: "error", message: event.message });
@@ -303,6 +284,7 @@ export function AskAiTrigger() {
       if (activeStreamIdRef.current === aiId) {
         activeStreamIdRef.current = null;
         setAsking(false);
+        void sessionsApi.refreshSessions();
       }
     }
   };
@@ -453,7 +435,15 @@ export function AskAiTrigger() {
                   New chat
                 </button>
               </div>
-              <HistoryChatList savedChats={savedChats} onLoadChat={loadChat} />
+              <HistoryChatList
+                sessions={sessionsApi.sessions}
+                loading={sessionsApi.loading}
+                error={sessionsApi.error}
+                onRetry={() => void sessionsApi.refreshSessions()}
+                onLoadChat={(chat) => void loadChat(chat)}
+                onRenameChat={(chat) => void renameChat(chat)}
+                onDeleteChat={(chat) => void deleteChat(chat)}
+              />
             </div>
           )}
 
@@ -474,9 +464,9 @@ export function AskAiTrigger() {
                 </div>
                 <div className="truncate text-[11px] text-[var(--color-text-muted)]">
                   {[
-                    workspace.data?.project.companyName ?? cycle.company,
-                    screenNameForPath(routePath),
-                    workspace.data?.project.fiscalYear ?? cycle.period,
+                    activeSession?.companyName ?? workspace.data?.project.companyName ?? cycle.company,
+                    activeScreenName,
+                    activeSession?.projectLabel ?? workspace.data?.project.fiscalYear ?? cycle.period,
                   ].filter(Boolean).join(" · ")}
                 </div>
               </div>
@@ -508,7 +498,7 @@ export function AskAiTrigger() {
               </IconTooltip>
               <IconTooltip label="Close Ask AI">
                 <button
-                  onClick={() => { abortStream(); saveCurrentChat(); setOpen(false); }}
+                  onClick={() => { abortStream(); setOpen(false); }}
                   className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
                   aria-label="Close Ask AI"
                 >
@@ -599,7 +589,15 @@ export function AskAiTrigger() {
                   Past Chats
                 </span>
               </div>
-              <HistoryChatList savedChats={savedChats} onLoadChat={loadChat} />
+              <HistoryChatList
+                sessions={sessionsApi.sessions}
+                loading={sessionsApi.loading}
+                error={sessionsApi.error}
+                onRetry={() => void sessionsApi.refreshSessions()}
+                onLoadChat={(chat) => void loadChat(chat)}
+                onRenameChat={(chat) => void renameChat(chat)}
+                onDeleteChat={(chat) => void deleteChat(chat)}
+              />
             </>
           ) : (
             <>
@@ -694,7 +692,7 @@ export function AskAiTrigger() {
                         key={m.id}
                         message={m}
                         expanded={expanded}
-                        projectId={projectId}
+                        projectId={activeProjectId}
                         onPreviewSource={setPreviewSource}
                       />
                     );
@@ -1945,35 +1943,92 @@ function projectContextLabel(input: {
 }
 
 function HistoryChatList({
-  savedChats,
+  sessions,
+  loading,
+  error,
+  onRetry,
   onLoadChat,
+  onRenameChat,
+  onDeleteChat,
 }: {
-  savedChats: SavedChat[];
-  onLoadChat: (chat: SavedChat) => void;
+  sessions: AskAiChatSessionSummary[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onLoadChat: (chat: AskAiChatSessionSummary) => void;
+  onRenameChat: (chat: AskAiChatSessionSummary) => void;
+  onDeleteChat: (chat: AskAiChatSessionSummary) => void;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-      {savedChats.length === 0 ? (
+      {loading ? (
+        <div className="space-y-2 px-2 py-4">
+          {[0, 1, 2].map((item) => (
+            <div
+              key={item}
+              className="h-10 animate-pulse rounded-lg"
+              style={{ background: "var(--color-table-header)" }}
+            />
+          ))}
+        </div>
+      ) : error ? (
         <div className="px-2 py-8 text-center">
           <History className="mx-auto mb-2 h-8 w-8 text-[var(--color-text-muted)]" />
-          <div className="text-[12px] text-[var(--color-text-muted)]">No past conversations</div>
+          <div className="text-[12px] text-[var(--color-danger-fg)]">{error}</div>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 rounded-md border px-3 py-1.5 text-[12px] font-medium"
+            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="px-2 py-8 text-center">
+          <History className="mx-auto mb-2 h-8 w-8 text-[var(--color-text-muted)]" />
+          <div className="text-[12px] text-[var(--color-text-muted)]">No Ask AI threads yet.</div>
         </div>
       ) : (
-        groupChatsByDate(savedChats).map((group) => (
+        groupChatsByDate(sessions).map((group) => (
           <div key={group.label} className="mb-2">
             <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
               {group.label}
             </div>
             {group.chats.map((chat) => (
-              <button
+              <div
                 key={chat.id}
-                onClick={() => onLoadChat(chat)}
-                className="group flex w-full items-center rounded-lg px-2 py-1.5 text-left transition hover:bg-[var(--color-tag-bg)]"
+                className="group flex w-full items-center gap-1 rounded-lg px-2 py-1.5 transition hover:bg-[var(--color-tag-bg)]"
               >
-                <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
-                  {chat.title}
-                </span>
-              </button>
+                <button type="button" onClick={() => onLoadChat(chat)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate text-[13px] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
+                    {chat.title || "Untitled Ask AI thread"}
+                  </span>
+                  <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
+                    {[chat.companyName, chat.screenName].filter(Boolean).join(" · ")}
+                  </span>
+                </button>
+                <IconTooltip label="Rename thread">
+                  <button
+                    type="button"
+                    onClick={() => onRenameChat(chat)}
+                    className="rounded-md p-1 opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Rename thread"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                  </button>
+                </IconTooltip>
+                <IconTooltip label="Delete thread">
+                  <button
+                    type="button"
+                    onClick={() => onDeleteChat(chat)}
+                    className="rounded-md p-1 opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Delete thread"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--color-danger-fg)]" />
+                  </button>
+                </IconTooltip>
+              </div>
             ))}
           </div>
         ))
@@ -1982,7 +2037,9 @@ function HistoryChatList({
   );
 }
 
-function groupChatsByDate(chats: SavedChat[]): Array<{ label: string; chats: SavedChat[] }> {
+function groupChatsByDate(
+  chats: AskAiChatSessionSummary[],
+): Array<{ label: string; chats: AskAiChatSessionSummary[] }> {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const groups: Array<{ label: string; test: (ms: number) => boolean }> = [
@@ -1992,26 +2049,14 @@ function groupChatsByDate(chats: SavedChat[]): Array<{ label: string; chats: Sav
     { label: "Previous 30 days", test: (ms) => ms >= startOfToday - 30 * 86400000 },
     { label: "Older", test: () => true },
   ];
-  const result: Array<{ label: string; chats: SavedChat[] }> = [];
+  const result: Array<{ label: string; chats: AskAiChatSessionSummary[] }> = [];
   const remaining = [...chats];
   for (const group of groups) {
-    const matched = remaining.filter((c) => group.test(new Date(c.date).getTime()));
+    const matched = remaining.filter((c) => group.test(new Date(c.updatedAt).getTime()));
     matched.forEach((c) => remaining.splice(remaining.indexOf(c), 1));
     if (matched.length > 0) result.push({ label: group.label, chats: matched });
   }
   return result;
-}
-
-function formatChatDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function useGlobalToast() {

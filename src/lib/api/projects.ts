@@ -1,6 +1,8 @@
 import { apiBlob, apiFetch, apiStream } from "./client";
 import type {
   AssumptionsGenerateResponse,
+  AskAiChatSessionResponse,
+  AskAiChatSessionSummary,
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
@@ -195,6 +197,32 @@ export function askAi(projectId: string, input: Record<string, unknown>, options
     body: input,
     signal: options.signal,
   });
+}
+
+export function listAskAiSessions(input: { limit?: number; cursor?: string | null } = {}) {
+  const params = new URLSearchParams();
+  if (input.limit) params.set("limit", String(input.limit));
+  if (input.cursor) params.set("cursor", input.cursor);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiFetch<AskAiChatSessionSummary[]>(`/api/ask-ai/sessions${suffix}`);
+}
+
+export function readAskAiSession(sessionId: string) {
+  return apiFetch<AskAiChatSessionResponse>(`/api/ask-ai/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export function renameAskAiSession(sessionId: string, title: string) {
+  return apiFetch<AskAiChatSessionSummary>(
+    `/api/ask-ai/sessions/${encodeURIComponent(sessionId)}`,
+    { method: "PATCH", body: { title } },
+  );
+}
+
+export function deleteAskAiSession(sessionId: string) {
+  return apiFetch<AskAiChatSessionSummary>(
+    `/api/ask-ai/sessions/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export function runBalanceSheetDiagnosis(projectId: string) {

@@ -66,6 +66,36 @@ export interface WorkspaceResponse {
   balanceSheetDiagnosis?: Record<string, unknown> | null;
 }
 
+export interface AskAiChatMessageResponse {
+  id: string;
+  role: "user" | "assistant" | string;
+  content: string;
+  routePath: string | null;
+  screenName: string | null;
+  citations: Array<Record<string, unknown>>;
+  warnings: string[];
+  usage: Record<string, unknown>;
+  retrievalSnapshot: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AskAiChatSessionSummary {
+  id: string;
+  projectId: string;
+  projectLabel: string | null;
+  companyName: string | null;
+  title: string | null;
+  routePath: string | null;
+  screenName: string | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AskAiChatSessionResponse extends AskAiChatSessionSummary {
+  messages: AskAiChatMessageResponse[];
+}
+
 export interface AnalysisRequestResponse {
   id: string;
   requesterUserId: string;

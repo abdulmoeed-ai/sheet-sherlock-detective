@@ -30,6 +30,7 @@ export type AskAiClaimSourceGroup = {
 
 export type AskAiFinalResponse = {
   answer: string;
+  sessionId?: string | null;
   sourcesUsed: Array<Record<string, unknown>>;
   modelCitations: Array<Record<string, unknown>>;
   sourceCitations: Array<Record<string, unknown>>;
