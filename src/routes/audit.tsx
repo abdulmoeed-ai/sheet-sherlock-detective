@@ -12,7 +12,7 @@ import { auditRows } from "@/lib/mappers/workspace";
 export const Route = createFileRoute("/audit")({
   head: () => ({
     meta: [
-      { title: "Audit Trail — Sheet Sherlock" },
+      { title: "Audit Trail — F(AI)nance" },
       {
         name: "description",
         content: "Immutable audit log of every system and human action with full data lineage.",

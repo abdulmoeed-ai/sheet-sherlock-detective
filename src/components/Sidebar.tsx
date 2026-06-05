@@ -1,10 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   LayoutDashboard,
   TrendingUp,
-  FileText,
   ShieldCheck,
-  Search,
   Sparkles,
   ChevronsLeft,
   ChevronsRight,
@@ -14,12 +13,16 @@ import {
   ClipboardCheck,
   Lock,
   Bell,
+  ChevronDown,
+  LogOut,
 } from "lucide-react";
 import type { BackendRole } from "@/lib/api/types";
 import { getAccessToken } from "@/lib/auth-store";
 import { useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { initialsFor, roleLabel } from "@/lib/role-access";
 import { IconTooltip } from "@/components/IconTooltip";
+import { ProductLogo } from "@/components/ProductLogo";
+import { ProductWordmark } from "@/components/ProductWordmark";
 import {
   sidebarStore,
   useSidebarCollapsed,
@@ -42,7 +45,6 @@ const nav = [
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },
   { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
-  { to: "/assumptions", label: "Assumptions", icon: FileText, roles: ["finance_analyst"] },
   { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
   { to: "/sign-off", label: "CFO Sign-Off", icon: Lock, roles: ["cfo"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
@@ -66,6 +68,7 @@ export function Sidebar() {
   const collapsed = useSidebarCollapsed();
   const { data: user } = useCurrentUser();
   const logout = useLogout();
+  const [profileOpen, setProfileOpen] = useState(false);
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const currentRole: BackendRole = user?.role ?? "finance_analyst";
   const visibleNav = getAccessToken()
@@ -75,52 +78,35 @@ export function Sidebar() {
 
   return (
     <aside
-      className="flex h-screen flex-col transition-[width] duration-200 ease-out"
+      className="relative flex h-screen flex-col transition-[width] duration-200 ease-out"
       style={{
         width,
         background: "var(--color-sidebar-bg)",
         borderRight: "1px solid var(--color-sidebar-border)",
       }}
     >
-      <div
-        className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"} pt-5 pb-4`}
-      >
-        <div
-          className={`flex items-center justify-center rounded-md ${collapsed ? "h-10 w-10" : "h-8 w-8"}`}
-          style={{ background: "var(--color-brand)" }}
-        >
-          <Search
-            className={collapsed ? "h-[22px] w-[22px] text-white" : "h-[18px] w-[18px] text-white"}
-          />
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col leading-tight">
-            <span className="text-[15px] font-semibold text-white">Sheet Sherlock</span>
-            <span
-              className="text-[10px] font-medium uppercase tracking-wider"
-              style={{ color: "var(--color-sidebar-icon)" }}
-            >
-              FP&amp;A · v1
-            </span>
+      <div className={collapsed ? "flex justify-center px-0 pt-5 pb-4" : "px-3 pt-4 pb-3"}>
+        {collapsed ? (
+          <ProductLogo className="h-10 w-10" />
+        ) : (
+          <div
+            className="flex items-center gap-3 rounded-lg border px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(2,6,23,0.18)]"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(123,104,238,0.26), rgba(255,255,255,0.055))",
+              borderColor: "rgba(158,149,245,0.28)",
+            }}
+          >
+            <ProductLogo className="h-9 w-9" />
+            <div className="min-w-0 leading-tight">
+              <ProductWordmark
+                className="block truncate text-[18px] font-bold tracking-[0.01em] text-white"
+                aiClassName="text-[#DAD7FF]"
+              />
+            </div>
           </div>
         )}
       </div>
-
-      {!collapsed && (
-        <div className="px-3 pb-2 pt-1">
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px]"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "var(--color-sidebar-text)",
-            }}
-          >
-            <Search className="h-3.5 w-3.5" style={{ color: "var(--color-sidebar-icon)" }} />
-            <span className="text-[12px]">Quick find…</span>
-          </div>
-        </div>
-      )}
 
       {!collapsed && (
         <div
@@ -131,7 +117,9 @@ export function Sidebar() {
         </div>
       )}
 
-      <nav className={`flex-1 py-1 ${collapsed ? "flex flex-col items-center gap-1 px-0" : "px-1"}`}>
+      <nav
+        className={`flex-1 py-1 ${collapsed ? "flex flex-col items-center gap-1 px-0" : "px-1"}`}
+      >
         {visibleNav.map(({ to, label, icon: Icon }) => {
           const active = pathname === to;
           if (collapsed) {
@@ -217,37 +205,73 @@ export function Sidebar() {
       </IconTooltip>
 
       <div
-        className={`flex items-center border-t py-3 ${collapsed ? "justify-center px-0" : "gap-2.5 px-4"}`}
+        className={`relative border-t py-3 ${collapsed ? "px-0" : "px-4"}`}
         style={{ borderColor: "var(--color-sidebar-border)" }}
       >
-        <div
-          className={`flex items-center justify-center rounded-full font-semibold text-white ${
-            collapsed ? "h-10 w-10 text-[13px]" : "h-8 w-8 text-[12px]"
-          }`}
-          style={{ background: "var(--color-brand)" }}
-          title={user?.name ?? "Sheet Sherlock"}
-        >
-          {initials}
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col leading-tight">
-            <span className="text-[12px] font-semibold text-white">
-              {user?.name ?? "Not signed in"}
-            </span>
-            <span className="text-[10px]" style={{ color: "var(--color-sidebar-text)" }}>
-              {user ? roleLabel(user.role) : "Guest"}
-            </span>
+        {profileOpen && user && (
+          <div
+            className={`absolute z-20 rounded-lg border p-1 shadow-xl ${
+              collapsed ? "bottom-[64px] left-2 w-40" : "right-3 bottom-[64px] left-3"
+            }`}
+            style={{
+              background: "var(--color-card)",
+              borderColor: "var(--color-border-default)",
+              boxShadow: "0 18px 42px rgba(15, 23, 42, 0.22)",
+            }}
+          >
+            <button
+              onClick={() => {
+                setProfileOpen(false);
+                logout();
+              }}
+              className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--color-tag-bg)]"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              <LogOut className="h-4 w-4" style={{ color: "var(--color-brand)" }} />
+              Sign out
+            </button>
           </div>
         )}
-        {!collapsed && user && (
-          <button
-            onClick={logout}
-            className="ml-auto rounded px-2 py-1 text-[10px] font-semibold hover:bg-white/5"
-            style={{ color: "var(--color-sidebar-text)" }}
+
+        <div
+          className={`flex w-full items-center rounded-lg ${
+            collapsed ? "justify-center px-0 py-0" : "gap-2.5 px-0 py-1"
+          }`}
+        >
+          <div
+            className={`flex items-center justify-center rounded-full font-semibold text-white ${
+              collapsed ? "h-10 w-10 text-[13px]" : "h-8 w-8 text-[12px]"
+            }`}
+            style={{ background: "var(--color-brand)" }}
+            title={user?.name ?? "F(AI)nance"}
           >
-            Sign out
-          </button>
-        )}
+            {initials}
+          </div>
+          {!collapsed && (
+            <div className="flex min-w-0 flex-1 flex-col text-left leading-tight">
+              <span className="truncate text-[12px] font-semibold text-white">
+                {user?.name ?? "Not signed in"}
+              </span>
+              <span className="text-[10px]" style={{ color: "var(--color-sidebar-text)" }}>
+                {user ? roleLabel(user.role) : "Guest"}
+              </span>
+            </div>
+          )}
+          {!collapsed && user && (
+            <button
+              type="button"
+              onClick={() => setProfileOpen((open) => !open)}
+              className="ml-auto flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/5"
+              aria-expanded={profileOpen}
+              aria-label="Open profile menu"
+              style={{ color: "var(--color-sidebar-text)" }}
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${profileOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   );

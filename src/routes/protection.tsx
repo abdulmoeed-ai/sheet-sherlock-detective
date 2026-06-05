@@ -7,7 +7,7 @@ import { Lock, Unlock, ShieldCheck, AlertTriangle, KeyRound } from "lucide-react
 export const Route = createFileRoute("/protection")({
   head: () => ({
     meta: [
-      { title: "Write-Protection Layer — Sheet Sherlock" },
+      { title: "Write-Protection Layer — F(AI)nance" },
       {
         name: "description",
         content:

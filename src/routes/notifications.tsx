@@ -7,7 +7,7 @@ import { Bell, Send, CheckCircle2, MessageSquare, Plus } from "lucide-react";
 export const Route = createFileRoute("/notifications")({
   head: () => ({
     meta: [
-      { title: "Teams Notifications — Sheet Sherlock" },
+      { title: "Teams Notifications — F(AI)nance" },
       {
         name: "description",
         content:
@@ -149,7 +149,7 @@ function Notifications() {
       event: "Test notification",
       channel: "#fp&a-cycle",
       status: "delivered",
-      preview: "✅ Sheet Sherlock test message from notification rules screen.",
+      preview: "F(AI)nance test message from notification rules screen.",
     };
     setLog((l) => [entry, ...l]);
   };

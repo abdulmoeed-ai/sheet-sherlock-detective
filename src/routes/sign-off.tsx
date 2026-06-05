@@ -26,7 +26,7 @@ import {
 export const Route = createFileRoute("/sign-off")({
   head: () => ({
     meta: [
-      { title: "CFO Sign-Off - Sheet Sherlock" },
+      { title: "CFO Sign-Off - F(AI)nance" },
       {
         name: "description",
         content: "One-page executive brief and version-locked approval for the CFO.",

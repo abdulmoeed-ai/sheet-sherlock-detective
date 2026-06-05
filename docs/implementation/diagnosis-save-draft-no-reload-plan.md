@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the edited workbook snapshot mounted as local route state while save/version API calls run in the background. Replace immediate navigation to the newly-created project version with an in-place saved-version marker, and update only lightweight metadata/toasts so the grid does not reset, remount, or jump.
 
-**Tech Stack:** React, TanStack Router, TanStack Query, Vitest/jsdom via `bun run test`, existing Sheet Sherlock project APIs.
+**Tech Stack:** React, TanStack Router, TanStack Query, Vitest/jsdom via `bun run test`, existing F(AI)nance project APIs.
 
 ---
 

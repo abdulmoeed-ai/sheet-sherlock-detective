@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { CycleProgress } from "./CycleProgress";
+import { ProductWordmark } from "./ProductWordmark";
 
 interface Props {
   title: string;
@@ -20,9 +21,10 @@ export function PageShell({ title, subtitle, actions, children, hideProgress }: 
           style={{ borderColor: "var(--color-border-default)" }}
         >
           <div className="flex flex-col leading-tight">
-            <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-              Sheet Sherlock
-            </span>
+            <ProductWordmark
+              className="text-[11px] tracking-wider text-[var(--color-text-muted)]"
+              aiClassName="text-[var(--color-brand)]"
+            />
             <span className="text-[14px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
               {title}
             </span>

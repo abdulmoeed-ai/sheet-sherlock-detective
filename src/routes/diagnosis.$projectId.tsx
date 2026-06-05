@@ -83,7 +83,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/diagnosis/$projectId")({
   head: () => ({
     meta: [
-      { title: "Diagnosis - Sheet Sherlock" },
+      { title: "Diagnosis - F(AI)nance" },
       {
         name: "description",
         content: "Workbook-style cell diagnosis for Millat extraction review.",

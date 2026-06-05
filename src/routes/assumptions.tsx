@@ -8,7 +8,7 @@ import { IconTooltip } from "@/components/IconTooltip";
 export const Route = createFileRoute("/assumptions")({
   head: () => ({
     meta: [
-      { title: "Assumptions — Sheet Sherlock" },
+      { title: "Assumptions — F(AI)nance" },
       { name: "description", content: "Auto-generated assumptions sheet from ingestion with full source citation." },
     ],
   }),

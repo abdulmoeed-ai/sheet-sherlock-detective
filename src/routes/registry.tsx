@@ -15,7 +15,7 @@ const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025"
 export const Route = createFileRoute("/registry")({
   head: () => ({
     meta: [
-      { title: "Model Registry — Sheet Sherlock" },
+      { title: "Model Registry — F(AI)nance" },
       { name: "description", content: "Silent pre-initiation lookup, version timeline, and CFO-grade decision cards." },
     ],
   }),

@@ -33,7 +33,7 @@ import {
 export const Route = createFileRoute("/review")({
   head: () => ({
     meta: [
-      { title: "Manager Review - Sheet Sherlock" },
+      { title: "Manager Review - F(AI)nance" },
       {
         name: "description",
         content:
