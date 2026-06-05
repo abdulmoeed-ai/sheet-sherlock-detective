@@ -99,6 +99,8 @@ export interface ExtractionJobResponse {
   error: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
 }
 
 export interface ExtractionProgressEventResponse {

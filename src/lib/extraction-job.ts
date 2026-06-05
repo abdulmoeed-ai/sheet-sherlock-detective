@@ -78,6 +78,40 @@ export function extractionFailureMessage(job: ExtractionJobResponse | null) {
   return job.error || job.message || "Extraction failed. Please try again.";
 }
 
+export function extractionElapsedLabel(
+  job: ExtractionJobResponse | null,
+  events: ExtractionProgressEventResponse[],
+  now: Date = new Date(),
+) {
+  const startedAt = parseTimestamp(job?.startedAt ?? events[0]?.createdAt ?? null);
+  const completedAt = parseTimestamp(
+    job?.completedAt ??
+      (job && (isCompletedExtractionJob(job) || isFailedExtractionJob(job)) ? job.updatedAt : null) ??
+      events.at(-1)?.createdAt ??
+      (job ? now.toISOString() : null),
+  );
+  if (!startedAt || !completedAt || completedAt.getTime() < startedAt.getTime()) return null;
+  return formatDuration(completedAt.getTime() - startedAt.getTime());
+}
+
 function clampPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseTimestamp(value: string | null | undefined) {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp);
+}
+
+function formatDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours > 0) return `${hours}h ${remainingMinutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }

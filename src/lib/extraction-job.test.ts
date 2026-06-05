@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   effectiveExtractionPercent,
+  extractionElapsedLabel,
   extractionFailureMessage,
   latestExtractionEvent,
   mergeExtractionEvents,
@@ -19,6 +20,8 @@ function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): Ex
     error: null,
     createdAt: null,
     updatedAt: null,
+    startedAt: null,
+    completedAt: null,
     ...overrides,
   };
 }
@@ -136,5 +139,26 @@ describe("extraction progress helpers", () => {
     expect(extractionFailureMessage(job("failed", { error: "PDF parse failed" }))).toBe(
       "PDF parse failed",
     );
+  });
+
+  it("formats elapsed extraction time from backend job timestamps", () => {
+    expect(
+      extractionElapsedLabel(
+        job("completed", {
+          startedAt: "2026-06-04T10:00:00.000Z",
+          completedAt: "2026-06-04T10:02:05.000Z",
+        }),
+        [],
+      ),
+    ).toBe("2m 5s");
+  });
+
+  it("falls back to event timestamps for elapsed extraction time", () => {
+    expect(
+      extractionElapsedLabel(null, [
+        event("event-1", "2026-06-04T10:00:00.000Z"),
+        event("event-2", "2026-06-04T10:00:07.000Z"),
+      ]),
+    ).toBe("7s");
   });
 });

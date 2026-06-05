@@ -15,6 +15,7 @@ import type {
 } from "@/lib/api/types";
 import {
   effectiveExtractionPercent,
+  extractionElapsedLabel,
   extractionFailureMessage,
   latestExtractionEvent,
   mergeExtractionEvents,
@@ -131,7 +132,9 @@ function Ingestion() {
         return;
       }
       toast.error(error instanceof Error ? error.message : "Unable to start extraction");
-      setExtractionError(error instanceof Error ? error.message : "Unable to start extraction. Please try again.");
+      setExtractionError(
+        error instanceof Error ? error.message : "Unable to start extraction. Please try again.",
+      );
     } finally {
       setExtractionPending(false);
     }
@@ -161,7 +164,9 @@ function Ingestion() {
       openDiagnosis(projectId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to re-run extraction");
-      setExtractionError(error instanceof Error ? error.message : "Unable to re-run extraction. Please try again.");
+      setExtractionError(
+        error instanceof Error ? error.message : "Unable to re-run extraction. Please try again.",
+      );
     } finally {
       setExtractionPending(false);
     }
@@ -473,16 +478,18 @@ function buildIngestionProgressModel({
           ? "ready"
           : "idle";
   const currentStage = latestEvent?.stage ?? extractionProgress?.status ?? "upload";
+  const elapsedLabel = extractionElapsedLabel(extractionProgress, extractionEvents);
   const title = failedMessage
     ? "Extraction needs attention"
-    : latestEvent?.title ?? (extractionProgress ? extractionProgress.message : "Ready for source PDFs");
+    : (latestEvent?.title ??
+      (extractionProgress ? extractionProgress.message : "Ready for source PDFs"));
   const message = failedMessage
     ? `${failedMessage}. Please try again after checking the uploaded PDF and backend worker.`
-    : latestEvent?.message ??
+    : (latestEvent?.message ??
       (extractionProgress?.status.toLowerCase() === "queued"
         ? "Waiting for the extraction worker to pick up the queued job."
-        : extractionProgress?.message || "Upload source PDFs, then start extraction.");
-  return { percent, status, currentStage, title, message, latestEvent };
+        : extractionProgress?.message || "Upload source PDFs, then start extraction."));
+  return { percent, status, currentStage, title, message, latestEvent, elapsedLabel };
 }
 
 function IngestionProgressWorkbench({
@@ -509,12 +516,30 @@ function IngestionProgressWorkbench({
               {model.message}
             </p>
           </div>
-          <div className="rounded-md border px-3 py-2 text-right" style={{ borderColor: "#E1E7F0" }}>
-            <div className="text-[11px] font-semibold uppercase" style={{ color: "#788397" }}>
-              Backend progress
-            </div>
-            <div className="tnum text-[20px] font-semibold" style={{ color: "#202633" }}>
-              {model.percent}%
+          <div className="flex gap-2">
+            {model.elapsedLabel ? (
+              <div
+                className="rounded-md border px-3 py-2 text-right"
+                style={{ borderColor: "#E1E7F0" }}
+              >
+                <div className="text-[11px] font-semibold uppercase" style={{ color: "#788397" }}>
+                  Elapsed
+                </div>
+                <div className="tnum text-[20px] font-semibold" style={{ color: "#202633" }}>
+                  {model.elapsedLabel}
+                </div>
+              </div>
+            ) : null}
+            <div
+              className="rounded-md border px-3 py-2 text-right"
+              style={{ borderColor: "#E1E7F0" }}
+            >
+              <div className="text-[11px] font-semibold uppercase" style={{ color: "#788397" }}>
+                Backend progress
+              </div>
+              <div className="tnum text-[20px] font-semibold" style={{ color: "#202633" }}>
+                {model.percent}%
+              </div>
             </div>
           </div>
         </div>
@@ -547,17 +572,27 @@ function IngestionProgressWorkbench({
               These rows are replayed from the extraction event store.
             </p>
           </div>
-          <Radio className="h-4 w-4" style={{ color: model.status === "running" ? "#2563EB" : "#94A3B8" }} />
+          <Radio
+            className="h-4 w-4"
+            style={{ color: model.status === "running" ? "#2563EB" : "#94A3B8" }}
+          />
         </div>
         {events.length ? (
           <div className="max-h-72 overflow-y-auto pr-1">
-            {events.slice(-8).reverse().map((event) => (
-              <ExtractionEventRow key={event.eventId} event={event} />
-            ))}
+            {events
+              .slice(-8)
+              .reverse()
+              .map((event) => (
+                <ExtractionEventRow key={event.eventId} event={event} />
+              ))}
           </div>
         ) : (
-          <div className="rounded-md border px-3 py-3 text-[12px] leading-5" style={{ borderColor: "#E1E7F0", color: "#586174" }}>
-            No backend extraction events have arrived yet. If the job remains queued, confirm the Redis/RQ extraction worker is running.
+          <div
+            className="rounded-md border px-3 py-3 text-[12px] leading-5"
+            style={{ borderColor: "#E1E7F0", color: "#586174" }}
+          >
+            No backend extraction events have arrived yet. If the job remains queued, confirm the
+            Redis/RQ extraction worker is running.
           </div>
         )}
       </div>
@@ -592,7 +627,10 @@ function ExtractionStepTile({
     pending: { border: "#E1E7F0", bg: "#F8FAFC", fg: "#64748B" },
   }[state];
   return (
-    <div className="min-h-[78px] rounded-md border px-3 py-2.5" style={{ borderColor: colors.border, background: colors.bg }}>
+    <div
+      className="min-h-[78px] rounded-md border px-3 py-2.5"
+      style={{ borderColor: colors.border, background: colors.bg }}
+    >
       <div className="flex items-center gap-2">
         {state === "done" ? (
           <CheckCircle2 className="h-3.5 w-3.5" style={{ color: colors.fg }} />
@@ -613,7 +651,8 @@ function ExtractionStepTile({
 }
 
 function ExtractionEventRow({ event }: { event: ExtractionProgressEventResponse }) {
-  const tone = event.status === "failed" ? "#DC2626" : event.status === "warning" ? "#B45309" : "#2563EB";
+  const tone =
+    event.status === "failed" ? "#DC2626" : event.status === "warning" ? "#B45309" : "#2563EB";
   return (
     <div className="border-t py-2.5 first:border-t-0" style={{ borderColor: "#EEF2F6" }}>
       <div className="flex items-start justify-between gap-3">
@@ -648,9 +687,12 @@ function stepState(
   if (job?.status.toLowerCase() === "completed") return "done";
   const stageIndex = EXTRACTION_STEPS.findIndex((step) => step.stage === stage);
   const currentIndex = EXTRACTION_STEPS.findIndex((step) => step.stage === currentStage);
-  const hasPassedEvent = events.some((event) => event.stage === stage && ["passed", "completed"].includes(event.status));
+  const hasPassedEvent = events.some(
+    (event) => event.stage === stage && ["passed", "completed"].includes(event.status),
+  );
   if (hasPassedEvent || (currentIndex > stageIndex && stageIndex >= 0)) return "done";
-  if (currentStage === stage || (stage === "queued" && job?.status.toLowerCase() === "queued")) return "active";
+  if (currentStage === stage || (stage === "queued" && job?.status.toLowerCase() === "queued"))
+    return "active";
   return "pending";
 }
 
@@ -757,23 +799,22 @@ function StickyFooter({
   const uploadPercent = uploadSummary.total
     ? Math.round((uploadSummary.uploaded / uploadSummary.total) * 100)
     : 0;
-  const progressPercent =
-    extractionProgress
-      ? effectiveExtractionPercent(extractionProgress, extractionEvents, uploadPercent)
-      : uploadPercent;
+  const progressPercent = extractionProgress
+    ? effectiveExtractionPercent(extractionProgress, extractionEvents, uploadPercent)
+    : uploadPercent;
   const failure = extractionError ?? extractionFailureMessage(extractionProgress);
   const latestEvent = latestExtractionEvent(extractionEvents);
   const progressLabel = failure
     ? `Extraction failed: ${failure}`
     : extractionProgress
       ? latestEvent?.message || extractionProgress.message || "Extracting reports."
-    : uploadSummary.failed
-      ? `Upload failed: ${uploadSummary.failed}`
-      : uploadSummary.uploading
-        ? `Uploading ${uploadSummary.uploaded + 1} of ${uploadSummary.total}: ${uploadSummary.uploading}`
-        : uploadSummary.total
-          ? `${uploadSummary.uploaded} of ${uploadSummary.total} report uploads complete`
-          : "";
+      : uploadSummary.failed
+        ? `Upload failed: ${uploadSummary.failed}`
+        : uploadSummary.uploading
+          ? `Uploading ${uploadSummary.uploaded + 1} of ${uploadSummary.total}: ${uploadSummary.uploading}`
+          : uploadSummary.total
+            ? `${uploadSummary.uploaded} of ${uploadSummary.total} report uploads complete`
+            : "";
 
   return (
     <div
@@ -805,7 +846,10 @@ function StickyFooter({
               >
                 <div
                   className="h-full rounded-full transition-all"
-                  style={{ width: `${progressPercent}%`, background: failure ? "var(--color-danger)" : "var(--color-brand)" }}
+                  style={{
+                    width: `${progressPercent}%`,
+                    background: failure ? "var(--color-danger)" : "var(--color-brand)",
+                  }}
                 />
               </div>
               {extractionEvents.length ? (
@@ -817,17 +861,21 @@ function StickyFooter({
                       style={{ color: "var(--color-text-secondary)" }}
                     >
                       <div className="min-w-0">
-                        <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        <span
+                          className="font-semibold"
+                          style={{ color: "var(--color-text-primary)" }}
+                        >
                           {event.title}
                         </span>
                         <span className="ml-1">{event.message}</span>
                         {event.ruleCodes.length ? (
-                          <span className="ml-1 font-semibold">
-                            {event.ruleCodes.join(", ")}
-                          </span>
+                          <span className="ml-1 font-semibold">{event.ruleCodes.join(", ")}</span>
                         ) : null}
                       </div>
-                      <span className="shrink-0 uppercase" style={{ color: "var(--color-text-muted)" }}>
+                      <span
+                        className="shrink-0 uppercase"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
                         {event.status}
                       </span>
                     </div>
