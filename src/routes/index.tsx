@@ -238,6 +238,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
   const [startError, setStartError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "financial">("overview");
 
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
   const dashboardState = useMemo(
@@ -293,23 +294,63 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
     }
   };
 
-  if (intelligenceLoading) {
-    return <AnalystDashboardLoading />;
-  }
-
-  if (dashboardState.kind === "analyst_company_no_model") {
-    return (
-      <AnalystNoModelDashboard
-        state={dashboardState}
-        startPending={startPending}
-        startError={startError}
-        onStartModel={() => startModel(dashboardState)}
-      />
-    );
-  }
+  const tabs = role === "finance_analyst"
+    ? [
+        { id: "overview" as const, label: "Overview" },
+        { id: "financial" as const, label: "Financial Dashboard" },
+      ]
+    : null;
 
   return (
     <div className="space-y-5">
+      {/* Sub-tabs — analyst only */}
+      {tabs && (
+        <div
+          className="flex gap-0 border-b"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="px-4 py-2.5 text-[13px] font-medium transition"
+              style={{
+                color: activeTab === tab.id ? "var(--color-brand)" : "var(--color-text-muted)",
+                borderBottom: activeTab === tab.id
+                  ? "2px solid var(--color-brand)"
+                  : "2px solid transparent",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Financial Dashboard tab */}
+      {activeTab === "financial" && role === "finance_analyst" && (
+        intelligenceLoading ? (
+          <AnalystDashboardLoading />
+        ) : dashboardState.kind === "analyst_company_no_model" ? (
+          <AnalystNoModelDashboard
+            state={dashboardState}
+            startPending={startPending}
+            startError={startError}
+            onStartModel={() => startModel(dashboardState)}
+          />
+        ) : (
+          <div
+            className="rounded-xl border px-4 py-8 text-center text-[13px] text-[var(--color-text-secondary)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            No financial model data available yet.
+          </div>
+        )
+      )}
+
+      {/* Overview tab (original dashboard) */}
+      {(activeTab === "overview" || role !== "finance_analyst") && (
+        <div className="space-y-5">
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Projects" value={projects.data?.length ?? 0} />
         {role === "finance_analyst" && (
@@ -416,6 +457,8 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
             Admin source controls are available from Sources Admin.
           </div>
         </Card>
+      )}
+      </div>
       )}
     </div>
   );
