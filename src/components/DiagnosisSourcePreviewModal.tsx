@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { AlertCircle, ExternalLink, Loader2, Maximize2, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
-import { Dialog, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertCircle,
+  ExternalLink,
+  Loader2,
+  Maximize2,
+  RotateCcw,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { IconTooltip } from "@/components/IconTooltip";
 import { readDocumentPageImage } from "@/lib/api/projects";
 
@@ -26,27 +41,15 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 
-export function DiagnosisSourcePreviewModal({
-  open,
-  onOpenChange,
-  source,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  source: DiagnosisSourcePreview | null;
-}) {
+function useDiagnosisSourceImage(enabled: boolean, source: DiagnosisSourcePreview | null) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const pageLabel = source?.printedPageNumber ?? (source ? source.pdfPageIndex + 1 : "-");
-  const bbox = useMemo(() => normalizeBoundingBox(source?.boundingBox), [source?.boundingBox]);
+  const projectId = source?.projectId;
+  const documentId = source?.documentId;
+  const pdfPageIndex = source?.pdfPageIndex;
 
   useEffect(() => {
-    setZoom(1);
-  }, [source?.documentId, source?.pdfPageIndex]);
-
-  useEffect(() => {
-    if (!open || !source) {
+    if (!enabled || !projectId || !documentId || pdfPageIndex === undefined) {
       setImageUrl(null);
       setImageError(null);
       return;
@@ -56,7 +59,7 @@ export function DiagnosisSourcePreviewModal({
     let objectUrl: string | null = null;
     setImageUrl(null);
     setImageError(null);
-    readDocumentPageImage(source.projectId, source.documentId, source.pdfPageIndex)
+    readDocumentPageImage(projectId, documentId, pdfPageIndex)
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
@@ -71,7 +74,170 @@ export function DiagnosisSourcePreviewModal({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [open, source]);
+  }, [documentId, enabled, pdfPageIndex, projectId]);
+
+  return { imageUrl, imageError };
+}
+
+export function DiagnosisSourceInlinePreview({
+  source,
+  onExpand,
+}: {
+  source: DiagnosisSourcePreview;
+  onExpand: () => void;
+}) {
+  const [zoom, setZoom] = useState(0.78);
+  const pageLabel = source.printedPageNumber ?? source.pdfPageIndex + 1;
+  const bbox = useMemo(() => normalizeBoundingBox(source.boundingBox), [source.boundingBox]);
+  const { imageUrl, imageError } = useDiagnosisSourceImage(true, source);
+
+  useEffect(() => {
+    setZoom(0.78);
+  }, [source.documentId, source.pdfPageIndex]);
+
+  const changeZoom = (nextZoom: number) => {
+    setZoom(Math.min(1.6, Math.max(0.45, Number(nextZoom.toFixed(2)))));
+  };
+
+  return (
+    <section
+      className="mt-3 overflow-hidden rounded-lg border bg-white"
+      style={{ borderColor: "#D8DEE8" }}
+    >
+      <div
+        className="flex min-h-12 items-center justify-between gap-2 border-b px-3 py-2"
+        style={{ borderColor: "#E3E6EA", background: "#F8FAFC" }}
+      >
+        <div className="min-w-0">
+          <div
+            className="truncate text-[11px] font-bold uppercase tracking-wide"
+            style={{ color: "#64748B" }}
+          >
+            Source preview
+          </div>
+          <div className="truncate text-[12px] font-semibold" style={{ color: "#1F2937" }}>
+            {source.documentFilename} · Page {pageLabel}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <IconButton
+            label="Zoom out"
+            onClick={() => changeZoom(zoom - ZOOM_STEP)}
+            disabled={zoom <= 0.45}
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </IconButton>
+          <IconButton
+            label="Zoom in"
+            onClick={() => changeZoom(zoom + ZOOM_STEP)}
+            disabled={zoom >= 1.6}
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </IconButton>
+          <IconButton label="Expand preview" onClick={onExpand}>
+            <Maximize2 className="h-3.5 w-3.5" />
+          </IconButton>
+        </div>
+      </div>
+
+      <div className="max-h-[420px] overflow-auto bg-[#F3F4F6] p-3">
+        <div
+          className="relative mx-auto w-[min(100%,720px)] origin-top"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "top center",
+            transition: "transform 120ms ease",
+          }}
+        >
+          <div
+            className="relative overflow-hidden border bg-white shadow-sm"
+            style={{ borderColor: "#CBD5E1" }}
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={`${source.documentFilename} page ${pageLabel}`}
+                className="block h-auto w-full"
+              />
+            ) : (
+              <div className="flex h-80 items-center justify-center">
+                {imageError ? (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: "#B91C1C" }}>
+                    <AlertCircle className="h-4 w-4" />
+                    {imageError}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-[12px]" style={{ color: "#64748B" }}>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading source page
+                  </div>
+                )}
+              </div>
+            )}
+
+            {bbox && (
+              <div
+                aria-label="Highlighted source row"
+                className="pointer-events-none absolute"
+                style={{
+                  left: `${highlightBox(bbox).x}%`,
+                  top: `${highlightBox(bbox).y}%`,
+                  width: `${highlightBox(bbox).width}%`,
+                  height: `${highlightBox(bbox).height}%`,
+                  border: "2px solid #DC2626",
+                  borderRadius: "6px",
+                  background: "rgba(220, 38, 38, 0.09)",
+                  boxShadow: "0 0 0 9999px rgba(17, 24, 39, 0.035)",
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="flex items-center justify-between gap-3 border-t px-3 py-2"
+        style={{ borderColor: "#E3E6EA" }}
+      >
+        <div className="min-w-0 truncate text-[11px]" style={{ color: "#4F546B" }}>
+          {bbox ? (
+            <>
+              <span className="font-semibold" style={{ color: "#DC2626" }}>
+                Highlighted row
+              </span>
+              {source.sourceText ? ` · ${source.sourceText}` : ""}
+            </>
+          ) : (
+            <span className="font-semibold" style={{ color: "#B45309" }}>
+              Source row location unavailable
+            </span>
+          )}
+        </div>
+        <div className="shrink-0 text-[11px] font-semibold" style={{ color: "#292D34" }}>
+          {source.value ?? "-"}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function DiagnosisSourcePreviewModal({
+  open,
+  onOpenChange,
+  source,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  source: DiagnosisSourcePreview | null;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const pageLabel = source?.printedPageNumber ?? (source ? source.pdfPageIndex + 1 : "-");
+  const bbox = useMemo(() => normalizeBoundingBox(source?.boundingBox), [source?.boundingBox]);
+  const { imageUrl, imageError } = useDiagnosisSourceImage(open, source);
+
+  useEffect(() => {
+    setZoom(1);
+  }, [source?.documentId, source?.pdfPageIndex]);
 
   const changeZoom = (nextZoom: number) => {
     setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(nextZoom.toFixed(2)))));
@@ -82,23 +248,38 @@ export function DiagnosisSourcePreviewModal({
       <DialogPortal>
         <DialogOverlay />
         <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 flex h-[88vh] w-[min(1180px,94vw)] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg">
-          <div className="flex min-h-14 items-center justify-between gap-3 border-b px-4" style={{ borderColor: "#E3E6EA" }}>
+          <div
+            className="flex min-h-14 items-center justify-between gap-3 border-b px-4"
+            style={{ borderColor: "#E3E6EA" }}
+          >
             <div className="min-w-0">
               <DialogTitle className="truncate text-[14px] font-bold" style={{ color: "#292D34" }}>
                 {source?.documentFilename ?? "Source page preview"}
               </DialogTitle>
               <DialogDescription className="truncate text-[12px]" style={{ color: "#818EA0" }}>
-                Page {pageLabel} · {source?.label ?? "Selected cell"} · {confidenceLabel(source?.confidence)}
+                Page {pageLabel} · {source?.label ?? "Selected cell"} ·{" "}
+                {confidenceLabel(source?.confidence)}
               </DialogDescription>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <IconButton label="Zoom out" onClick={() => changeZoom(zoom - ZOOM_STEP)} disabled={zoom <= MIN_ZOOM}>
+              <IconButton
+                label="Zoom out"
+                onClick={() => changeZoom(zoom - ZOOM_STEP)}
+                disabled={zoom <= MIN_ZOOM}
+              >
                 <ZoomOut className="h-4 w-4" />
               </IconButton>
-              <span className="w-12 text-center text-[12px] font-semibold" style={{ color: "#4F546B" }}>
+              <span
+                className="w-12 text-center text-[12px] font-semibold"
+                style={{ color: "#4F546B" }}
+              >
                 {Math.round(zoom * 100)}%
               </span>
-              <IconButton label="Zoom in" onClick={() => changeZoom(zoom + ZOOM_STEP)} disabled={zoom >= MAX_ZOOM}>
+              <IconButton
+                label="Zoom in"
+                onClick={() => changeZoom(zoom + ZOOM_STEP)}
+                disabled={zoom >= MAX_ZOOM}
+              >
                 <ZoomIn className="h-4 w-4" />
               </IconButton>
               <IconButton label="Reset zoom" onClick={() => changeZoom(1)}>
@@ -138,7 +319,10 @@ export function DiagnosisSourcePreviewModal({
                 transition: "transform 120ms ease",
               }}
             >
-              <div className="relative overflow-hidden border bg-white shadow-sm" style={{ borderColor: "#D1D5DB" }}>
+              <div
+                className="relative overflow-hidden border bg-white shadow-sm"
+                style={{ borderColor: "#D1D5DB" }}
+              >
                 {imageUrl ? (
                   <img
                     src={imageUrl}
@@ -148,12 +332,18 @@ export function DiagnosisSourcePreviewModal({
                 ) : (
                   <div className="flex h-[620px] items-center justify-center">
                     {imageError ? (
-                      <div className="flex items-center gap-2 text-[13px]" style={{ color: "#B91C1C" }}>
+                      <div
+                        className="flex items-center gap-2 text-[13px]"
+                        style={{ color: "#B91C1C" }}
+                      >
                         <AlertCircle className="h-4 w-4" />
                         {imageError}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-[13px]" style={{ color: "#818EA0" }}>
+                      <div
+                        className="flex items-center gap-2 text-[13px]"
+                        style={{ color: "#818EA0" }}
+                      >
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading source page
                       </div>
@@ -181,15 +371,22 @@ export function DiagnosisSourcePreviewModal({
             </div>
           </div>
 
-          <div className="flex min-h-12 items-center justify-between gap-3 border-t px-4" style={{ borderColor: "#E3E6EA" }}>
+          <div
+            className="flex min-h-12 items-center justify-between gap-3 border-t px-4"
+            style={{ borderColor: "#E3E6EA" }}
+          >
             <div className="min-w-0 truncate text-[12px]" style={{ color: "#4F546B" }}>
               {bbox ? (
                 <>
-                  <span className="font-semibold" style={{ color: "#DC2626" }}>Highlighted row</span>
+                  <span className="font-semibold" style={{ color: "#DC2626" }}>
+                    Highlighted row
+                  </span>
                   {source?.sourceText ? ` · ${source.sourceText}` : ""}
                 </>
               ) : (
-                <span className="font-semibold" style={{ color: "#B45309" }}>Source row location unavailable</span>
+                <span className="font-semibold" style={{ color: "#B45309" }}>
+                  Source row location unavailable
+                </span>
               )}
             </div>
             <div className="shrink-0 text-[12px] font-semibold" style={{ color: "#292D34" }}>
@@ -229,11 +426,15 @@ function IconButton({
   );
 }
 
-function normalizeBoundingBox(value?: SourceBoundingBox | null): [number, number, number, number] | null {
+function normalizeBoundingBox(
+  value?: SourceBoundingBox | null,
+): [number, number, number, number] | null {
   const parts = Array.isArray(value)
     ? value
     : value && typeof value === "object"
-      ? [value.x, value.y, value.width, value.height].map((part) => (part === null || part === undefined ? NaN : Number(part) * 100))
+      ? [value.x, value.y, value.width, value.height].map((part) =>
+          part === null || part === undefined ? NaN : Number(part) * 100,
+        )
       : null;
   if (!parts || parts.length !== 4) return null;
   const [x, y, width, height] = parts.map(Number);

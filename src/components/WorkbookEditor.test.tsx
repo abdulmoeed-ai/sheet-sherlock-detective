@@ -34,7 +34,29 @@ const workbook: WorkbookPayload = {
               status: "pending",
             },
           },
-          "1": { v: 250, f: "A1*2", diagnosis: { sheetName: "Inputs", address: "B1", editable: false, formula: true } },
+          "1": {
+            v: 250,
+            f: "A1*2",
+            diagnosis: {
+              sheetName: "Inputs",
+              address: "B1",
+              editable: false,
+              formula: true,
+              value: "-2,630,470",
+            },
+          },
+          "2": {
+            v: null,
+            f: "A1*2",
+            formulaValueStatus: "blank_precedents",
+            diagnosis: {
+              sheetName: "Inputs",
+              address: "C1",
+              editable: false,
+              formula: true,
+              value: "74",
+            },
+          },
         },
       },
     },
@@ -77,6 +99,16 @@ describe("WorkbookEditor bridge", () => {
     const prepared = prepareWorkbookForUniver({
       ...workbook,
       formulaEvaluation: { status: "computed" },
+      styles: {
+        "diagnosis-formula": { bg: { rgb: "#F9FAFB" }, cl: { rgb: "#374151" } },
+        "diagnosis-default": { bg: { rgb: "#F8FBFF" }, cl: { rgb: "#1D4ED8" } },
+      },
+      sheets: {
+        "sheet-1": {
+          ...workbook.sheets!["sheet-1"],
+          showGridlines: 0,
+        },
+      },
       unknownBackendField: true,
     });
 
@@ -84,8 +116,14 @@ describe("WorkbookEditor bridge", () => {
     expect(prepared.unknownBackendField).toBeUndefined();
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe("field-a1");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.f).toBe("=A1*2");
-    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]).not.toHaveProperty("v");
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.v).toBe(-2630470);
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["2"]?.v).toBeNull();
+    expect(prepared.sheets?.["sheet-1"]?.showGridlines).toBe(1);
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.s).toBeDefined();
+    expect(prepared.styles).toMatchObject({
+      "diagnosis-formula": { n: { pattern: "#,##0;(#,##0);0" } },
+      "diagnosis-default": { n: { pattern: "#,##0;(#,##0);0" } },
+    });
   });
 
   it("normalizes Univer sheet dimensions so extracted values remain readable", () => {
@@ -116,7 +154,7 @@ describe("WorkbookEditor bridge", () => {
     expect(sheet?.columnData?.["1"]?.w).toBeGreaterThanOrEqual(112);
   });
 
-  it("configures Univer to force formula calculation when loading the workbook", async () => {
+  it("configures Univer to force formula recomputation when loading the workbook", async () => {
     vi.resetModules();
     const presetSpy = vi.fn((config: unknown) => ({ config }));
     const setInitialFormulaComputing = vi.fn();

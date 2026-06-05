@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Download,
-  FileSearch,
   History,
   Loader2,
   MessageSquare,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import {
+  DiagnosisSourceInlinePreview,
   DiagnosisSourcePreviewModal,
   type SourceBoundingBox,
 } from "@/components/DiagnosisSourcePreviewModal";
@@ -27,8 +27,13 @@ import { WorkbookEditor, type WorkbookEditEvent } from "@/components/WorkbookEdi
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { queryKeys } from "@/lib/api/query-keys";
-import { listComments, readMappingRules, saveWorkbook as saveWorkbookRequest } from "@/lib/api/projects";
-import type { ReviewCommentResponse } from "@/lib/api/types";
+import {
+  createProjectVersion,
+  listComments,
+  readMappingRules,
+  readWorkbookCellHistory,
+} from "@/lib/api/projects";
+import type { ReviewCommentResponse, WorkbookRevisionResponse } from "@/lib/api/types";
 import {
   activeMentionQuery,
   buildCellCommentIndicators,
@@ -44,13 +49,22 @@ import {
   type MentionUser,
 } from "@/lib/comments";
 import {
+  buildExportWarningSummary,
+  formatLlmReview,
+  formatTermStandardization,
   formatHistoryEntry,
   orderedHistoryEntries,
   ruleTooltipDetails,
   sheetNeedsAttention,
   type RuleTooltipMetadata,
   warningDetails,
+  workbookRevisionHistoryEntry,
 } from "@/lib/diagnosis-cell";
+import {
+  diagnosisDraftSaveLabel,
+  hasDiagnosisDraftChanges,
+  workbookDraftSaveSnapshot,
+} from "@/lib/diagnosis-draft";
 import { useWorkspace } from "@/hooks/use-projects";
 import {
   useCreateComment,
@@ -58,6 +72,7 @@ import {
   useDownloadExcelExport,
   useReopenComment,
   useRevertReviewCell,
+  useRevertWorkbookCell,
   useResolveComment,
   useReviewCell,
 } from "@/hooks/use-project-actions";
@@ -99,6 +114,13 @@ type WorkbookPayload = {
   sheetOrder?: string[];
   sheets?: Record<string, SheetPayload>;
   summary?: Record<string, number>;
+  exportWarnings?: {
+    unresolvedIssues?: number;
+    lowConfidence?: number;
+    blocked?: number;
+    missing?: number;
+    actionableWarnings?: number;
+  };
 };
 
 type DiagnosisMeta = {
@@ -118,9 +140,16 @@ type DiagnosisMeta = {
   sourceText?: string | null;
   boundingBox?: SourceBoundingBox | null;
   confidence?: number | null;
+  confidenceScore?: string | null;
+  confidenceLevel?: string | null;
+  confidenceReasonCodes?: string[];
+  confidenceReasons?: string[];
+  matchMethod?: string | null;
   status?: string;
   ruleIds?: string[];
   warnings?: string[];
+  llmReview?: Record<string, unknown> | null;
+  termStandardization?: Record<string, unknown> | null;
   history?: Array<Record<string, unknown>>;
   commentsSummary?: { total?: number; open?: number; comments?: ReviewCommentResponse[] };
   diagnosisCandidates?: Array<Record<string, unknown>>;
@@ -146,13 +175,12 @@ function Diagnosis() {
   const workspace = useWorkspace(projectId);
   const reviewCell = useReviewCell(projectId, { invalidateOnSuccess: false });
   const revertCell = useRevertReviewCell(projectId);
+  const revertWorkbookCell = useRevertWorkbookCell(projectId);
   const createComment = useCreateComment(projectId);
   const resolveComment = useResolveComment(projectId);
   const reopenComment = useReopenComment(projectId);
   const createExport = useCreateExcelExport(projectId);
   const downloadExport = useDownloadExcelExport(projectId);
-  const autosavePromises = useRef(new Set<Promise<unknown>>());
-  const autosaveStatusRef = useRef<"idle" | "saving" | "saved" | "error">("idle");
   const comments = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
@@ -169,17 +197,20 @@ function Diagnosis() {
   }, [projectId]);
 
   const workbookSource = workspace.data?.diagnosisWorkbook ?? workspace.data?.exportPreview;
-  const serverWorkbook = useMemo(
-    () => workbookPayload(workbookSource),
-    [workbookSource],
-  );
+  const serverWorkbook = useMemo(() => workbookPayload(workbookSource), [workbookSource]);
+  const draftWorkbookRef = useRef<WorkbookPayload | null>(null);
+  const [pendingWorkbookEditCount, setPendingWorkbookEditCount] = useState(0);
+  const [savingProjectVersion, setSavingProjectVersion] = useState(false);
+  const [savedDraftVersion, setSavedDraftVersion] = useState<{ id: string; label: string | null } | null>(null);
   const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedSheetId =
     selection?.sheetId && sheetIds.includes(selection.sheetId) ? selection.sheetId : null;
   const resolvedActiveSheetId =
-    selectedSheetId ?? (selection ? null : firstSheetWithDiagnosis(workbook, sheetIds)) ?? sheetIds[0];
+    selectedSheetId ??
+    (selection ? null : firstSheetWithDiagnosis(workbook, sheetIds)) ??
+    sheetIds[0];
   const activeSheet = resolvedActiveSheetId ? workbook?.sheets?.[resolvedActiveSheetId] : undefined;
   const resolvedSelection = resolveSelection(selection, resolvedActiveSheetId, activeSheet);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -193,8 +224,22 @@ function Diagnosis() {
       )
     : undefined;
   const selectedMeta = selectedCell?.diagnosis;
+  const exportWarnings = useMemo(() => {
+    if (workbook?.exportWarnings) return workbook.exportWarnings;
+    const diagnosedCells = sheetIds.flatMap((sheetId) => sheetCells(workbook?.sheets?.[sheetId])).filter((cell) => cell.diagnosis);
+    return buildExportWarningSummary(diagnosedCells);
+  }, [workbook, sheetIds]);
   const selectedCellAddress = `${columnName(resolvedSelection.col)}${resolvedSelection.row + 1}`;
   const selectedAddress = `${activeSheet?.name ?? "Sheet"}!${selectedCellAddress}`;
+  const workbookCellHistory = useQuery({
+    queryKey:
+      projectId && resolvedActiveSheetId
+        ? queryKeys.workbookCellHistory(projectId, resolvedActiveSheetId, selectedCellAddress)
+        : ["projects", "none", "workbook", "cells", "none", selectedCellAddress, "history"],
+    queryFn: () =>
+      readWorkbookCellHistory(projectId as string, resolvedActiveSheetId as string, selectedCellAddress),
+    enabled: !!projectId && !!resolvedActiveSheetId && !!selectedCell && !selectedMeta?.fieldId,
+  });
   const commentTarget = useMemo(
     () =>
       buildCommentTarget({
@@ -221,7 +266,18 @@ function Diagnosis() {
     () => mentionCandidates(workspace.data?.project.teamMembers ?? [], currentUser.data),
     [currentUser.data, workspace.data?.project.teamMembers],
   );
-  const dirty = draftValue.trim() !== "";
+  const dirty = hasDiagnosisDraftChanges({ draftValue, pendingWorkbookEditCount });
+  const draftSaveLabel = diagnosisDraftSaveLabel({
+    dirty,
+    saving: savingProjectVersion,
+    savedVersionLabel: savedDraftVersion?.label,
+  });
+
+  useEffect(() => {
+    draftWorkbookRef.current = null;
+    setPendingWorkbookEditCount(0);
+    setSavedDraftVersion(null);
+  }, [projectId]);
   const visibleShape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
   const rulesByCode = useMemo(() => {
     return Object.fromEntries(
@@ -244,10 +300,38 @@ function Diagnosis() {
     }
   };
 
+  const revertManualWorkbookRevision = async (revisionId: string) => {
+    if (!projectId || !resolvedActiveSheetId) return;
+    try {
+      await revertWorkbookCell.mutateAsync({
+        sheetId: resolvedActiveSheetId,
+        cellAddress: selectedCellAddress,
+        revisionId,
+      });
+      await workspace.refetch();
+      await workbookCellHistory.refetch();
+      toast.success("Manual workbook cell reverted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to revert manual workbook cell");
+    }
+  };
+
   const saveDraft = async () => {
     if (!projectId) return;
     const fieldId = selectedMeta?.fieldId;
     try {
+      if (pendingWorkbookEditCount > 0 && workbook) {
+        setSavingProjectVersion(true);
+        const nextProject = await createProjectVersion(projectId, {
+          workbook: workbookDraftSaveSnapshot(draftWorkbookRef.current, workbook) as Record<string, unknown>,
+        });
+        setDraftValue("");
+        draftWorkbookRef.current = null;
+        setPendingWorkbookEditCount(0);
+        setSavedDraftVersion({ id: nextProject.id, label: nextProject.projectLabel ?? null });
+        toast.success(`Draft saved as ${nextProject.projectLabel ?? "a new version"}`);
+        return;
+      }
       if (draftValue.trim() && fieldId) {
         const optimisticUpdate = buildOptimisticCellUpdate({
           fieldId,
@@ -272,6 +356,8 @@ function Diagnosis() {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }
       toast.error(error instanceof Error ? error.message : "Unable to save draft");
+    } finally {
+      setSavingProjectVersion(false);
     }
   };
 
@@ -337,65 +423,25 @@ function Diagnosis() {
             currentUser: currentUser.data,
           })
         : null;
-    try {
-      if (fieldId && optimisticUpdate) {
-        setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
-      }
-      await trackAutosave(
-        saveWorkbookRequest(projectId, {
-          workbook: event.workbook as Record<string, unknown>,
-          action: "edit",
-          sheetId: event.sheetId,
-          sheetName: event.sheetName,
-          cellAddress: event.address,
-          fieldId,
-          oldCell: (event.oldCell as Record<string, unknown> | null | undefined) ?? null,
-          newCell: (event.newCell as Record<string, unknown> | null | undefined) ?? null,
-        }),
-      );
-      if (!sheetIds.includes(event.sheetId)) {
-        await workspace.refetch();
-      }
-      if (fieldId) {
-        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
-      }
-      toast.success(`${event.sheetName}!${event.address} saved`);
-    } catch (error) {
-      if (fieldId) {
-        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
-      }
-      toast.error(error instanceof Error ? error.message : "Unable to save workbook edit");
+    if (fieldId && optimisticUpdate) {
+      setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
     }
-  };
-
-  const trackAutosave = async <T,>(promise: Promise<T>) => {
-    setAutosaveStatusIfChanged("saving");
-    autosavePromises.current.add(promise);
-    try {
-      const result = await promise;
-      setAutosaveStatusIfChanged("saved");
-      return result;
-    } catch (error) {
-      setAutosaveStatusIfChanged("error");
-      throw error;
-    } finally {
-      autosavePromises.current.delete(promise);
-    }
-  };
-
-  const setAutosaveStatusIfChanged = (status: "idle" | "saving" | "saved" | "error") => {
-    if (autosaveStatusRef.current === status) return;
-    autosaveStatusRef.current = status;
-  };
-
-  const flushAutosaves = async () => {
-    await Promise.all(Array.from(autosavePromises.current));
+    draftWorkbookRef.current = event.workbook;
+    setPendingWorkbookEditCount((count) => count + 1);
+    setSavedDraftVersion(null);
+    toast.success(`${event.sheetName}!${event.address} added to draft`);
   };
 
   const exportWorkbook = async () => {
     if (!projectId) return;
+    const unresolved = Number(exportWarnings?.unresolvedIssues ?? 0);
+    if (unresolved > 0) {
+      const proceed = window.confirm(
+        `This export has ${unresolved} unresolved parsing review issue(s): ${Number(exportWarnings.lowConfidence ?? 0)} low confidence, ${Number(exportWarnings.blocked ?? 0)} blocked, ${Number(exportWarnings.missing ?? 0)} missing, and ${Number(exportWarnings.actionableWarnings ?? 0)} warning(s). Continue export?`,
+      );
+      if (!proceed) return;
+    }
     try {
-      await flushAutosaves();
       const created = await createExport.mutateAsync();
       const blob = await downloadExport.mutateAsync(created.id);
       const url = window.URL.createObjectURL(blob);
@@ -468,13 +514,16 @@ function Diagnosis() {
               )}
               Export to Excel
             </button>
+            <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
+              {draftSaveLabel}
+            </span>
             <button
               onClick={saveDraft}
-              disabled={!projectId || !dirty || reviewCell.isPending || createComment.isPending}
+              disabled={!projectId || !dirty || reviewCell.isPending || createComment.isPending || savingProjectVersion}
               className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
             >
-              {reviewCell.isPending || createComment.isPending ? (
+              {reviewCell.isPending || createComment.isPending || savingProjectVersion ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Save className="h-3.5 w-3.5" />
@@ -529,7 +578,7 @@ function Diagnosis() {
                 setDraftValue("");
               }}
               onCommitEdit={commitWorkbookEdit}
-              commitPending={reviewCell.isPending || createComment.isPending}
+              commitPending={reviewCell.isPending || createComment.isPending || savingProjectVersion}
             />
           )}
         </main>
@@ -578,6 +627,10 @@ function Diagnosis() {
                 rulesByCode={rulesByCode}
                 onRevert={revertToRevision}
                 revertPending={revertCell.isPending}
+                manualHistory={workbookCellHistory.data ?? []}
+                manualHistoryPending={workbookCellHistory.isLoading}
+                onManualRevert={revertManualWorkbookRevision}
+                manualRevertPending={revertWorkbookCell.isPending}
               />
             ) : (
               <CommentsPanel
@@ -613,6 +666,10 @@ function DiagnosisPanel({
   rulesByCode,
   onRevert,
   revertPending,
+  manualHistory,
+  manualHistoryPending,
+  onManualRevert,
+  manualRevertPending,
 }: {
   projectId?: string | null;
   address: string;
@@ -622,8 +679,14 @@ function DiagnosisPanel({
   rulesByCode: Record<string, RuleTooltipMetadata | undefined>;
   onRevert: (revisionId: string) => Promise<void>;
   revertPending: boolean;
+  manualHistory: WorkbookRevisionResponse[];
+  manualHistoryPending: boolean;
+  onManualRevert: (revisionId: string) => Promise<void>;
+  manualRevertPending: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const llmReview = formatLlmReview(meta?.llmReview);
+  const termStandardization = formatTermStandardization(meta?.termStandardization);
   const previewSource =
     projectId &&
     meta?.sourceDocumentId &&
@@ -651,11 +714,80 @@ function DiagnosisPanel({
   if (!meta) {
     return (
       <div className="flex-1 overflow-y-auto p-4">
-        <h2 className="text-[13px] font-bold" style={{ color: "#292D34" }}>
-          {address}
-        </h2>
-        <KV label="Value" value={displayValue(cell) || "-"} />
-        <KV label="Formula" value={cell.f ? `=${cell.f}` : "No"} />
+        <div className="mb-4">
+          <h2 className="text-[13px] font-bold" style={{ color: "#292D34" }}>
+            {address}
+          </h2>
+          <div className="mt-1 text-[13px] font-semibold" style={{ color: "#4F546B" }}>
+            Manual workbook entry
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed" style={{ color: "#818EA0" }}>
+            This cell was entered manually and was not extracted from the PDF.
+          </p>
+        </div>
+        <section className="space-y-2 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+          <KV label="Value" value={displayValue(cell) || "-"} />
+          <KV label="Formula" value={cell.f ? `=${cell.f}` : "No"} />
+        </section>
+        <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
+          <div
+            className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase"
+            style={{ color: "#818EA0" }}
+          >
+            <History className="h-3.5 w-3.5" /> History
+          </div>
+          {manualHistoryPending ? (
+            <div className="flex items-center gap-2 text-[12px]" style={{ color: "#818EA0" }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading history
+            </div>
+          ) : manualHistory.length === 0 ? (
+            <div className="text-[12px]" style={{ color: "#818EA0" }}>
+              No manual workbook history recorded for this cell.
+            </div>
+          ) : (
+            <div className="max-h-64 overflow-y-auto pr-1">
+              {orderedHistoryEntries(manualHistory.map(workbookRevisionHistoryEntry)).map(
+                (entry, index) => {
+                  const formatted = formatHistoryEntry(entry, { currentUser });
+                  const canRevert =
+                    typeof entry.id === "string" &&
+                    String(entry.action ?? "").toLowerCase() !== "revert";
+                  return (
+                    <div
+                      key={String(entry.id ?? index)}
+                      className="border-t py-2 text-[12px]"
+                      style={{ borderColor: "#F3F4F6", color: "#4F546B" }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="break-words font-semibold" style={{ color: "#292D34" }}>
+                            {formatted.title}
+                          </div>
+                          {(formatted.meta || formatted.note) && (
+                            <div className="mt-0.5 text-[11px]" style={{ color: "#818EA0" }}>
+                              {[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                        {canRevert && (
+                          <button
+                            onClick={() => onManualRevert(String(entry.id))}
+                            disabled={manualRevertPending}
+                            className="flex h-6 shrink-0 items-center gap-1 rounded border px-2 text-[11px] font-semibold disabled:opacity-50"
+                            style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+                          >
+                            <RotateCcw className="h-3 w-3" /> Revert
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          )}
+        </section>
       </div>
     );
   }
@@ -678,23 +810,18 @@ function DiagnosisPanel({
             meta.confidence === null || meta.confidence === undefined ? "-" : `${meta.confidence}%`
           }
         />
+        <KV label="Confidence level" value={meta.confidenceLevel ?? "-"} />
+        <KV label="Match method" value={meta.matchMethod ?? "-"} />
         <KV label="Note" value={meta.noteReference ?? "-"} />
         <KV label="Source" value={meta.documentFilename ?? "-"} />
         <KV label="Page" value={meta.printedPageNumber ? String(meta.printedPageNumber) : "-"} />
-        {previewSource && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border text-[12px] font-semibold"
-              style={{ borderColor: "#C7D2FE", color: "#4338CA", background: "#EEF2FF" }}
-            >
-              <FileSearch className="h-3.5 w-3.5" />
-              Open preview
-            </button>
-          </div>
-        )}
       </section>
+      {previewSource && (
+        <DiagnosisSourceInlinePreview
+          source={previewSource}
+          onExpand={() => setPreviewOpen(true)}
+        />
+      )}
       <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
         <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
           Rules
@@ -722,6 +849,79 @@ function DiagnosisPanel({
                 <WarningChip key={warning} warning={warning} />
               ))}
             </TooltipProvider>
+          </div>
+        )}
+        {!!meta.confidenceReasons?.length && (
+          <div className="mt-3 space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
+              Confidence reasons
+            </div>
+            {meta.confidenceReasons.map((reason, index) => (
+              <div
+                key={`${reason}-${index}`}
+                className="rounded border px-2 py-1.5 text-[11px] leading-relaxed"
+                style={{ borderColor: "#E5E7EB", background: "#F9FAFB", color: "#4F546B" }}
+              >
+                {reason}
+              </div>
+            ))}
+          </div>
+        )}
+        {llmReview && (
+          <div
+            className="mt-3 space-y-2 border-t pt-3"
+            style={{ borderColor: "#E5E7EB" }}
+          >
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
+              AI review
+            </div>
+            <KV label="Decision" value={llmReview.decision} />
+            <KV label="Validation" value={llmReview.validationStatus} />
+            <KV label="Recommended value" value={llmReview.recommendedValue} />
+            <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
+              {llmReview.reason}
+            </div>
+            {llmReview.riskFlags.length ? (
+              <div className="flex flex-wrap gap-1">
+                {llmReview.riskFlags.map((flag) => (
+                  <span
+                    key={flag}
+                    className="rounded border px-1.5 py-0.5 text-[10px]"
+                    style={{ borderColor: "#BFDBFE", color: "#1D4ED8" }}
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+        {termStandardization && (
+          <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: "#E5E7EB" }}>
+            <div className="text-[11px] font-semibold uppercase" style={{ color: "#4F546B" }}>
+              Term standardization
+            </div>
+            <KV label="From" value={termStandardization.standardizedFromLabel} />
+            <KV label="To" value={termStandardization.standardizedToLabel} />
+            <KV label="Canonical term" value={termStandardization.canonicalFinancialTerm} />
+            <KV label="Validation" value={termStandardization.validationStatus} />
+            <KV label="Confidence" value={termStandardization.confidence} />
+            <div className="text-[11px] leading-relaxed" style={{ color: "#1E3A8A" }}>
+              {termStandardization.reason}
+            </div>
+            {termStandardization.riskFlags.length ? (
+              <div className="flex flex-wrap gap-1">
+                {termStandardization.riskFlags.map((flag) => (
+                  <span
+                    key={flag}
+                    className="rounded border px-1.5 py-0.5 text-[10px]"
+                    style={{ borderColor: "#BFDBFE", color: "#1D4ED8" }}
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </section>

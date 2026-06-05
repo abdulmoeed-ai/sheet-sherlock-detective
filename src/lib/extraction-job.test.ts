@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { waitForExtractionCompletion } from "./extraction-job";
-import type { ExtractionJobResponse } from "./api/types";
+import {
+  effectiveExtractionPercent,
+  extractionElapsedLabel,
+  extractionFailureMessage,
+  latestExtractionEvent,
+  mergeExtractionEvents,
+  waitForExtractionCompletion,
+} from "./extraction-job";
+import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./api/types";
 
 function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): ExtractionJobResponse {
   return {
@@ -13,6 +20,8 @@ function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): Ex
     error: null,
     createdAt: null,
     updatedAt: null,
+    startedAt: null,
+    completedAt: null,
     ...overrides,
   };
 }
@@ -64,5 +73,92 @@ describe("waitForExtractionCompletion", () => {
     expect(onProgress).toHaveBeenCalledWith(
       expect.objectContaining({ status: "completed", percent: 100 }),
     );
+  });
+});
+
+function event(
+  eventId: string,
+  createdAt: string,
+  overrides: Partial<ExtractionProgressEventResponse> = {},
+): ExtractionProgressEventResponse {
+  return {
+    eventId,
+    projectId: "project-1",
+    jobId: "job-1",
+    documentId: null,
+    documentFilename: null,
+    stage: "queued",
+    status: "pending",
+    percent: 0,
+    title: "Queued",
+    message: "Extraction queued.",
+    ruleCodes: [],
+    cellRef: null,
+    sheetName: null,
+    confidenceLevel: null,
+    details: {},
+    createdAt,
+    ...overrides,
+  };
+}
+
+describe("mergeExtractionEvents", () => {
+  it("deduplicates replayed backend events and keeps timeline order", () => {
+    const merged = mergeExtractionEvents(
+      [event("event-2", "2026-06-04T10:00:02.000Z")],
+      [
+        event("event-1", "2026-06-04T10:00:01.000Z"),
+        event("event-2", "2026-06-04T10:00:02.000Z", { message: "Updated replay row" }),
+      ],
+    );
+
+    expect(merged.map((item) => item.eventId)).toEqual(["event-1", "event-2"]);
+    expect(merged[1].message).toBe("Updated replay row");
+  });
+});
+
+describe("extraction progress helpers", () => {
+  it("uses backend event percent instead of upload completion fallback for queued jobs", () => {
+    expect(effectiveExtractionPercent(job("queued", { percent: 0 }), [], 100)).toBe(10);
+    expect(
+      effectiveExtractionPercent(
+        job("queued", { percent: 0 }),
+        [event("event-1", "2026-06-04T10:00:01.000Z", { percent: 35 })],
+        100,
+      ),
+    ).toBe(35);
+  });
+
+  it("returns latest event and user-facing failure message", () => {
+    const events = [
+      event("event-1", "2026-06-04T10:00:01.000Z"),
+      event("event-2", "2026-06-04T10:00:02.000Z", { message: "Parsing failed." }),
+    ];
+
+    expect(latestExtractionEvent(events)?.eventId).toBe("event-2");
+    expect(extractionFailureMessage(job("failed", { error: "PDF parse failed" }))).toBe(
+      "PDF parse failed",
+    );
+  });
+
+  it("formats elapsed extraction time from backend job timestamps", () => {
+    expect(
+      extractionElapsedLabel(
+        job("completed", {
+          startedAt: "2026-06-04T10:00:00.000Z",
+          completedAt: "2026-06-04T10:02:05.000Z",
+        }),
+        [],
+      ),
+    ).toBe("2m 5s");
+  });
+
+  it("falls back to event timestamps for elapsed extraction time", () => {
+    expect(
+      extractionElapsedLabel(null, [
+        event("event-1", "2026-06-04T10:00:00.000Z"),
+        event("event-2", "2026-06-04T10:00:07.000Z"),
+      ]),
+    ).toBe("7s");
   });
 });

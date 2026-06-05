@@ -17,14 +17,17 @@ export type WorkbookCellMeta = {
   fieldId?: string;
   status?: string;
   confidence?: number | null;
+  confidenceLevel?: string | null;
   templateCell?: string;
   warnings?: string[];
+  value?: unknown;
   [key: string]: unknown;
 };
 
 export type WorkbookCellPayload = {
   v?: unknown;
   f?: string;
+  formulaValueStatus?: string;
   diagnosis?: WorkbookCellMeta;
   s?: string;
 };
@@ -79,6 +82,7 @@ const MAX_VISIBLE_COLS = 14;
 const MIN_COLUMN_WIDTH = 112;
 const MAX_COLUMN_WIDTH = 260;
 const MIN_ROW_HEIGHT = 28;
+const FINANCE_NUMBER_FORMAT = "#,##0;(#,##0);0";
 
 export function WorkbookEditor({
   workbook,
@@ -335,6 +339,7 @@ export function WorkbookEditor({
                     formula,
                     status: cell?.diagnosis?.status,
                     confidence: cell?.diagnosis?.confidence,
+                    confidenceLevel: cell?.diagnosis?.confidenceLevel,
                     hasWarning: isActionableWarningSet(cell?.diagnosis?.warnings),
                   });
                   const style = cellToneStyle(tone, { active, hasDiagnosis, formula });
@@ -440,6 +445,7 @@ export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPay
   for (const [sheetId, sheet] of Object.entries(workbook.sheets ?? {})) {
     prepared.sheets![sheetId] = {
       ...sheet,
+      showGridlines: 1,
       defaultColumnWidth: readableDefaultColumnWidth(sheet.defaultColumnWidth),
       defaultRowHeight: readableDefaultRowHeight(sheet.defaultRowHeight),
       columnData: readableColumnData(sheet),
@@ -527,6 +533,7 @@ function styledCellData(
         formula,
         status: cell.diagnosis?.status,
         confidence: cell.diagnosis?.confidence,
+        confidenceLevel: cell.diagnosis?.confidenceLevel,
         hasWarning: isActionableWarningSet(cell.diagnosis?.warnings),
       });
       const styleId = styleIdForTone(tone, formula, !!cell.diagnosis);
@@ -535,13 +542,31 @@ function styledCellData(
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
       };
-      if (formula) {
-        delete preparedCell.v;
+      if (
+        formula &&
+        cell.diagnosis &&
+        "value" in cell.diagnosis &&
+        cell.formulaValueStatus !== "blank_precedents"
+      ) {
+        preparedCell.v = workbookDisplayValue(cell.diagnosis.value);
       }
       next[rowKey][colKey] = preparedCell;
     }
   }
   return next;
+}
+
+function workbookDisplayValue(value: unknown) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const normalized = trimmed
+    .replace(/[−–—]/g, "-")
+    .replace(/,/g, "");
+  const accountingNegative = normalized.match(/^\(([-+]?\d+(?:\.\d+)?)\)$/);
+  const numericText = accountingNegative ? `-${accountingNegative[1]}` : normalized;
+  const numericValue = Number(numericText);
+  return Number.isFinite(numericValue) ? numericValue : value;
 }
 
 function normalizeFormula(formula: string) {
@@ -611,6 +636,9 @@ function clampWidth(width: number) {
 
 function styleIdForTone(tone: DiagnosisTone, formula: boolean, hasDiagnosis: boolean) {
   if (tone === "candidate") return "diagnosis-candidate";
+  if (tone === "high-confidence") return "diagnosis-high-confidence";
+  if (tone === "medium-confidence") return "diagnosis-medium-confidence";
+  if (tone === "blocked-confidence") return "diagnosis-blocked-confidence";
   if (tone === "low-confidence") return "diagnosis-low-confidence";
   if (tone === "edited") return "diagnosis-edited";
   if (tone === "formula" || formula) return "diagnosis-formula";
@@ -624,9 +652,19 @@ function ensureToneStyle(
   tone: DiagnosisTone,
   formula: boolean,
 ) {
-  if (!styles[styleId]) {
+  const existingStyle = styles[styleId];
+  if (isRecord(existingStyle)) {
+    styles[styleId] = {
+      ...existingStyle,
+      n: { pattern: FINANCE_NUMBER_FORMAT },
+    };
+  } else {
     const style = cellToneStyle(tone, { active: false, hasDiagnosis: true, formula });
-    styles[styleId] = { bg: { rgb: style.background }, cl: { rgb: style.color } };
+    styles[styleId] = {
+      bg: { rgb: style.background },
+      cl: { rgb: style.color },
+      n: { pattern: FINANCE_NUMBER_FORMAT },
+    };
   }
   return styleId;
 }
@@ -835,8 +873,17 @@ function cellToneStyle(
   if (tone === "candidate") {
     return { background: "#FFF5F5", color: "#991B1B", borderColor: "#FCA5A5" };
   }
-  if (tone === "low-confidence") {
+  if (tone === "high-confidence") {
+    return { background: "#F0FDF4", color: "#166534", borderColor: "#86EFAC" };
+  }
+  if (tone === "medium-confidence") {
     return { background: "#FFFBEB", color: "#92400E", borderColor: "#FCD34D" };
+  }
+  if (tone === "low-confidence") {
+    return { background: "#FEF2F2", color: "#991B1B", borderColor: "#FCA5A5" };
+  }
+  if (tone === "blocked-confidence") {
+    return { background: "#F3F4F6", color: "#374151", borderColor: "#9CA3AF" };
   }
   if (tone === "edited") {
     return { background: "#EFF6FF", color: "#1D4ED8", borderColor: "#93C5FD" };

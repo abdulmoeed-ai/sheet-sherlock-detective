@@ -4,9 +4,11 @@ import type {
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
+  ExtractionProgressEventResponse,
   ForecastRunResponse,
   MappingRulesSummaryResponse,
   ModelArchiveResponse,
+  ProjectVersionCreateInput,
   ProjectResponse,
   ReviewCommentInput,
   ReviewCommentResponse,
@@ -43,6 +45,13 @@ export function readProject(projectId: string) {
   return apiFetch<ProjectResponse>(`/api/projects/${projectId}`);
 }
 
+export function createProjectVersion(projectId: string, input: ProjectVersionCreateInput = {}) {
+  return apiFetch<ProjectResponse>(`/api/projects/${projectId}/versions`, {
+    method: "POST",
+    body: input,
+  });
+}
+
 export function readWorkspace(projectId: string) {
   return apiFetch<WorkspaceResponse>(`/api/projects/${projectId}/workspace`);
 }
@@ -57,6 +66,18 @@ export function saveWorkbook(projectId: string, input: WorkbookSaveInput) {
 export function readWorkbookCellHistory(projectId: string, sheetId: string, cellAddress: string) {
   return apiFetch<WorkbookRevisionResponse[]>(
     `/api/projects/${projectId}/workbook/cells/${encodeURIComponent(sheetId)}/${encodeURIComponent(cellAddress)}/history`,
+  );
+}
+
+export function revertWorkbookCell(
+  projectId: string,
+  sheetId: string,
+  cellAddress: string,
+  revisionId: string,
+) {
+  return apiFetch<WorkbookSaveResponse>(
+    `/api/projects/${projectId}/workbook/cells/${encodeURIComponent(sheetId)}/${encodeURIComponent(cellAddress)}/history/${encodeURIComponent(revisionId)}/revert`,
+    { method: "POST" },
   );
 }
 
@@ -79,6 +100,12 @@ export function startExtraction(projectId: string, force = false) {
 
 export function readExtractionJob(projectId: string, jobId: string) {
   return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/${jobId}`);
+}
+
+export function readExtractionEvents(projectId: string, jobId: string) {
+  return apiFetch<ExtractionProgressEventResponse[]>(
+    `/api/projects/${projectId}/extractions/${jobId}/events`,
+  );
 }
 
 export function readMappingRules(projectId: string) {

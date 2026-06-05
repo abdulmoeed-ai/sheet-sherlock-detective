@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildExportWarningSummary,
   diagnosisCellTone,
+  formatLlmReview,
+  formatTermStandardization,
   formatHistoryEntry,
   formatHistoryTimestamp,
   historyValue,
@@ -10,6 +13,8 @@ import {
   sheetNeedsAttention,
   shouldCommitCellDraftOnKey,
   warningDetails,
+  workbookPayloadDisplayValue,
+  workbookRevisionHistoryEntry,
 } from "./diagnosis-cell";
 
 describe("diagnosis cell helpers", () => {
@@ -30,9 +35,68 @@ describe("diagnosis cell helpers", () => {
     expect(diagnosisCellTone({ formula: true, status: "pending", confidence: 95 })).toBe("formula");
   });
 
+  it("derives workbook tone from backend confidence level before local score heuristics", () => {
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "medium" })).toBe(
+      "medium-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "blocked" })).toBe(
+      "blocked-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "low" })).toBe(
+      "low-confidence",
+    );
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "high" })).toBe(
+      "high-confidence",
+    );
+  });
+
+  it("builds export warning summaries from unresolved backend confidence states", () => {
+    expect(
+      buildExportWarningSummary([
+        { diagnosis: { confidenceLevel: "high", warnings: [] } },
+        { diagnosis: { confidenceLevel: "low", warnings: ["note_subtotal_reconciliation"] } },
+        { diagnosis: { confidenceLevel: "blocked", warnings: [] } },
+        {},
+      ]),
+    ).toEqual({
+      unresolvedIssues: 3,
+      lowConfidence: 1,
+      blocked: 1,
+      missing: 1,
+      actionableWarnings: 1,
+    });
+  });
+
   it("extracts a revertable value from history entries", () => {
     expect(historyValue({ value: "10", newValue: "11" })).toBe("10");
     expect(historyValue({ newValue: "11" })).toBe("11");
+  });
+
+  it("formats workbook revision payloads for manual-cell history", () => {
+    expect(workbookPayloadDisplayValue(null)).toBe("-");
+    expect(workbookPayloadDisplayValue({ v: 2500 })).toBe("2,500");
+    expect(workbookPayloadDisplayValue({ f: "SUM(A1:A2)", v: null })).toBe("=SUM(A1:A2)");
+
+    expect(
+      workbookRevisionHistoryEntry({
+        id: "revision-1",
+        actor: "analyst-1",
+        actorName: "Dev Finance Analyst",
+        action: "edit",
+        oldPayload: null,
+        newPayload: { v: "Manual input" },
+        createdAt: "2026-06-04T08:00:00Z",
+      }),
+    ).toEqual({
+      id: "revision-1",
+      action: "edit",
+      actor: "analyst-1",
+      actorDisplayName: "Dev Finance Analyst",
+      oldValue: "-",
+      newValue: "Manual input",
+      note: "Saved from workbook editor.",
+      createdAt: "2026-06-04T08:00:00Z",
+    });
   });
 
   it("formats source, edit, and revert history entries for analysts", () => {
@@ -127,6 +191,70 @@ describe("diagnosis cell helpers", () => {
       label: "Note subtotal reconciliation",
       description: "Review this extraction warning before sign-off.",
       actionable: true,
+    });
+  });
+
+  it("formats AI warnings and review metadata", () => {
+    expect(warningDetails("llm.accepted_after_validation")).toEqual({
+      label: "AI accepted after validation",
+      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      actionable: false,
+    });
+    expect(warningDetails("llm.rejected_wrong_section").actionable).toBe(true);
+
+    expect(
+      formatLlmReview({
+        decision: "accept",
+        validationStatus: "accepted",
+        recommendedValue: "0",
+        reason: "Dash source evidence.",
+        provider: "google-genai",
+        model: "gemini-3.5-flash",
+        riskFlags: ["dash_zero"],
+      }),
+    ).toEqual({
+      decision: "accept",
+      validationStatus: "accepted",
+      recommendedValue: "0",
+      reason: "Dash source evidence.",
+      provider: "google-genai",
+      model: "gemini-3.5-flash",
+      riskFlags: ["dash_zero"],
+    });
+  });
+
+  it("formats term standardization warnings and metadata", () => {
+    expect(warningDetails("llm.term_standardization_requires_review")).toEqual({
+      label: "Term mapping needs review",
+      description: "AI found a likely standardized financial term, but analyst review is required.",
+      actionable: true,
+    });
+    expect(warningDetails("llm.term_standardized_after_validation").actionable).toBe(false);
+
+    expect(
+      formatTermStandardization({
+        decision: "match",
+        validationStatus: "requires_review",
+        canonicalFinancialTerm: "Goods Cost",
+        standardizedFromLabel: "Cost of Goods",
+        standardizedToLabel: "Goods Cost",
+        confidence: 0.84,
+        reason: "Equivalent finance term.",
+        provider: "google-genai",
+        model: "gemini-3.5-flash",
+        riskFlags: ["term.medium_confidence_requires_review"],
+      }),
+    ).toEqual({
+      decision: "match",
+      validationStatus: "requires_review",
+      canonicalFinancialTerm: "Goods Cost",
+      standardizedFromLabel: "Cost of Goods",
+      standardizedToLabel: "Goods Cost",
+      confidence: "0.84",
+      reason: "Equivalent finance term.",
+      provider: "google-genai",
+      model: "gemini-3.5-flash",
+      riskFlags: ["term.medium_confidence_requires_review"],
     });
   });
 

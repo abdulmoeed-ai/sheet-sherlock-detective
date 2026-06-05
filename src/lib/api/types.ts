@@ -99,6 +99,27 @@ export interface ExtractionJobResponse {
   error: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ExtractionProgressEventResponse {
+  eventId: string;
+  projectId: string;
+  jobId: string;
+  documentId: string | null;
+  documentFilename: string | null;
+  stage: string;
+  status: string;
+  percent: number;
+  title: string;
+  message: string;
+  ruleCodes: string[];
+  cellRef: string | null;
+  sheetName: string | null;
+  confidenceLevel: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface MappingRulesSummaryResponse {
@@ -138,6 +159,10 @@ export interface WorkbookSaveInput {
   fieldId?: string | null;
   oldCell?: Record<string, unknown> | null;
   newCell?: Record<string, unknown> | null;
+}
+
+export interface ProjectVersionCreateInput {
+  workbook?: Record<string, unknown> | null;
 }
 
 export interface WorkbookRevisionResponse {

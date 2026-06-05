@@ -1,4 +1,13 @@
-export type DiagnosisTone = "candidate" | "low-confidence" | "edited" | "formula" | "normal";
+export type DiagnosisTone =
+  | "candidate"
+  | "high-confidence"
+  | "medium-confidence"
+  | "low-confidence"
+  | "blocked-confidence"
+  | "edited"
+  | "formula"
+  | "normal";
+export type BackendConfidenceLevel = "high" | "medium" | "low" | "blocked" | "missing" | string;
 export type RuleTooltipMetadata = {
   code?: unknown;
   title?: unknown;
@@ -6,23 +15,81 @@ export type RuleTooltipMetadata = {
   severity?: unknown;
   description?: unknown;
 };
+export type LlmReviewMetadata = {
+  decision?: unknown;
+  validationStatus?: unknown;
+  recommendedValue?: unknown;
+  reason?: unknown;
+  riskFlags?: unknown;
+  provider?: unknown;
+  model?: unknown;
+};
+export type TermStandardizationMetadata = {
+  decision?: unknown;
+  validationStatus?: unknown;
+  canonicalFinancialTerm?: unknown;
+  standardizedFromLabel?: unknown;
+  standardizedToLabel?: unknown;
+  confidence?: unknown;
+  reason?: unknown;
+  riskFlags?: unknown;
+  provider?: unknown;
+  model?: unknown;
+};
 
 export function diagnosisCellTone({
   formula,
   status,
   confidence,
+  confidenceLevel,
   hasWarning = false,
 }: {
   formula: boolean;
   status?: string | null;
   confidence?: number | null;
+  confidenceLevel?: BackendConfidenceLevel | null;
   hasWarning?: boolean;
 }): DiagnosisTone {
-  if (hasWarning) return "candidate";
   if (formula) return "formula";
   if ((status ?? "").toLowerCase() === "edited") return "edited";
+  const level = String(confidenceLevel ?? "").toLowerCase();
+  if (level === "blocked") return "blocked-confidence";
+  if (level === "low") return "low-confidence";
+  if (level === "medium") return "medium-confidence";
+  if (level === "high") return "high-confidence";
+  if (hasWarning) return "candidate";
   if (typeof confidence === "number" && confidence > 0 && confidence < 70) return "low-confidence";
   return "normal";
+}
+
+export function buildExportWarningSummary(
+  cells: Array<{ diagnosis?: { confidenceLevel?: BackendConfidenceLevel | null; warnings?: string[] | null } | null }>,
+) {
+  let lowConfidence = 0;
+  let blocked = 0;
+  let missing = 0;
+  let actionableWarnings = 0;
+  let unresolvedIssues = 0;
+  for (const cell of cells) {
+    const diagnosis = cell.diagnosis;
+    const level = String(diagnosis?.confidenceLevel ?? "").toLowerCase();
+    const isMissing = !diagnosis || level === "missing";
+    const isLow = level === "low";
+    const isBlocked = level === "blocked";
+    const hasActionableWarning = isActionableWarningSet(diagnosis?.warnings);
+    if (isMissing) missing += 1;
+    if (isLow) lowConfidence += 1;
+    if (isBlocked) blocked += 1;
+    if (hasActionableWarning) actionableWarnings += 1;
+    if (isMissing || isLow || isBlocked || hasActionableWarning) unresolvedIssues += 1;
+  }
+  return {
+    unresolvedIssues,
+    lowConfidence,
+    blocked,
+    missing,
+    actionableWarnings,
+  };
 }
 
 export function historyValue(entry: Record<string, unknown>): string {
@@ -30,7 +97,106 @@ export function historyValue(entry: Record<string, unknown>): string {
   return value === null || value === undefined ? "" : String(value);
 }
 
+export function workbookPayloadDisplayValue(payload?: Record<string, unknown> | null): string {
+  if (!payload) return "-";
+  const formula = typeof payload.f === "string" ? payload.f.trim() : "";
+  const value = payload.v;
+  if (formula && (value === null || value === undefined || value === "")) {
+    return formula.startsWith("=") ? formula : `=${formula}`;
+  }
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return value.toLocaleString();
+  return String(value);
+}
+
+export function workbookRevisionHistoryEntry(revision: {
+  id: string;
+  actor: string;
+  actorName?: string | null;
+  action: string;
+  oldPayload?: Record<string, unknown> | null;
+  newPayload?: Record<string, unknown> | null;
+  createdAt: string;
+}): Record<string, unknown> {
+  return {
+    id: revision.id,
+    action: revision.action,
+    actor: revision.actor,
+    actorDisplayName: revision.actorName,
+    oldValue: workbookPayloadDisplayValue(revision.oldPayload),
+    newValue: workbookPayloadDisplayValue(revision.newPayload),
+    note:
+      revision.action.toLowerCase() === "revert"
+        ? "Manual workbook cell reverted."
+        : "Saved from workbook editor.",
+    createdAt: revision.createdAt,
+  };
+}
+
 export function warningDetails(warning: string) {
+  if (warning === "llm.accepted_after_validation") {
+    return {
+      label: "AI accepted after validation",
+      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.recommended_zero_dash") {
+    return {
+      label: "AI recommended zero",
+      description: "AI recommended zero from dash or nil source evidence and deterministic checks accepted it.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.rejected_wrong_section") {
+    return {
+      label: "AI rejected mapping",
+      description: "AI rejected this mapping, so an analyst should review the cell.",
+      actionable: true,
+    };
+  }
+  if (warning === "llm.requires_analyst_review") {
+    return {
+      label: "AI review unresolved",
+      description: "AI could not safely accept this mapping; analyst review is required.",
+      actionable: true,
+    };
+  }
+  if (warning === "llm.term_standardized_after_validation") {
+    return {
+      label: "AI standardized term",
+      description: "AI standardized the financial term and deterministic checks accepted the mapping.",
+      actionable: false,
+    };
+  }
+  if (warning === "llm.term_standardization_requires_review") {
+    return {
+      label: "Term mapping needs review",
+      description: "AI found a likely standardized financial term, but analyst review is required.",
+      actionable: true,
+    };
+  }
+  if (warning === "llm.term_standardization_rejected") {
+    return {
+      label: "Term mapping rejected",
+      description: "AI proposed a term mapping that failed deterministic validation.",
+      actionable: true,
+    };
+  }
+  if (warning === "mapping.deterministic_synonym_match") {
+    return {
+      label: "Synonym term match",
+      description: "The financial term matched through the curated synonym registry.",
+      actionable: true,
+    };
+  }
+  if (warning === "mapping.token_reordered_label_match") {
+    return {
+      label: "Reordered label match",
+      description: "The financial term matched after comparing reordered label tokens.",
+      actionable: true,
+    };
+  }
   if (warning === "comparative_year") {
     return {
       label: "Comparative-year source column",
@@ -43,6 +209,41 @@ export function warningDetails(warning: string) {
     label: humanizeKey(warning),
     description: "Review this extraction warning before sign-off.",
     actionable: true,
+  };
+}
+
+export function formatLlmReview(review?: LlmReviewMetadata | null) {
+  if (!review) return null;
+  const riskFlags = Array.isArray(review.riskFlags)
+    ? review.riskFlags.map((flag) => String(flag)).filter(Boolean)
+    : [];
+  return {
+    decision: stringValue(review.decision, "-"),
+    validationStatus: stringValue(review.validationStatus, "-"),
+    recommendedValue: stringValue(review.recommendedValue, "-"),
+    reason: stringValue(review.reason, "-"),
+    provider: stringValue(review.provider, "-"),
+    model: stringValue(review.model, "-"),
+    riskFlags,
+  };
+}
+
+export function formatTermStandardization(review?: TermStandardizationMetadata | null) {
+  if (!review) return null;
+  const riskFlags = Array.isArray(review.riskFlags)
+    ? review.riskFlags.map((flag) => String(flag)).filter(Boolean)
+    : [];
+  return {
+    decision: stringValue(review.decision, "-"),
+    validationStatus: stringValue(review.validationStatus, "-"),
+    canonicalFinancialTerm: stringValue(review.canonicalFinancialTerm, "-"),
+    standardizedFromLabel: stringValue(review.standardizedFromLabel, "-"),
+    standardizedToLabel: stringValue(review.standardizedToLabel, "-"),
+    confidence: stringValue(review.confidence, "-"),
+    reason: stringValue(review.reason, "-"),
+    provider: stringValue(review.provider, "-"),
+    model: stringValue(review.model, "-"),
+    riskFlags,
   };
 }
 

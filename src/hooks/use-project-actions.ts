@@ -13,6 +13,7 @@ import {
   recordManagerDecision,
   reopenComment,
   resolveComment,
+  revertWorkbookCell,
   revertReviewCell,
   runBalanceSheetDiagnosis,
   saveWorkbook,
@@ -172,6 +173,27 @@ export function useRevertReviewCell(projectId: string) {
     mutationFn: ({ fieldId, revisionId }: { fieldId: string; revisionId: string }) =>
       revertReviewCell(projectId, fieldId, revisionId),
     onSuccess: () => invalidateProject(queryClient, projectId),
+  });
+}
+
+export function useRevertWorkbookCell(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sheetId,
+      cellAddress,
+      revisionId,
+    }: {
+      sheetId: string;
+      cellAddress: string;
+      revisionId: string;
+    }) => revertWorkbookCell(projectId, sheetId, cellAddress, revisionId),
+    onSuccess: (_data, variables) => {
+      invalidateProject(queryClient, projectId);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workbookCellHistory(projectId, variables.sheetId, variables.cellAddress),
+      });
+    },
   });
 }
 

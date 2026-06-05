@@ -765,7 +765,7 @@ function StreamingAiBubble({
           </div>
         ) : (
           <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-            The answer will appear here as soon as the model starts streaming tokens.
+            The answer will appear here as soon as AI starts drafting it.
           </div>
         )}
 
@@ -1251,7 +1251,7 @@ function CurrentEventPanel({
             ))
           ) : (
             <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-              Waiting for backend context, retrieval, and model events...
+              Waiting for context, retrieval, and AI activity...
             </span>
           )}
         </div>
@@ -1268,7 +1268,7 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
   if (message.done) {
     return {
       title: message.error ? "Ask AI stopped" : "Answer ready",
-      message: message.error ?? "The model finished generating the cited answer.",
+      message: message.error ?? "AI finished generating the cited answer.",
       percent: 100,
     };
   }
@@ -1294,16 +1294,24 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
   if (latest.type === "status") {
     return {
       title: statusTitle(latest.stage),
-      message: latest.message,
+      message: sanitizeAiActivityMessage(latest.message),
       percent: latest.percent,
     };
   }
 
   return {
     title: `${sourceTitle(latest.kind)} (${latest.count})`,
-    message: latest.message,
+    message: sanitizeAiActivityMessage(latest.message),
     percent: latestStatusPercent(message.activity),
   };
+}
+
+function sanitizeAiActivityMessage(message: string): string {
+  return message
+    .replace(/Gemini/gi, "AI")
+    .replace(/\bLLM\b/g, "AI")
+    .replace(/^Calling AI$/i, "Drafting cited answer")
+    .trim();
 }
 
 function latestStatusPercent(activity: StreamActivityEvent[]): number | null {
@@ -1315,7 +1323,7 @@ function statusTitle(stage: string): string {
   if (stage === "context") return "Reading project context";
   if (stage === "retrieval") return "Matching workbook and PDF evidence";
   if (stage === "web") return "Checking approved external sources";
-  if (stage === "llm") return "Asking the model";
+  if (stage === "llm") return "Asking AI";
   if (stage === "finalizing") return "Finalizing citations";
   return "Processing";
 }
