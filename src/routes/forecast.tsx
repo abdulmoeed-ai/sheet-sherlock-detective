@@ -90,6 +90,7 @@ function Forecast() {
     <PageShell
       title="5-Year Forecast"
       subtitle="Scenario-based revenue projection driven by PSX historicals + ADB macro"
+      hideProgress
     >
       <div className="pb-24">
         {/* Diagnosis lock status banner */}
