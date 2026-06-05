@@ -5,7 +5,6 @@ import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { Pencil } from "lucide-react";
 import { IconTooltip } from "@/components/IconTooltip";
-import { useSelectedProjectId } from "@/lib/project-store";
 import { usePsxCompanies } from "@/hooks/use-users";
 
 export const Route = createFileRoute("/forecast")({
@@ -31,7 +30,6 @@ const YEARS = ["FY2025", "FY2026", "FY2027", "FY2028", "FY2029", "FY2030"];
 function Forecast() {
   const navigate = useNavigate();
   const cycle = useCycle();
-  const selectedProjectId = useSelectedProjectId();
   const psxCompanies = usePsxCompanies();
   const [selectedSector, setSelectedSector] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState("");
@@ -132,17 +130,12 @@ function Forecast() {
           {!diagnosisReady && (
             <button
               onClick={() => {
-                if (!selectedProjectId) return;
-                navigate({
-                  to: "/diagnosis/$projectId",
-                  params: { projectId: selectedProjectId },
-                });
+                navigate({ to: "/registry" });
               }}
-              disabled={!selectedProjectId}
               className="h-8 rounded-md px-3 text-[12px] font-semibold text-white"
-              style={{ background: "#7B68EE", opacity: selectedProjectId ? 1 : 0.5 }}
+              style={{ background: "#7B68EE" }}
             >
-              Open diagnosis →
+              Visit Workbooks
             </button>
           )}
         </div>
