@@ -33,7 +33,7 @@ import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useWorkspace } from "@/hooks/use-projects";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import {
-  DiagnosisSourcePreviewModal,
+  CitationPreviewSidebar,
   type DiagnosisSourcePreview,
 } from "@/components/DiagnosisSourcePreviewModal";
 import { IconTooltip } from "@/components/IconTooltip";
@@ -755,12 +755,11 @@ export function AskAiTrigger() {
           )}
         </aside>
       )}
-      <DiagnosisSourcePreviewModal
-        open={previewSource !== null}
+      <CitationPreviewSidebar
         source={previewSource}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) setPreviewSource(null);
-        }}
+        askAiExpanded={expanded}
+        expandedLeft={expandedLeft}
+        onClose={() => setPreviewSource(null)}
       />
     </>
   );
@@ -940,17 +939,7 @@ function StreamingAiBubble({
 
         {answer ? (
           <div className="min-w-0 overflow-visible break-words">
-            <MarkdownContent
-              markdown={answer}
-              renderCitation={(index) => (
-                <InlineCitationBadge
-                  index={index}
-                  citations={citations}
-                  projectId={projectId}
-                  onPreviewSource={onPreviewSource}
-                />
-              )}
-            />
+            <MarkdownContent markdown={answer} renderCitation={() => null} />
             {claimSourceGroups.length > 0 && (
               <GroupedSourcePills
                 groups={claimSourceGroups}
@@ -987,7 +976,7 @@ function StreamingAiBubble({
   );
 }
 
-// ─── Sources list at bottom (ChatGPT style) ─────────────────────────────────
+// ─── Sources — ChatGPT pill with clickable stacked bubbles ──────────────────
 
 function SourcesList({
   citations,
@@ -999,104 +988,161 @@ function SourcesList({
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
 }) {
   if (citations.length === 0) return null;
+
+  const visible = citations.slice(0, 5);
+  const overflow = citations.length - visible.length;
+
   return (
-    <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--color-border-default)" }}>
-      <div className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-        Sources
-      </div>
-      <div className="space-y-1.5">
-        {citations.map((citation, i) => (
-          <CitationCard
-            key={String(citation.index ?? i)}
-            citation={citation}
-            index={Number(citation.index ?? i + 1)}
-            projectId={projectId}
-            onPreviewSource={onPreviewSource}
-          />
-        ))}
+    <div className="mt-3">
+      <div
+        className="inline-flex items-center gap-2.5 rounded-2xl border px-3 py-2"
+        style={{
+          background: "var(--color-tag-bg)",
+          borderColor: "var(--color-border-default)",
+        }}
+      >
+        {/* Stacked clickable bubbles */}
+        <div className="flex items-center">
+          {visible.map((citation, i) => (
+            <SourceBubble
+              key={String(citation.index ?? i)}
+              citation={citation}
+              stackIndex={i}
+              totalVisible={visible.length}
+              projectId={projectId}
+              onPreviewSource={onPreviewSource}
+            />
+          ))}
+          {overflow > 0 && (
+            <div
+              className="relative flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold"
+              style={{
+                marginLeft: "-7px",
+                zIndex: 0,
+                background: "var(--color-page)",
+                borderColor: "var(--color-page)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              +{overflow}
+            </div>
+          )}
+        </div>
+
+        <span
+          className="text-[12px] font-medium"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          {citations.length} source{citations.length === 1 ? "" : "s"}
+        </span>
       </div>
     </div>
   );
 }
 
-function CitationCard({
+function SourceBubble({
   citation,
-  index,
+  stackIndex,
+  totalVisible,
   projectId,
   onPreviewSource,
 }: {
   citation: Record<string, unknown>;
-  index: number;
+  stackIndex: number;
+  totalVisible: number;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
 }) {
-  const title = getAskAiCitationTitle(citation);
   const preview = getAskAiCitationPreview(citation);
+  const title = getAskAiCitationTitle(citation);
   const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
-  const meta = citationMeta(citation);
 
-  const icon =
-    citation.kind === "model" ? (
-      <Database className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-    ) : citation.kind === "uploaded_pdf" ? (
-      <FileIcon className="h-3.5 w-3.5 text-[var(--color-danger)]" />
-    ) : (
-      <Globe className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-    );
+  const kind = String(citation.kind ?? "");
+  const label =
+    kind === "model"
+      ? "M"
+      : kind === "uploaded_pdf"
+        ? "P"
+        : String(citation.sourceName ?? "W").charAt(0).toUpperCase();
 
-  return (
+  const bg =
+    kind === "model"
+      ? "var(--color-brand)"
+      : kind === "uploaded_pdf"
+        ? "var(--color-danger)"
+        : "var(--color-brand)";
+
+  const bubble = (
     <div
-      className="flex items-start gap-2.5 rounded-lg border bg-[#FAFBFF] px-3 py-2.5 transition hover:border-[rgba(123,104,238,0.3)]"
-      style={{ borderColor: "var(--color-border-default)" }}
+      className="flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold text-white"
+      style={{
+        background: bg,
+        borderColor: "var(--color-tag-bg)",
+        marginLeft: stackIndex > 0 ? "-7px" : "0",
+        position: "relative",
+        zIndex: totalVisible - stackIndex,
+      }}
     >
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-tag-bg)] text-[10px] font-bold text-[var(--color-brand)]">
-        {index}
-      </span>
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white border" style={{ borderColor: "var(--color-border-default)" }}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-semibold text-[var(--color-text-primary)]">{title}</div>
-        {meta && (
-          <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">{meta}</div>
-        )}
-        {excerpt && (
-          <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-            {excerpt}
-          </div>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {preview?.type === "external_url" && (
-          <a
-            href={preview.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-7 w-7 items-center justify-center rounded-lg border transition hover:bg-[var(--color-tag-bg)] hover:border-[var(--color-brand)]"
-            style={{ borderColor: "var(--color-border-default)" }}
-            title="Open in new tab"
-          >
-            <ExternalLink className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-          </a>
-        )}
-        {preview?.type === "document_page" && projectId && (
-          <button
-            type="button"
-            onClick={() =>
-              onPreviewSource(
-                buildCitationPreviewSource({ citation, preview, projectId, excerpt }),
-              )
-            }
-            className="flex h-7 w-7 items-center justify-center rounded-lg border transition hover:bg-[var(--color-tag-bg)] hover:border-[var(--color-brand)]"
-            style={{ borderColor: "var(--color-border-default)" }}
-            title="Preview page"
-          >
-            <FileSearch className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-          </button>
-        )}
-      </div>
+      {label}
     </div>
   );
+
+  if (preview?.type === "external_url") {
+    return (
+      <IconTooltip label={title}>
+        <a
+          href={preview.url}
+          target="_blank"
+          rel="noreferrer"
+          className="cursor-pointer transition hover:opacity-80"
+          aria-label={title}
+        >
+          {bubble}
+        </a>
+      </IconTooltip>
+    );
+  }
+
+  if (preview?.type === "document_page" && projectId) {
+    return (
+      <IconTooltip label={title}>
+        <button
+          type="button"
+          onClick={() =>
+            onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))
+          }
+          className="cursor-pointer transition hover:opacity-80"
+          aria-label={title}
+        >
+          {bubble}
+        </button>
+      </IconTooltip>
+    );
+  }
+
+  return (
+    <IconTooltip label={title}>
+      <div>{bubble}</div>
+    </IconTooltip>
+  );
+}
+
+
+function citationSubline(citation: Record<string, unknown>): string {
+  if (citation.kind === "uploaded_pdf") {
+    const page = citation.pageNumber ?? citation.page ?? citation.pdfPageIndex;
+    return page ? `p. ${String(page)}` : String(citation.filename ?? "");
+  }
+  if (citation.kind === "model") {
+    const ref = [citation.sheetName, citation.cellReference].filter(Boolean).map(String).join(" · ");
+    return ref || String(citation.period ?? "");
+  }
+  if (typeof citation.url === "string" && citation.url) {
+    try {
+      return new URL(citation.url).hostname.replace(/^www\./, "");
+    } catch {}
+  }
+  return String(citation.sourceName ?? "");
 }
 
 // ─── Forecast snapshot ───────────────────────────────────────────────────────
@@ -1498,6 +1544,7 @@ function citationMeta(citation: Record<string, unknown>): string {
   }
   return [citation.sourceName, citation.date, citation.url].filter(Boolean).map(String).join(" · ");
 }
+// citationMeta kept for InlineCitationBadge tooltip
 
 function buildCitationPreviewSource({
   citation,

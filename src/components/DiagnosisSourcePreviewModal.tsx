@@ -5,6 +5,7 @@ import {
   ExternalLink,
   Loader2,
   Maximize2,
+  Minimize2,
   RotateCcw,
   X,
   ZoomIn,
@@ -396,6 +397,209 @@ export function DiagnosisSourcePreviewModal({
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>
+  );
+}
+
+const ASK_AI_PANEL_WIDTH = 430;
+
+export function CitationPreviewSidebar({
+  source,
+  onClose,
+  askAiExpanded = false,
+  expandedLeft = 0,
+}: {
+  source: DiagnosisSourcePreview | null;
+  onClose: () => void;
+  askAiExpanded?: boolean;
+  expandedLeft?: number;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [expanded, setExpanded] = useState(false);
+  const pageLabel = source?.printedPageNumber ?? (source ? source.pdfPageIndex + 1 : "-");
+  const bbox = useMemo(() => normalizeBoundingBox(source?.boundingBox), [source?.boundingBox]);
+  const { imageUrl, imageError } = useDiagnosisSourceImage(source !== null, source);
+
+  useEffect(() => {
+    setZoom(1);
+    setExpanded(false);
+  }, [source?.documentId, source?.pdfPageIndex]);
+
+  const changeZoom = (next: number) => {
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2)))));
+  };
+
+  if (!source) return null;
+
+  // When Ask AI is expanded (full-screen), sidebar sits on top at the right edge (z-55).
+  // When Ask AI is normal width, sidebar sits left of the Ask AI panel (z-40).
+  const sidebarStyle: React.CSSProperties = askAiExpanded
+    ? {
+        right: 0,
+        width: expanded ? `calc(100vw - ${expandedLeft}px)` : "400px",
+        zIndex: 55,
+        borderColor: "#E3E6EA",
+        boxShadow: "-8px 0 24px -12px rgba(17,24,39,0.25)",
+        transition: "width 180ms ease",
+      }
+    : {
+        right: `${ASK_AI_PANEL_WIDTH}px`,
+        width: expanded ? `calc(100vw - ${ASK_AI_PANEL_WIDTH}px)` : "360px",
+        zIndex: 40,
+        borderColor: "#E3E6EA",
+        boxShadow: "-8px 0 24px -12px rgba(17,24,39,0.18)",
+        transition: "width 180ms ease",
+      };
+
+  return (
+    <aside
+      className="fixed top-0 flex h-screen flex-col overflow-hidden border-l bg-white"
+      style={sidebarStyle}
+    >
+      {/* Header — row 1: title + close */}
+      <div
+        className="flex shrink-0 items-center justify-between gap-3 border-b px-4 pt-3 pb-2"
+        style={{ borderColor: "#E3E6EA", background: "#F8FAFC" }}
+      >
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold" style={{ color: "#1F2937" }}>
+            {source.documentFilename}
+          </div>
+          <div className="mt-0.5 text-[11px]" style={{ color: "#818EA0" }}>
+            Page {pageLabel}
+            {source.label ? ` · ${source.label}` : ""}
+            {source.confidence != null ? ` · ${Math.round(source.confidence)}% confidence` : ""}
+          </div>
+        </div>
+        <IconButton label="Close preview" onClick={onClose}>
+          <X className="h-3.5 w-3.5" />
+        </IconButton>
+      </div>
+
+      {/* Header — row 2: zoom + expand + external */}
+      <div
+        className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5"
+        style={{ borderColor: "#E3E6EA", background: "#F8FAFC" }}
+      >
+        <IconButton
+          label="Zoom out"
+          onClick={() => changeZoom(zoom - ZOOM_STEP)}
+          disabled={zoom <= MIN_ZOOM}
+        >
+          <ZoomOut className="h-3.5 w-3.5" />
+        </IconButton>
+        <span className="w-10 text-center text-[11px] font-semibold" style={{ color: "#4F546B" }}>
+          {Math.round(zoom * 100)}%
+        </span>
+        <IconButton
+          label="Zoom in"
+          onClick={() => changeZoom(zoom + ZOOM_STEP)}
+          disabled={zoom >= MAX_ZOOM}
+        >
+          <ZoomIn className="h-3.5 w-3.5" />
+        </IconButton>
+        <IconButton label="Reset zoom" onClick={() => changeZoom(1)}>
+          <RotateCcw className="h-3.5 w-3.5" />
+        </IconButton>
+        <div className="ml-auto flex items-center gap-1">
+          <IconButton
+            label={expanded ? "Collapse to sidebar" : "Expand full width"}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+          </IconButton>
+          {imageUrl && (
+            <IconButton
+              label="Open image in new tab"
+              onClick={() => window.open(imageUrl, "_blank")}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </IconButton>
+          )}
+        </div>
+      </div>
+
+      {/* PDF viewer */}
+      <div className="min-h-0 flex-1 overflow-auto bg-[#F3F4F6] p-3">
+        <div
+          className="relative mx-auto w-[min(100%,860px)] origin-top"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "top center",
+            transition: "transform 120ms ease",
+          }}
+        >
+          <div
+            className="relative overflow-hidden border bg-white shadow-sm"
+            style={{ borderColor: "#D1D5DB" }}
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={`${source.documentFilename} page ${pageLabel}`}
+                className="block h-auto w-full"
+              />
+            ) : (
+              <div className="flex h-[520px] items-center justify-center">
+                {imageError ? (
+                  <div className="flex items-center gap-2 text-[13px]" style={{ color: "#B91C1C" }}>
+                    <AlertCircle className="h-4 w-4" />
+                    {imageError}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-[13px]" style={{ color: "#818EA0" }}>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading source page…
+                  </div>
+                )}
+              </div>
+            )}
+
+            {bbox && (
+              <div
+                aria-label="Highlighted source row"
+                className="pointer-events-none absolute"
+                style={{
+                  left: `${highlightBox(bbox).x}%`,
+                  top: `${highlightBox(bbox).y}%`,
+                  width: `${highlightBox(bbox).width}%`,
+                  height: `${highlightBox(bbox).height}%`,
+                  border: "2px solid #DC2626",
+                  borderRadius: "6px",
+                  background: "rgba(220,38,38,0.09)",
+                  boxShadow: "0 0 0 9999px rgba(17,24,39,0.04)",
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="flex shrink-0 min-h-11 items-center justify-between gap-3 border-t px-4"
+        style={{ borderColor: "#E3E6EA", background: "#F8FAFC" }}
+      >
+        <div className="min-w-0 truncate text-[11px]" style={{ color: "#4F546B" }}>
+          {bbox ? (
+            <>
+              <span className="font-semibold" style={{ color: "#DC2626" }}>Highlighted row</span>
+              {source.sourceText ? ` · ${source.sourceText}` : ""}
+            </>
+          ) : (
+            <span style={{ color: "#B45309" }}>Source row location unavailable</span>
+          )}
+        </div>
+        {source.value && (
+          <div className="shrink-0 text-[11px] font-semibold" style={{ color: "#292D34" }}>
+            {source.value}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
