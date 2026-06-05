@@ -10,6 +10,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { AskAiTrigger } from "@/components/AskAiTrigger";
 import { ProductWordmark } from "@/components/ProductWordmark";
@@ -193,7 +194,18 @@ function AuthenticatedApp() {
   if (!token || isLoading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-page)] text-[13px] text-[var(--color-text-secondary)]">
-        Loading <ProductWordmark aiClassName="text-[var(--color-brand)]" />...
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-[var(--color-brand)]" aria-hidden="true" />
+          <div className="flex items-center gap-1.5 font-medium" role="status" aria-live="polite">
+            <span>Loading</span>
+            <ProductWordmark aiClassName="text-[var(--color-brand)]" />
+            <span className="flex w-5 items-center gap-0.5" aria-hidden="true">
+              <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--color-brand)] [animation-delay:-0.2s]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--color-brand)] [animation-delay:-0.1s]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--color-brand)]" />
+            </span>
+          </div>
+        </div>
       </div>
     );
   }

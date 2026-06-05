@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  diagnosisExportUnsavedDraftWarning,
   diagnosisDraftSaveLabel,
   hasDiagnosisDraftChanges,
   workbookDraftSaveSnapshot,
@@ -29,5 +30,12 @@ describe("diagnosis draft helpers", () => {
   it("saves the latest workbook draft snapshot without feeding it back into render state", () => {
     expect(workbookDraftSaveSnapshot({ id: "edited" }, { id: "server" })).toEqual({ id: "edited" });
     expect(workbookDraftSaveSnapshot(null, { id: "server" })).toEqual({ id: "server" });
+  });
+
+  it("warns that unsaved draft values are excluded from Excel export", () => {
+    expect(diagnosisExportUnsavedDraftWarning({ dirty: true })).toContain(
+      "Save your draft before exporting",
+    );
+    expect(diagnosisExportUnsavedDraftWarning({ dirty: false })).toBe("");
   });
 });

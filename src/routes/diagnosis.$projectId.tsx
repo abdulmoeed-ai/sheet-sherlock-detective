@@ -43,6 +43,7 @@ import {
   activeMentionQuery,
   buildCellCommentIndicators,
   cellSelectionFromComment,
+  commentTargetKey,
   commentsForCell,
   commentsForSheet,
   filterMentionMembers,
@@ -55,6 +56,7 @@ import {
 } from "@/lib/comments";
 import {
   buildExportWarningSummary,
+  canRevertReviewHistoryEntry,
   formatLlmReview,
   formatTermStandardization,
   formatHistoryEntry,
@@ -66,6 +68,7 @@ import {
   workbookRevisionHistoryEntry,
 } from "@/lib/diagnosis-cell";
 import {
+  diagnosisExportUnsavedDraftWarning,
   diagnosisDraftSaveLabel,
   hasDiagnosisDraftChanges,
   workbookDraftSaveSnapshot,
@@ -172,7 +175,7 @@ type OptimisticCellUpdate = {
   fieldId: string;
   displayValue: string;
   workbookValue: string | number;
-  historyEntry: Record<string, unknown>;
+  history: Array<Record<string, unknown>>;
 };
 type PanelTab = "diagnosis" | "info" | "comments";
 
@@ -284,9 +287,10 @@ function Diagnosis() {
     () => commentsForSheet(comments.data ?? [], activeSheet?.name),
     [comments.data, activeSheet?.name],
   );
+  const fieldIdCellKeys = useMemo(() => buildFieldIdCellKeys(workbook), [workbook]);
   const commentIndicators = useMemo(
-    () => buildCellCommentIndicators(comments.data ?? []),
-    [comments.data],
+    () => buildCellCommentIndicators(comments.data ?? [], { fieldIdCellKeys }),
+    [comments.data, fieldIdCellKeys],
   );
   const commentMentionCandidates = useMemo(
     () => mentionCandidates(workspace.data?.project.teamMembers ?? [], currentUser.data),
@@ -348,6 +352,7 @@ function Diagnosis() {
     if (!selectedMeta?.fieldId) return;
     try {
       await revertCell.mutateAsync({ fieldId: selectedMeta.fieldId, revisionId });
+      setOptimisticCells((updates) => removeOptimisticCell(updates, selectedMeta.fieldId as string));
       await workspace.refetch();
       toast.success("Cell value reverted");
     } catch (error) {
@@ -395,19 +400,21 @@ function Diagnosis() {
           fieldId,
           draftValue: draftValue.trim(),
           oldValue: selectedMeta?.value ?? displayValue(selectedCell) ?? "-",
+          existingHistory: selectedMeta?.history,
           currentUser: currentUser.data,
         });
         setOptimisticCells((updates) => ({ ...updates, [fieldId]: optimisticUpdate }));
-        await reviewCell.mutateAsync({
+        const updatedCell = await reviewCell.mutateAsync({
           fieldId,
           input: { action: "edit", value: draftValue.trim(), note: "Saved from Diagnosis draft." },
         });
+        setOptimisticCells((updates) => ({
+          ...updates,
+          [fieldId]: buildConfirmedCellUpdate(fieldId, updatedCell, optimisticUpdate),
+        }));
       }
       setDraftValue("");
       await workspace.refetch();
-      if (fieldId) {
-        setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
-      }
       toast.success("Draft saved");
     } catch (error) {
       if (fieldId) {
@@ -478,6 +485,7 @@ function Diagnosis() {
             fieldId,
             draftValue: event.newValue,
             oldValue: event.oldValue,
+            existingHistory: event.oldCell?.diagnosis?.history,
             currentUser: currentUser.data,
           })
         : null;
@@ -492,6 +500,11 @@ function Diagnosis() {
 
   const exportWorkbook = async () => {
     if (!projectId) return;
+    const unsavedDraftWarning = diagnosisExportUnsavedDraftWarning({ dirty });
+    if (unsavedDraftWarning) {
+      window.alert(unsavedDraftWarning);
+      return;
+    }
     const unresolved = Number(exportWarnings?.unresolvedIssues ?? 0);
     if (unresolved > 0) {
       const proceed = window.confirm(
@@ -1135,7 +1148,7 @@ function DiagnosisHistorySection({
                 key={String(entry.id ?? index)}
                 title={formatted.title}
                 meta={[formatted.meta, formatted.note].filter(Boolean).join(" · ")}
-                canRevert={typeof entry.id === "string" && !String(entry.id).endsWith("-source")}
+                canRevert={canRevertReviewHistoryEntry(entry)}
                 revertPending={revertPending}
                 onRevert={() => onRevert(String(entry.id))}
               />
@@ -1820,6 +1833,35 @@ function sheetCells(sheet?: SheetPayload): CellPayload[] {
   return Object.values(sheet?.cellData ?? {}).flatMap((row) => Object.values(row));
 }
 
+function buildFieldIdCellKeys(workbook: WorkbookPayload | null) {
+  const keys = new Map<string, string>();
+  const duplicateFieldIds = new Set<string>();
+  for (const sheetId of workbook?.sheetOrder ?? Object.keys(workbook?.sheets ?? {})) {
+    const sheet = workbook?.sheets?.[sheetId];
+    if (!sheet) continue;
+    for (const [rowKey, row] of Object.entries(sheet.cellData ?? {})) {
+      const rowIndex = Number(rowKey);
+      if (!Number.isFinite(rowIndex)) continue;
+      for (const [colKey, cell] of Object.entries(row)) {
+        const colIndex = Number(colKey);
+        const fieldId = cell.diagnosis?.fieldId;
+        if (!fieldId || !Number.isFinite(colIndex)) continue;
+        const address = `${columnName(colIndex)}${rowIndex + 1}`;
+        const key = commentTargetKey(sheet.name, address);
+        if (keys.has(fieldId) && keys.get(fieldId) !== key) {
+          duplicateFieldIds.add(fieldId);
+          keys.delete(fieldId);
+          continue;
+        }
+        if (!duplicateFieldIds.has(fieldId)) {
+          keys.set(fieldId, key);
+        }
+      }
+    }
+  }
+  return keys;
+}
+
 function firstSheetWithDiagnosis(workbook: WorkbookPayload | null, sheetIds: string[]) {
   for (const sheetId of sheetIds) {
     if (sheetCells(workbook?.sheets?.[sheetId]).some((cell) => !!cell.diagnosis)) {
@@ -1851,7 +1893,7 @@ function optimisticCell(
       ...cell.diagnosis,
       value: update.displayValue,
       status: "edited",
-      history: [update.historyEntry, ...(cell.diagnosis?.history ?? [])],
+      history: update.history,
     },
   };
 }
@@ -1860,29 +1902,52 @@ function buildOptimisticCellUpdate({
   fieldId,
   draftValue,
   oldValue,
+  existingHistory,
   currentUser,
 }: {
   fieldId: string;
   draftValue: string;
   oldValue: string;
+  existingHistory?: Array<Record<string, unknown>>;
   currentUser?: { id?: string | null; name?: string | null } | null;
 }): OptimisticCellUpdate {
   return {
     fieldId,
     displayValue: draftValue,
     workbookValue: workbookValueFromDraft(draftValue),
-    historyEntry: {
-      id: `${fieldId}-optimistic-${Date.now()}`,
-      action: "edit",
-      actor: currentUser?.id ?? "optimistic",
-      actorDisplayName: currentUser?.name ?? "Analyst",
-      oldValue,
-      newValue: draftValue,
-      oldStatus: "pending",
-      newStatus: "edited",
-      note: "Saved from Diagnosis draft.",
-      createdAt: new Date().toISOString(),
-    },
+    history: [
+      {
+        id: `${fieldId}-optimistic-${Date.now()}`,
+        action: "edit",
+        actor: currentUser?.id ?? "optimistic",
+        actorDisplayName: currentUser?.name ?? "Analyst",
+        oldValue,
+        newValue: draftValue,
+        oldStatus: "pending",
+        newStatus: "edited",
+        note: "Saved from Diagnosis draft.",
+        createdAt: new Date().toISOString(),
+      },
+      ...(existingHistory ?? []),
+    ],
+  };
+}
+
+function buildConfirmedCellUpdate(
+  fieldId: string,
+  response: Record<string, unknown>,
+  fallback: OptimisticCellUpdate,
+): OptimisticCellUpdate {
+  const history = Array.isArray(response.history)
+    ? response.history.filter((entry): entry is Record<string, unknown> => isRecord(entry))
+    : fallback.history;
+  const displayValue = response.value === null || response.value === undefined ? fallback.displayValue : String(response.value);
+
+  return {
+    fieldId,
+    displayValue,
+    workbookValue: workbookValueFromDraft(displayValue),
+    history,
   };
 }
 

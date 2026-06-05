@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   diagnosisCellTone,
   isActionableWarningSet,
   shouldCommitCellDraftOnKey,
   type DiagnosisTone,
 } from "@/lib/diagnosis-cell";
+import type { CellCommentIndicator } from "@/lib/comments";
+import { createDebouncedCallback, type DebouncedCallback } from "@/lib/debounce";
 import { CalculationMode } from "@univerjs/sheets-formula";
 import "@univerjs/preset-sheets-core/lib/index.css";
 
@@ -30,6 +32,7 @@ export type WorkbookCellPayload = {
   formulaValueStatus?: string;
   diagnosis?: WorkbookCellMeta;
   s?: string;
+  markers?: Record<string, unknown>;
 };
 
 export type WorkbookSheetPayload = {
@@ -83,13 +86,17 @@ const MIN_COLUMN_WIDTH = 112;
 const MAX_COLUMN_WIDTH = 260;
 const MIN_ROW_HEIGHT = 28;
 const FINANCE_NUMBER_FORMAT = "#,##0;(#,##0);0";
+const SELECTION_UPDATE_DEBOUNCE_MS = 100;
+const COMMENT_MARKER_COLOR = "#7B68EE";
+const COMMENT_MARKER_SIZE = 8;
+const EMPTY_COMMENT_INDICATORS = new Map<string, CellCommentIndicator>();
 
 export function WorkbookEditor({
   workbook,
   activeSheetId,
   selected,
   draftValue,
-  commentIndicators = new Set(),
+  commentIndicators = EMPTY_COMMENT_INDICATORS,
   commitPending,
   onSelect,
   onCommitEdit,
@@ -98,7 +105,7 @@ export function WorkbookEditor({
   activeSheetId?: string | null;
   selected: WorkbookSelection;
   draftValue: string;
-  commentIndicators?: Set<string>;
+  commentIndicators?: Map<string, CellCommentIndicator>;
   commitPending: boolean;
   onSelect: (selection: WorkbookSelection) => void;
   onCommitEdit: (event: WorkbookEditEvent) => Promise<void> | void;
@@ -106,11 +113,15 @@ export function WorkbookEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   const onCommitEditRef = useRef(onCommitEdit);
+  const selectionDebouncerRef = useRef<DebouncedCallback<[WorkbookSelection]> | null>(null);
   const [editing, setEditing] = useState<WorkbookSelection | null>(null);
   const [editValue, setEditValue] = useState("");
   const [univerState, setUniverState] = useState<"loading" | "ready" | "fallback">("loading");
   const [paintState, setPaintState] = useState<"unknown" | "painted" | "blank">("unknown");
-  const preparedWorkbook = useMemo(() => prepareWorkbookForUniver(workbook), [workbook]);
+  const preparedWorkbook = useMemo(
+    () => prepareWorkbookForUniver(workbook, commentIndicators),
+    [commentIndicators, workbook],
+  );
   const activeSheet = activeSheetId ? workbook.sheets?.[activeSheetId] : undefined;
   const shape = useMemo(() => sheetShape(activeSheet), [activeSheet]);
 
@@ -122,6 +133,26 @@ export function WorkbookEditor({
     onCommitEditRef.current = onCommitEdit;
   }, [onCommitEdit]);
 
+  if (!selectionDebouncerRef.current) {
+    selectionDebouncerRef.current = createDebouncedCallback(
+      (selection: WorkbookSelection) => onSelectRef.current(selection),
+      SELECTION_UPDATE_DEBOUNCE_MS,
+    );
+  }
+
+  const clearScheduledSelection = () => {
+    selectionDebouncerRef.current?.cancel();
+  };
+
+  const selectImmediately = (selection: WorkbookSelection) => {
+    clearScheduledSelection();
+    onSelectRef.current(selection);
+  };
+
+  const scheduleSelection = (selection: WorkbookSelection) => {
+    selectionDebouncerRef.current?.run(selection);
+  };
+
   useEffect(() => {
     let disposed = false;
     let dispose: (() => void) | undefined;
@@ -130,12 +161,15 @@ export function WorkbookEditor({
     async function bootUniver() {
       if (!containerRef.current) return;
       try {
-        const [{ createUniver, LocaleType, mergeLocales }, { UniverSheetsCorePreset }, localeModule] =
-          await Promise.all([
-            import("@univerjs/presets"),
-            import("@univerjs/preset-sheets-core"),
-            import("@univerjs/preset-sheets-core/locales/en-US"),
-          ]);
+        const [
+          { createUniver, LocaleType, mergeLocales },
+          { UniverSheetsCorePreset },
+          localeModule,
+        ] = await Promise.all([
+          import("@univerjs/presets"),
+          import("@univerjs/preset-sheets-core"),
+          import("@univerjs/preset-sheets-core/locales/en-US"),
+        ]);
         if (disposed || !containerRef.current) return;
         const { univerAPI } = createUniver({
           locale: LocaleType.EN_US,
@@ -164,6 +198,8 @@ export function WorkbookEditor({
             BeforeSheetEditEnd?: unknown;
             BeforeSheetEditStart?: unknown;
             CellClicked?: unknown;
+            SelectionChanged?: unknown;
+            SelectionMoveEnd?: unknown;
             SheetEditEnded?: unknown;
           };
           addEvent?: (event: unknown, callback: (params: Record<string, unknown>) => void) => void;
@@ -175,7 +211,9 @@ export function WorkbookEditor({
         }
         eventApi.addEvent?.(eventApi.Event?.CellClicked, (params) => {
           const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
-          const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
+          const worksheet = params.worksheet as
+            | { getSheetId?: () => string; getName?: () => string }
+            | undefined;
           const sheetId = resolveWorkbookSheetId(
             eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
@@ -183,12 +221,23 @@ export function WorkbookEditor({
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
           if (sheetId && row !== null && column !== null) {
-            onSelectRef.current({ sheetId, row, col: column });
+            selectImmediately({ sheetId, row, col: column });
           }
         });
+        const selectFromSelectionEvent = (params: Record<string, unknown>) => {
+          const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
+          const selection = selectionFromUniverSelectionEvent(eventWorkbook, params);
+          if (selection) {
+            scheduleSelection(selection);
+          }
+        };
+        eventApi.addEvent?.(eventApi.Event?.SelectionMoveEnd, selectFromSelectionEvent);
+        eventApi.addEvent?.(eventApi.Event?.SelectionChanged, selectFromSelectionEvent);
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditStart, (params) => {
           const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
-          const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
+          const worksheet = params.worksheet as
+            | { getSheetId?: () => string; getName?: () => string }
+            | undefined;
           const sheetId = resolveWorkbookSheetId(
             eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
@@ -196,12 +245,14 @@ export function WorkbookEditor({
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
           if (sheetId && row !== null && column !== null) {
-            onSelectRef.current({ sheetId, row, col: column });
+            selectImmediately({ sheetId, row, col: column });
           }
         });
         eventApi.addEvent?.(eventApi.Event?.BeforeSheetEditEnd, (params) => {
           const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
-          const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
+          const worksheet = params.worksheet as
+            | { getSheetId?: () => string; getName?: () => string }
+            | undefined;
           const sheetId = resolveWorkbookSheetId(
             eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
@@ -209,7 +260,7 @@ export function WorkbookEditor({
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
           if (sheetId && row !== null && column !== null) {
-            onSelectRef.current({ sheetId, row, col: column });
+            selectImmediately({ sheetId, row, col: column });
           }
           const editEvent =
             sheetId && row !== null && column !== null
@@ -225,7 +276,9 @@ export function WorkbookEditor({
         });
         eventApi.addEvent?.(eventApi.Event?.SheetEditEnded, (params) => {
           const eventWorkbook = workbookSnapshotFromApi(eventApi) ?? workbook;
-          const worksheet = params.worksheet as { getSheetId?: () => string; getName?: () => string } | undefined;
+          const worksheet = params.worksheet as
+            | { getSheetId?: () => string; getName?: () => string }
+            | undefined;
           const sheetId = resolveWorkbookSheetId(
             eventWorkbook,
             stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
@@ -233,7 +286,7 @@ export function WorkbookEditor({
           const row = numberOrNull(params.row);
           const column = numberOrNull(params.column);
           if (sheetId && row !== null && column !== null) {
-            onSelectRef.current({ sheetId, row, col: column });
+            selectImmediately({ sheetId, row, col: column });
           }
         });
         dispose = () => eventApi.dispose();
@@ -251,6 +304,7 @@ export function WorkbookEditor({
     return () => {
       disposed = true;
       if (paintTimer !== undefined) window.clearTimeout(paintTimer);
+      clearScheduledSelection();
       dispose?.();
     };
   }, [preparedWorkbook, workbook]);
@@ -284,7 +338,11 @@ export function WorkbookEditor({
 
   return (
     <div className="relative h-full min-h-[640px] bg-[#F7F8FA]">
-      <div className="h-full min-h-[640px] w-full" ref={containerRef} data-testid="univer-workbook-host" />
+      <div
+        className="h-full min-h-[640px] w-full"
+        ref={containerRef}
+        data-testid="univer-workbook-host"
+      />
       {univerState === "loading" && (
         <div className="absolute inset-x-4 top-4 flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-[12px] text-[#4F546B] shadow-sm">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -293,10 +351,15 @@ export function WorkbookEditor({
       )}
       {univerState === "ready" && paintState === "blank" && (
         <div className="absolute left-4 top-4 max-w-sm rounded-md border bg-white px-3 py-2 text-[12px] text-[#4F546B] shadow-sm">
-          The spreadsheet engine loaded, but the workbook canvas did not paint. Refresh the page or use the fallback grid.
+          The spreadsheet engine loaded, but the workbook canvas did not paint. Refresh the page or
+          use the fallback grid.
         </div>
       )}
-      <div className={univerState === "fallback" ? "absolute inset-0 overflow-auto bg-[#F7F8FA] p-4" : "sr-only"}>
+      <div
+        className={
+          univerState === "fallback" ? "absolute inset-0 overflow-auto bg-[#F7F8FA] p-4" : "sr-only"
+        }
+      >
         <table
           role="grid"
           aria-label={`${activeSheet.name} workbook editor`}
@@ -313,7 +376,10 @@ export function WorkbookEditor({
             <tr>
               <th className="sticky left-0 top-0 z-20 h-7 w-10 border bg-[#F7F8FA]" />
               {Array.from({ length: shape.cols }, (_, col) => (
-                <th key={col} className="sticky top-0 z-10 h-7 min-w-[108px] border bg-[#F7F8FA] px-2 font-semibold text-[#818EA0]">
+                <th
+                  key={col}
+                  className="sticky top-0 z-10 h-7 min-w-[108px] border bg-[#F7F8FA] px-2 font-semibold text-[#818EA0]"
+                >
                   {columnName(col)}
                 </th>
               ))}
@@ -328,11 +394,15 @@ export function WorkbookEditor({
                 {Array.from({ length: shape.cols }, (_, col) => {
                   const cell = getCell(activeSheet, row, col);
                   const address = `${columnName(col)}${row + 1}`;
-                  const active = selected.sheetId === activeSheetId && selected.row === row && selected.col === col;
-                  const commentKey = `${activeSheet.name}!${address}`;
-                  const hasOpenComment = commentIndicators.has(commentKey);
+                  const active =
+                    selected.sheetId === activeSheetId &&
+                    selected.row === row &&
+                    selected.col === col;
                   const editingCell =
-                    editing !== null && editing.sheetId === activeSheetId && editing.row === row && editing.col === col;
+                    editing !== null &&
+                    editing.sheetId === activeSheetId &&
+                    editing.row === row &&
+                    editing.col === col;
                   const formula = !!cell?.f || !!cell?.diagnosis?.formula;
                   const hasDiagnosis = !!cell?.diagnosis;
                   const tone = diagnosisCellTone({
@@ -348,8 +418,23 @@ export function WorkbookEditor({
                       key={col}
                       role="gridcell"
                       aria-label={`${address} ${displayValue(cell)}`}
-                      onClick={() => onSelect({ sheetId: activeSheetId ?? activeSheet.id ?? activeSheet.name, row, col })}
-                      onDoubleClick={() => startEdit({ sheetId: activeSheetId ?? activeSheet.id ?? activeSheet.name, row, col }, cell)}
+                      onClick={() =>
+                        onSelect({
+                          sheetId: activeSheetId ?? activeSheet.id ?? activeSheet.name,
+                          row,
+                          col,
+                        })
+                      }
+                      onDoubleClick={() =>
+                        startEdit(
+                          {
+                            sheetId: activeSheetId ?? activeSheet.id ?? activeSheet.name,
+                            row,
+                            col,
+                          },
+                          cell,
+                        )
+                      }
                       className="relative h-8 truncate border px-2"
                       style={{
                         borderColor: style.borderColor,
@@ -361,14 +446,6 @@ export function WorkbookEditor({
                         fontVariantNumeric: "tabular-nums",
                       }}
                     >
-                      {hasOpenComment ? (
-                        <span
-                          aria-label={`${address} has open comments`}
-                          className="absolute right-1 top-1 flex h-3 w-3 items-center justify-center rounded-full bg-[#7B68EE] text-white"
-                        >
-                          <MessageSquare className="h-2 w-2" aria-hidden="true" />
-                        </span>
-                      ) : null}
                       {editingCell ? (
                         <input
                           value={editValue}
@@ -430,7 +507,10 @@ export function buildWorkbookCellIndex(workbook: WorkbookPayload) {
   return cells;
 }
 
-export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPayload {
+export function prepareWorkbookForUniver(
+  workbook: WorkbookPayload,
+  commentIndicators: Map<string, CellCommentIndicator> = EMPTY_COMMENT_INDICATORS,
+): WorkbookPayload {
   const prepared: WorkbookPayload = {
     id: workbook.id,
     name: workbook.name,
@@ -450,7 +530,7 @@ export function prepareWorkbookForUniver(workbook: WorkbookPayload): WorkbookPay
       defaultRowHeight: readableDefaultRowHeight(sheet.defaultRowHeight),
       columnData: readableColumnData(sheet),
       rowData: readableRowData(sheet),
-      cellData: styledCellData(sheet.cellData, styles),
+      cellData: styledCellData(sheet.cellData, styles, sheet.name, commentIndicators),
     };
   }
   return prepared;
@@ -462,8 +542,30 @@ export function resolveWorkbookSheetId(
 ) {
   if (!sheetIdentity) return null;
   if (workbook.sheets?.[sheetIdentity]) return sheetIdentity;
-  const match = Object.entries(workbook.sheets ?? {}).find(([, sheet]) => sheet.name === sheetIdentity);
+  const match = Object.entries(workbook.sheets ?? {}).find(
+    ([, sheet]) => sheet.name === sheetIdentity,
+  );
   return match?.[0] ?? null;
+}
+
+function selectionFromUniverSelectionEvent(
+  workbook: WorkbookPayload,
+  params: Record<string, unknown>,
+): WorkbookSelection | null {
+  const worksheet = params.worksheet as
+    | { getSheetId?: () => string; getName?: () => string }
+    | undefined;
+  const sheetId = resolveWorkbookSheetId(
+    workbook,
+    stringOrNull(worksheet?.getSheetId?.()) ?? stringOrNull(worksheet?.getName?.()),
+  );
+  const selections = Array.isArray(params.selections) ? params.selections : [];
+  const firstSelection = selections[0];
+  if (!sheetId || !isRecord(firstSelection)) return null;
+  const row = numberOrNull(firstSelection.startRow);
+  const column = numberOrNull(firstSelection.startColumn);
+  if (row === null || column === null) return null;
+  return { sheetId, row, col: column };
 }
 
 export function workbookCellFromUniverPosition(
@@ -523,11 +625,20 @@ export function cellKey(sheetName: string, address: string) {
 function styledCellData(
   cellData: Record<string, Record<string, WorkbookCellPayload>> | undefined,
   styles: Record<string, unknown>,
+  sheetName: string,
+  commentIndicators: Map<string, CellCommentIndicator>,
 ) {
   const next: Record<string, Record<string, WorkbookCellPayload>> = {};
   for (const [rowKey, row] of Object.entries(cellData ?? {})) {
     next[rowKey] = {};
     for (const [colKey, cell] of Object.entries(row)) {
+      const rowIndex = Number(rowKey);
+      const colIndex = Number(colKey);
+      const address =
+        Number.isFinite(rowIndex) && Number.isFinite(colIndex)
+          ? `${columnName(colIndex)}${rowIndex + 1}`
+          : "";
+      const hasCommentIndicator = !!address && commentIndicators.has(`${sheetName}!${address}`);
       const formula = !!cell.f || !!cell.diagnosis?.formula;
       const tone = diagnosisCellTone({
         formula,
@@ -541,6 +652,21 @@ function styledCellData(
         ...cell,
         ...(typeof cell.f === "string" ? { f: normalizeFormula(cell.f) } : {}),
         ...(styleId ? { s: ensureToneStyle(styles, styleId, tone, formula) } : {}),
+        ...(hasCommentIndicator
+          ? {
+              markers: {
+                ...(isRecord(cell.markers) ? cell.markers : {}),
+                tr: {
+                  color: COMMENT_MARKER_COLOR,
+                  size: COMMENT_MARKER_SIZE,
+                },
+                tl: {
+                  color: COMMENT_MARKER_COLOR,
+                  size: COMMENT_MARKER_SIZE,
+                },
+              },
+            }
+          : {}),
       };
       if (
         formula &&
@@ -560,9 +686,7 @@ function workbookDisplayValue(value: unknown) {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   if (!trimmed) return value;
-  const normalized = trimmed
-    .replace(/[−–—]/g, "-")
-    .replace(/,/g, "");
+  const normalized = trimmed.replace(/[−–—]/g, "-").replace(/,/g, "");
   const accountingNegative = normalized.match(/^\(([-+]?\d+(?:\.\d+)?)\)$/);
   const numericText = accountingNegative ? `-${accountingNegative[1]}` : normalized;
   const numericValue = Number(numericText);
@@ -623,7 +747,10 @@ function inferColumnWidths(sheet: WorkbookSheetPayload) {
       if (!Number.isFinite(col)) continue;
       const text = displayValue(cell);
       if (!text) continue;
-      const contentWidth = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, text.length * 7 + 32));
+      const contentWidth = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(MIN_COLUMN_WIDTH, text.length * 7 + 32),
+      );
       widths.set(col, Math.max(widths.get(col) ?? 0, contentWidth));
     }
   }
@@ -682,7 +809,11 @@ function sheetShape(sheet?: WorkbookSheetPayload) {
   return { rows: Math.max(maxRow, 20), cols: Math.max(maxCol, 8) };
 }
 
-function getCell(sheet: WorkbookSheetPayload, row: number, col: number): WorkbookCellPayload | undefined {
+function getCell(
+  sheet: WorkbookSheetPayload,
+  row: number,
+  col: number,
+): WorkbookCellPayload | undefined {
   return sheet.cellData?.[String(row)]?.[String(col)];
 }
 
@@ -701,7 +832,12 @@ function workbookEditEventFromCell(
   }
   const nextCell = workbookCellPayloadFromDraft(cell, newValue);
   return buildWorkbookEditEvent({
-    workbook: updateWorkbookCell(workbook, { sheetId, row: position.row, column: position.column, cell: nextCell }),
+    workbook: updateWorkbookCell(workbook, {
+      sheetId,
+      row: position.row,
+      column: position.column,
+      cell: nextCell,
+    }),
     sheetId,
     sheetName: sheet.name,
     address,
@@ -749,7 +885,12 @@ function buildWorkbookEditEvent({
 }
 
 function isBackendReviewCell(cell?: WorkbookCellPayload) {
-  return !!cell?.diagnosis?.fieldId && cell.diagnosis.editable !== false && !cell.f && !cell.diagnosis.formula;
+  return (
+    !!cell?.diagnosis?.fieldId &&
+    cell.diagnosis.editable !== false &&
+    !cell.f &&
+    !cell.diagnosis.formula
+  );
 }
 
 function isNumericReviewEdit(value: string) {
