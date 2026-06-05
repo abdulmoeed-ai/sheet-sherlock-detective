@@ -74,7 +74,7 @@ function Inbox() {
         company: r.companyName,
         period: r.fiscalYear ?? "Current period",
       });
-      navigate({ to: "/ingestion" });
+      navigate({ to: "/registry" });
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {

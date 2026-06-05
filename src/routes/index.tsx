@@ -13,6 +13,7 @@ import { useProjects } from "@/hooks/use-projects";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { roleLabel } from "@/lib/role-access";
+import { SECTOR_PACKS } from "@/lib/sector-packs";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,7 +37,6 @@ const blankRequest: AnalysisRequestCreateInput = {
   note: "",
 };
 
-const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
 
 function Dashboard() {
   const { data: user } = useCurrentUser();
@@ -93,6 +93,11 @@ function ManagerDashboard() {
     [psxCompanies.data],
   );
 
+  const sectorOptions = useMemo(
+    () => Object.keys(SECTOR_PACKS).map((s) => ({ value: s, label: s })),
+    [],
+  );
+
   const handleCompanySelect = (symbol: string) => {
     const company = psxCompanies.data?.find((c) => c.symbol === symbol);
     if (company) {
@@ -133,15 +138,6 @@ function ManagerDashboard() {
         </div>
         <form onSubmit={submit} className="grid grid-cols-2 gap-3">
           <Combobox
-            label="Assigned analyst"
-            options={analystOptions}
-            value={draft.assignedAnalystEmail}
-            onChange={(value) => setDraft({ ...draft, assignedAnalystEmail: value })}
-            placeholder={analysts.isLoading ? "Loading…" : "Select analyst…"}
-            disabled={analysts.isLoading}
-            required
-          />
-          <Combobox
             label="Company"
             options={companyOptions}
             value={draft.companySymbol ?? ""}
@@ -150,78 +146,26 @@ function ManagerDashboard() {
             disabled={psxCompanies.isLoading}
             required
           />
-          <label>
-            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              Symbol
-            </span>
-            <input
-              type="text"
-              value={draft.companySymbol ?? ""}
-              disabled
-              className="h-10 w-full rounded-md border px-3 text-[13px] opacity-60"
-              style={{ borderColor: "var(--color-border-strong)" }}
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              Sector
-            </span>
-            <input
-              type="text"
-              value={draft.sector ?? ""}
-              disabled
-              className="h-10 w-full rounded-md border px-3 text-[13px] opacity-60"
-              style={{ borderColor: "var(--color-border-strong)" }}
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              Fiscal year
-            </span>
-            <select
-              value={draft.fiscalYear ?? "FY2025"}
-              onChange={(event) => setDraft({ ...draft, fiscalYear: event.target.value })}
-              className="h-10 w-full rounded-md border px-3 text-[13px]"
-              style={{ borderColor: "var(--color-border-strong)" }}
-            >
-              {FISCAL_YEARS.map((fy) => (
-                <option key={fy} value={fy}>
-                  {fy}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              Priority
-            </span>
-            <select
-              value={draft.priority}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  priority: event.target.value as AnalysisRequestCreateInput["priority"],
-                })
-              }
-              className="h-10 w-full rounded-md border px-3 text-[13px]"
-              style={{ borderColor: "var(--color-border-strong)" }}
-            >
-              {["low", "normal", "high", "urgent"].map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field
-            label="Due date"
-            type="date"
-            value={draft.dueDate ?? ""}
-            onChange={(value) => setDraft({ ...draft, dueDate: value })}
+          <Combobox
+            label="Analyst"
+            options={analystOptions}
+            value={draft.assignedAnalystEmail}
+            onChange={(value) => setDraft({ ...draft, assignedAnalystEmail: value })}
+            placeholder={analysts.isLoading ? "Loading…" : "Select analyst…"}
+            disabled={analysts.isLoading}
+            required
           />
+          <Combobox
+            label="Sector (optional)"
+            options={sectorOptions}
+            value={draft.sector ?? ""}
+            onChange={(value) => setDraft({ ...draft, sector: value })}
+            placeholder="Search sector…"
+          />
+          <div />
           <label className="col-span-2">
             <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              Note
+              Comments
             </span>
             <textarea
               value={draft.note ?? ""}
@@ -445,32 +389,3 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  required?: boolean;
-}) {
-  return (
-    <label>
-      <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-        {label}
-      </span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        className="h-10 w-full rounded-md border px-3 text-[13px]"
-        style={{ borderColor: "var(--color-border-strong)" }}
-      />
-    </label>
-  );
-}
