@@ -964,22 +964,6 @@ function StreamingAiBubble({
         {answer ? (
           <div className="min-w-0 overflow-visible break-words">
             <MarkdownContent markdown={answer} renderCitation={() => null} />
-            {claimSourceGroups.length > 0 && (
-              <GroupedSourcePills
-                groups={claimSourceGroups}
-                citations={citations}
-                projectId={projectId}
-                onPreviewSource={onPreviewSource}
-              />
-            )}
-            {/* Citations list at bottom — ChatGPT style */}
-            {message.done && citations.length > 0 && (
-              <SourcesList
-                citations={citations}
-                projectId={projectId}
-                onPreviewSource={onPreviewSource}
-              />
-            )}
           </div>
         ) : (
           <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
@@ -995,12 +979,66 @@ function StreamingAiBubble({
             {warnings.join(" · ")}
           </div>
         )}
+
+        {message.done && (citations.length > 0 || claimSourceGroups.length > 0) && (
+          <CitationFooter
+            citations={citations}
+            claimSourceGroups={claimSourceGroups}
+            projectId={projectId}
+            onPreviewSource={onPreviewSource}
+          />
+        )}
       </div>
     </AiBubble>
   );
 }
 
-// ─── Sources — ChatGPT pill with clickable stacked bubbles ──────────────────
+// ─── Bottom Citations ────────────────────────────────────────────────────────
+
+function CitationFooter({
+  citations,
+  claimSourceGroups,
+  projectId,
+  onPreviewSource,
+}: {
+  citations: Array<Record<string, unknown>>;
+  claimSourceGroups: AskAiClaimSourceGroup[];
+  projectId: string | null;
+  onPreviewSource: (source: DiagnosisSourcePreview) => void;
+}) {
+  return (
+    <section
+      className="mt-3 min-w-0 space-y-2 rounded-xl border bg-[#FAFBFF] p-2.5"
+      style={{ borderColor: "var(--color-border-default)" }}
+      aria-label="Answer sources"
+    >
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+            Sources
+          </div>
+          <div className="truncate text-[12px] font-medium text-[var(--color-text-secondary)]">
+            Evidence used for this answer
+          </div>
+        </div>
+        {citations.length > 0 && (
+          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
+            {citations.length}
+          </span>
+        )}
+      </div>
+      {claimSourceGroups.length > 0 && (
+        <GroupedSourcePills
+          groups={claimSourceGroups}
+          citations={citations}
+          projectId={projectId}
+          onPreviewSource={onPreviewSource}
+        />
+      )}
+      <SourcesList citations={citations} projectId={projectId} onPreviewSource={onPreviewSource} />
+    </section>
+  );
+}
 
 function SourcesList({
   citations,
@@ -1013,103 +1051,56 @@ function SourcesList({
 }) {
   if (citations.length === 0) return null;
 
-  const visible = citations.slice(0, 5);
-  const overflow = citations.length - visible.length;
-
   return (
-    <div className="mt-3">
-      <div
-        className="inline-flex items-center gap-2.5 rounded-2xl border px-3 py-2"
-        style={{
-          background: "var(--color-tag-bg)",
-          borderColor: "var(--color-border-default)",
-        }}
-      >
-        {/* Stacked clickable bubbles */}
-        <div className="flex items-center">
-          {visible.map((citation, i) => (
-            <SourceBubble
-              key={String(citation.index ?? i)}
-              citation={citation}
-              stackIndex={i}
-              totalVisible={visible.length}
-              projectId={projectId}
-              onPreviewSource={onPreviewSource}
-            />
-          ))}
-          {overflow > 0 && (
-            <div
-              className="relative flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold"
-              style={{
-                marginLeft: "-7px",
-                zIndex: 0,
-                background: "var(--color-page)",
-                borderColor: "var(--color-page)",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              +{overflow}
-            </div>
-          )}
-        </div>
-
-        <span
-          className="text-[12px] font-medium"
-          style={{ color: "var(--color-text-secondary)" }}
-        >
-          {citations.length} source{citations.length === 1 ? "" : "s"}
-        </span>
-      </div>
+    <div className="grid min-w-0 gap-2">
+      {citations.map((citation, i) => (
+        <SourceCard
+          key={String(citation.index ?? i)}
+          citation={citation}
+          projectId={projectId}
+          onPreviewSource={onPreviewSource}
+        />
+      ))}
     </div>
   );
 }
 
-function SourceBubble({
+function SourceCard({
   citation,
-  stackIndex,
-  totalVisible,
   projectId,
   onPreviewSource,
 }: {
   citation: Record<string, unknown>;
-  stackIndex: number;
-  totalVisible: number;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
 }) {
   const preview = getAskAiCitationPreview(citation);
   const title = getAskAiCitationTitle(citation);
   const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
-
-  const kind = String(citation.kind ?? "");
-  const label =
-    kind === "model"
-      ? "M"
-      : kind === "uploaded_pdf"
-        ? "P"
-        : String(citation.sourceName ?? "W").charAt(0).toUpperCase();
-
-  const bg =
-    kind === "model"
-      ? "var(--color-brand)"
-      : kind === "uploaded_pdf"
-        ? "var(--color-danger)"
-        : "var(--color-brand)";
-
-  const bubble = (
-    <div
-      className="flex h-6 w-6 items-center justify-center rounded-full border-2 text-[9px] font-bold text-white"
-      style={{
-        background: bg,
-        borderColor: "var(--color-tag-bg)",
-        marginLeft: stackIndex > 0 ? "-7px" : "0",
-        position: "relative",
-        zIndex: totalVisible - stackIndex,
-      }}
-    >
-      {label}
-    </div>
+  const meta = citationMeta(citation);
+  const badge = (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[10px] font-bold text-white">
+      {String(citation.index ?? "") || "S"}
+    </span>
   );
+  const body = (
+    <>
+      {badge}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] font-semibold text-[var(--color-text-primary)]">
+          {title}
+        </span>
+        {meta && <span className="block truncate text-[10px] text-[var(--color-text-muted)]">{meta}</span>}
+        {excerpt && (
+          <span className="mt-1 block line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+            {excerpt}
+          </span>
+        )}
+      </span>
+    </>
+  );
+  const className =
+    "flex min-w-0 items-start gap-2 rounded-lg border bg-white px-2.5 py-2 text-left transition hover:border-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]";
 
   if (preview?.type === "external_url") {
     return (
@@ -1118,10 +1109,12 @@ function SourceBubble({
           href={preview.url}
           target="_blank"
           rel="noreferrer"
-          className="cursor-pointer transition hover:opacity-80"
+          className={className}
+          style={{ borderColor: "var(--color-border-default)" }}
           aria-label={title}
         >
-          {bubble}
+          {body}
+          <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
         </a>
       </IconTooltip>
     );
@@ -1135,10 +1128,12 @@ function SourceBubble({
           onClick={() =>
             onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))
           }
-          className="cursor-pointer transition hover:opacity-80"
+          className={className}
+          style={{ borderColor: "var(--color-border-default)" }}
           aria-label={title}
         >
-          {bubble}
+          {body}
+          <FileSearch className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
         </button>
       </IconTooltip>
     );
@@ -1146,13 +1141,25 @@ function SourceBubble({
 
   return (
     <IconTooltip label={title}>
-      <div>{bubble}</div>
+      <div className={className} style={{ borderColor: "var(--color-border-default)" }}>
+        {body}
+      </div>
     </IconTooltip>
   );
 }
 
 
 function citationSubline(citation: Record<string, unknown>): string {
+  if (citation.kind === "diagnosis_workbook_cell") {
+    return [
+      citation.sheetName,
+      citation.cellReference,
+      citation.rowNumber ? `row ${String(citation.rowNumber)}` : undefined,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(" · ");
+  }
   if (citation.kind === "uploaded_pdf") {
     const page = citation.pageNumber ?? citation.page ?? citation.pdfPageIndex;
     return page ? `p. ${String(page)}` : String(citation.filename ?? "");
@@ -1553,6 +1560,20 @@ function latestSourceMessageCount(activity: StreamActivityEvent[], message: stri
 }
 
 function citationMeta(citation: Record<string, unknown>): string {
+  if (citation.kind === "diagnosis_workbook_cell") {
+    const value = citation.currentValue ?? citation.value;
+    return [
+      citation.sheetName,
+      citation.cellReference,
+      citation.rowNumber ? `row ${String(citation.rowNumber)}` : undefined,
+      citation.period,
+      value !== undefined && value !== null && value !== "" ? `value ${String(value)}` : undefined,
+      citation.formula ? `formula ${String(citation.formula)}` : undefined,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(" · ");
+  }
   if (citation.kind === "uploaded_pdf") {
     const page = citation.pageNumber ?? citation.page ?? citation.pdfPageIndex;
     return [citation.filename, page ? `page ${String(page)}` : undefined]

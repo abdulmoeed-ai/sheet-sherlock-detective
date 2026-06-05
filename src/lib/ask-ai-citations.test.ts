@@ -17,6 +17,16 @@ describe("getAskAiCitationTitle", () => {
     ).toBe("Assumptions B12");
   });
 
+  it("titles diagnosis workbook citations from label and cell", () => {
+    expect(
+      getAskAiCitationTitle({
+        kind: "diagnosis_workbook_cell",
+        label: "Total assets",
+        cellReference: "BS1!D18",
+      }),
+    ).toBe("Total assets BS1!D18");
+  });
+
   it("titles uploaded PDF citations from filename", () => {
     expect(getAskAiCitationTitle({ kind: "uploaded_pdf", filename: "annual-report.pdf" })).toBe(
       "annual-report.pdf",
@@ -62,6 +72,23 @@ describe("Ask AI citation pills", () => {
         currentValue: "52108997",
       }),
     ).toContain("Model cell: PL1 - Revenue PL1!F5");
+  });
+
+  it("explains diagnosis workbook citations with exact row cell and value", () => {
+    const detail = getAskAiCitationDetail({
+      kind: "diagnosis_workbook_cell",
+      sheetName: "Balance Sheet",
+      cellReference: "BS1!D18",
+      rowNumber: 18,
+      label: "Total assets",
+      period: "FY2025",
+      currentValue: "987654",
+      formula: "=D16+D17",
+    });
+
+    expect(detail).toContain("Workbook cell: Balance Sheet · BS1!D18 · row 18");
+    expect(detail).toContain("Value: 987654");
+    expect(detail).toContain("Formula: =D16+D17");
   });
 
   it("exposes uploaded PDF citations as previewable document pages", () => {
