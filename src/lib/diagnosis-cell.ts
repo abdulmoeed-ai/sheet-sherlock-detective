@@ -292,6 +292,14 @@ export function orderedHistoryEntries<T extends Record<string, unknown>>(entries
   });
 }
 
+export function canRevertReviewHistoryEntry(entry: Record<string, unknown>): boolean {
+  const id = typeof entry.id === "string" ? entry.id : "";
+  if (!id || id.endsWith("-source") || id.includes("-optimistic-")) return false;
+
+  const action = String(entry.action ?? "").toLowerCase();
+  return action !== "source" && action !== "revert";
+}
+
 export function shouldCommitCellDraftOnKey({
   key,
   draftValue,

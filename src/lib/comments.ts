@@ -6,6 +6,10 @@ export type CommentTarget = {
   sheetName?: string | null;
   templateCell?: string | null;
 };
+export type CellCommentIndicator = {
+  count: number;
+  displayCount: string;
+};
 export type MentionQuery = { start: number; end: number; query: string };
 export type CellSelection = { sheetId: string; row: number; col: number };
 export type MentionUser = Pick<TeamMember, "name" | "email"> & Partial<TeamMember>;
@@ -87,13 +91,26 @@ export function commentsForSheet(
     .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
 }
 
-export function buildCellCommentIndicators(comments: ReviewCommentResponse[]): Set<string> {
-  return new Set(
-    comments
-      .filter((comment) => comment.status === "open" && comment.sheetName && comment.templateCell)
-      .map((comment) =>
-        commentTargetKey(comment.sheetName as string, comment.templateCell as string),
-      ),
+export function buildCellCommentIndicators(
+  comments: ReviewCommentResponse[],
+  options: { fieldIdCellKeys?: Map<string, string> } = {},
+): Map<string, CellCommentIndicator> {
+  const counts = new Map<string, number>();
+  for (const comment of comments) {
+    const key =
+      comment.sheetName && comment.templateCell
+        ? commentTargetKey(comment.sheetName, comment.templateCell)
+        : comment.fieldId
+          ? options.fieldIdCellKeys?.get(comment.fieldId)
+          : null;
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Map(
+    [...counts.entries()].map(([key, count]) => [
+      key,
+      { count, displayCount: formatCommentIndicatorCount(count) },
+    ]),
   );
 }
 
@@ -156,6 +173,10 @@ function columnIndex(label: string): number {
 
 function timestamp(value: string | null | undefined): number {
   return value ? new Date(value).getTime() : 0;
+}
+
+function formatCommentIndicatorCount(count: number) {
+  return count > 99 ? "99+" : String(count);
 }
 
 function compact(value: string): string {

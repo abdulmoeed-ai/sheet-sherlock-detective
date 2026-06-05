@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildExportWarningSummary,
+  canRevertReviewHistoryEntry,
   diagnosisCellTone,
   formatLlmReview,
   formatTermStandardization,
@@ -70,6 +71,14 @@ describe("diagnosis cell helpers", () => {
   it("extracts a revertable value from history entries", () => {
     expect(historyValue({ value: "10", newValue: "11" })).toBe("10");
     expect(historyValue({ newValue: "11" })).toBe("11");
+  });
+
+  it("only allows persisted review history revisions to be reverted", () => {
+    expect(canRevertReviewHistoryEntry({ id: "revision-1", action: "edit" })).toBe(true);
+    expect(canRevertReviewHistoryEntry({ id: "field-1-optimistic-1780693774190", action: "edit" })).toBe(false);
+    expect(canRevertReviewHistoryEntry({ id: "field-1-source", action: "source" })).toBe(false);
+    expect(canRevertReviewHistoryEntry({ id: "revision-2", action: "revert" })).toBe(false);
+    expect(canRevertReviewHistoryEntry({ action: "edit" })).toBe(false);
   });
 
   it("formats workbook revision payloads for manual-cell history", () => {

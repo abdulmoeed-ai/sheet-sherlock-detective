@@ -21,6 +21,11 @@ export function diagnosisDraftSaveLabel(state: DiagnosisDraftSaveState) {
   return "No draft changes";
 }
 
+export function diagnosisExportUnsavedDraftWarning({ dirty }: { dirty: boolean }) {
+  if (!dirty) return "";
+  return "Save your draft before exporting. Unsaved values will not be included in the Excel export.";
+}
+
 export function workbookDraftSaveSnapshot<T>(draftSnapshot: T | null, serverWorkbook: T): T {
   return draftSnapshot ?? serverWorkbook;
 }

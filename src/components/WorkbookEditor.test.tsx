@@ -65,6 +65,7 @@ const workbook: WorkbookPayload = {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.doUnmock("@univerjs/presets");
   vi.doUnmock("@univerjs/preset-sheets-core");
   vi.doUnmock("@univerjs/preset-sheets-core/locales/en-US");
@@ -114,7 +115,9 @@ describe("WorkbookEditor bridge", () => {
 
     expect(prepared.formulaEvaluation).toBeUndefined();
     expect(prepared.unknownBackendField).toBeUndefined();
-    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe("field-a1");
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.diagnosis?.fieldId).toBe(
+      "field-a1",
+    );
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.f).toBe("=A1*2");
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.v).toBe(-2630470);
     expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["2"]?.v).toBeNull();
@@ -205,6 +208,199 @@ describe("WorkbookEditor bridge", () => {
     expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.FORCED);
   });
 
+  it("adds purple Univer markers to both top corners for cells with comment indicators", () => {
+    const prepared = prepareWorkbookForUniver(
+      workbook,
+      new Map([["Inputs!A1", { count: 2, displayCount: "2" }]]),
+    );
+
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["0"]?.markers).toMatchObject({
+      tr: {
+        color: "#7B68EE",
+        size: 8,
+      },
+      tl: {
+        color: "#7B68EE",
+        size: 8,
+      },
+    });
+    expect(prepared.sheets?.["sheet-1"]?.cellData?.["0"]?.["1"]?.markers).toBeUndefined();
+  });
+
+  it("debounces Univer selection move-end events before forwarding selected cells", async () => {
+    vi.resetModules();
+    let selectionMoveEnd: ((params: Record<string, unknown>) => void) | undefined;
+    const createWorkbook = vi.fn();
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing: vi.fn() }),
+          createWorkbook,
+          getActiveWorkbook: () => ({ setActiveSheet: vi.fn() }),
+          dispose: vi.fn(),
+          Event: { SelectionMoveEnd: "SelectionMoveEnd" },
+          addEvent: vi.fn((event, callback) => {
+            if (event === "SelectionMoveEnd") selectionMoveEnd = callback;
+          }),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: vi.fn((config: unknown) => ({ config })),
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+    const onSelect = vi.fn();
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        commitPending={false}
+        onSelect={onSelect}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+    vi.useFakeTimers();
+
+    selectionMoveEnd?.({
+      worksheet: { getSheetId: () => "sheet-1" },
+      selections: [{ startRow: 0, startColumn: 1, endRow: 0, endColumn: 1 }],
+    });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(99);
+    expect(onSelect).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onSelect).toHaveBeenCalledWith({ sheetId: "sheet-1", row: 0, col: 1 });
+  });
+
+  it("collapses rapid Univer selection movement to the latest selected cell", async () => {
+    vi.resetModules();
+    let selectionMoveEnd: ((params: Record<string, unknown>) => void) | undefined;
+    const createWorkbook = vi.fn();
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing: vi.fn() }),
+          createWorkbook,
+          getActiveWorkbook: () => ({ setActiveSheet: vi.fn() }),
+          dispose: vi.fn(),
+          Event: { SelectionMoveEnd: "SelectionMoveEnd" },
+          addEvent: vi.fn((event, callback) => {
+            if (event === "SelectionMoveEnd") selectionMoveEnd = callback;
+          }),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: vi.fn((config: unknown) => ({ config })),
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+    const onSelect = vi.fn();
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        commitPending={false}
+        onSelect={onSelect}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+    vi.useFakeTimers();
+
+    selectionMoveEnd?.({
+      worksheet: { getSheetId: () => "sheet-1" },
+      selections: [{ startRow: 0, startColumn: 1, endRow: 0, endColumn: 1 }],
+    });
+    vi.advanceTimersByTime(60);
+    selectionMoveEnd?.({
+      worksheet: { getSheetId: () => "sheet-1" },
+      selections: [{ startRow: 0, startColumn: 2, endRow: 0, endColumn: 2 }],
+    });
+    vi.advanceTimersByTime(100);
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith({ sheetId: "sheet-1", row: 0, col: 2 });
+  });
+
+  it("uses Univer selection-changed events as a keyboard selection fallback", async () => {
+    vi.resetModules();
+    let selectionChanged: ((params: Record<string, unknown>) => void) | undefined;
+    const createWorkbook = vi.fn();
+
+    vi.doMock("@univerjs/presets", () => ({
+      createUniver: () => ({
+        univerAPI: {
+          getFormula: () => ({ setInitialFormulaComputing: vi.fn() }),
+          createWorkbook,
+          getActiveWorkbook: () => ({ setActiveSheet: vi.fn() }),
+          dispose: vi.fn(),
+          Event: { SelectionChanged: "SelectionChanged" },
+          addEvent: vi.fn((event, callback) => {
+            if (event === "SelectionChanged") selectionChanged = callback;
+          }),
+        },
+      }),
+      LocaleType: { EN_US: "en-US" },
+      mergeLocales: (locale: unknown) => locale,
+    }));
+    vi.doMock("@univerjs/preset-sheets-core", () => ({
+      UniverSheetsCorePreset: vi.fn((config: unknown) => ({ config })),
+    }));
+    vi.doMock("@univerjs/preset-sheets-core/locales/en-US", () => ({
+      default: {},
+    }));
+
+    const { WorkbookEditor: MockedWorkbookEditor } = await import("./WorkbookEditor");
+    const onSelect = vi.fn();
+
+    render(
+      <MockedWorkbookEditor
+        workbook={workbook}
+        activeSheetId="sheet-1"
+        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
+        draftValue=""
+        commitPending={false}
+        onSelect={onSelect}
+        onCommitEdit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
+    vi.useFakeTimers();
+
+    selectionChanged?.({
+      worksheet: { getName: () => "Inputs" },
+      selections: [{ startRow: 0, startColumn: 1, endRow: 0, endColumn: 1 }],
+    });
+    vi.advanceTimersByTime(100);
+
+    expect(onSelect).toHaveBeenCalledWith({ sheetId: "sheet-1", row: 0, col: 1 });
+  });
+
   it("converts Univer edit-end events into review-cell save events for editable inputs only", () => {
     expect(
       workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, "300"),
@@ -234,14 +430,22 @@ describe("WorkbookEditor bridge", () => {
 
   it("extracts scalar values from Univer cell objects before saving", () => {
     expect(
-      workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, { v: -11 }),
+      workbookEditEventFromUniverEnd(
+        workbook,
+        { sheetId: "sheet-1", row: 0, column: 0 },
+        { v: -11 },
+      ),
     ).toMatchObject({
       fieldId: "field-a1",
       newValue: "-11",
     });
 
     expect(
-      workbookEditEventFromUniverEnd(workbook, { sheetId: "sheet-1", row: 0, column: 0 }, { v: "−11" }),
+      workbookEditEventFromUniverEnd(
+        workbook,
+        { sheetId: "sheet-1", row: 0, column: 0 },
+        { v: "−11" },
+      ),
     ).toMatchObject({
       fieldId: "field-a1",
       newValue: "−11",
@@ -501,22 +705,5 @@ describe("WorkbookEditor bridge", () => {
         newCell: expect.objectContaining({ f: "=A2+B2" }),
       }),
     );
-  });
-
-  it("marks cells that have open comments", async () => {
-    render(
-      <WorkbookEditor
-        workbook={workbook}
-        activeSheetId="sheet-1"
-        selected={{ sheetId: "sheet-1", row: 0, col: 0 }}
-        draftValue=""
-        commentIndicators={new Set(["Inputs!A1"])}
-        commitPending={false}
-        onSelect={vi.fn()}
-        onCommitEdit={vi.fn()}
-      />,
-    );
-
-    expect(await screen.findByLabelText("A1 has open comments")).toBeTruthy();
   });
 });
