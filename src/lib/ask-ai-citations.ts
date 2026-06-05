@@ -1,4 +1,9 @@
 export function getAskAiCitationTitle(citation: Record<string, unknown>): string {
+  if (citation.kind === "diagnosis_workbook_cell") {
+    const label = String(citation.label ?? "Workbook cell");
+    const ref = String(citation.cellReference ?? "").trim();
+    return ref ? `${label} ${ref}` : label;
+  }
   if (citation.kind === "model") {
     return `${String(citation.sheetName ?? "Model")} ${String(citation.cellReference ?? "")}`.trim();
   }
@@ -14,6 +19,28 @@ export function getAskAiCitationPillLabel(citation: Record<string, unknown>): st
 }
 
 export function getAskAiCitationDetail(citation: Record<string, unknown>): string {
+  if (citation.kind === "diagnosis_workbook_cell") {
+    const location = [
+      citation.sheetName,
+      citation.cellReference,
+      citation.rowNumber ? `row ${String(citation.rowNumber)}` : null,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(" · ");
+    const value = citation.currentValue ?? citation.value;
+    return [
+      `Workbook cell: ${location || "Current diagnosis workbook"}`,
+      citation.label ? `Label: ${String(citation.label)}` : null,
+      citation.period ? `Period: ${String(citation.period)}` : null,
+      value !== undefined && value !== null && value !== "" ? `Value: ${String(value)}` : null,
+      citation.formula ? `Formula: ${String(citation.formula)}` : null,
+      citation.filename ? `Source PDF: ${String(citation.filename)}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   if (citation.kind === "model") {
     const title = [citation.sheetName, citation.cellReference].filter(Boolean).map(String).join(" ");
     const value = citation.currentValue ?? citation.value;
