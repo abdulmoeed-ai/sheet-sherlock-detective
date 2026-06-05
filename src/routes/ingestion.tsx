@@ -32,6 +32,7 @@ import {
   Circle,
   CircleDashed,
   CloudUpload,
+  FileSpreadsheet,
   FileText,
   Loader2,
   Radio,
@@ -230,6 +231,9 @@ function Ingestion() {
       }),
     [uploadSummary, extractionProgress, visibleEvents, extractionPending, extractionError],
   );
+  const statusMessage =
+    extractionProgress?.message ??
+    (extractionPending ? "Extracting data from PDF…" : "Uploading documents…");
 
   const refreshExtractedProject = async (id: string) => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(id) });
@@ -255,6 +259,15 @@ function Ingestion() {
       hideProgress
     >
       <div className="pb-24">
+        {uploadPending && !showProgressWorkbench ? (
+          <div
+            className="mb-5 rounded-xl border bg-white p-6"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <ExcelProcessingPanel message={statusMessage} />
+          </div>
+        ) : null}
+
         {showUploadPanel ? (
           <div className="mb-5 rounded-lg border bg-white p-5" style={{ borderColor: "#D8DEE8" }}>
             <div
@@ -319,7 +332,7 @@ function Ingestion() {
                         {item.file.name}
                       </div>
                       <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                        {(item.file.size / (1024 * 1024)).toFixed(1)} MB · {uploadStatusLabel(item)}
+                        {(item.file.size / (1024 * 1024)).toFixed(1)} MB
                       </div>
                       {item.status === "failed" && item.message ? (
                         <div className="mt-1 text-[11px]" style={{ color: "var(--color-danger)" }}>
@@ -327,23 +340,16 @@ function Ingestion() {
                         </div>
                       ) : null}
                     </div>
-                    {item.status === "uploading" ? (
-                      <Loader2
-                        className="h-4 w-4 animate-spin"
-                        style={{ color: "var(--color-brand)" }}
-                      />
-                    ) : (
-                      <IconTooltip label="Remove PDF">
-                        <button
-                          onClick={() => removeSelectedFile(item.file)}
-                          disabled={uploadPending}
-                          className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
-                          aria-label="Remove PDF"
-                        >
-                          <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
-                        </button>
-                      </IconTooltip>
-                    )}
+                    <IconTooltip label="Remove PDF">
+                      <button
+                        onClick={() => removeSelectedFile(item.file)}
+                        disabled={uploadPending}
+                        className="rounded-md p-1.5 hover:bg-[var(--color-tag-bg)] disabled:opacity-50"
+                        aria-label="Remove PDF"
+                      >
+                        <Trash2 className="h-4 w-4" style={{ color: "var(--color-text-muted)" }} />
+                      </button>
+                    </IconTooltip>
                   </div>
                 ))}
                 <div className="flex flex-wrap items-center gap-2">
@@ -412,6 +418,7 @@ function Ingestion() {
       <StickyFooter
         fileCount={selectedUploads.length}
         uploadPending={uploadPending}
+        statusMessage={uploadPending ? statusMessage : uploadSummary.failed ? `Upload failed: ${uploadSummary.failed}` : ""}
         hasProject={!!projectId}
         onStart={startIngestion}
       />
@@ -423,11 +430,33 @@ function fileKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-function uploadStatusLabel(item: SelectedUpload) {
-  if (item.status === "uploaded") return "uploaded";
-  if (item.status === "uploading") return "uploading";
-  if (item.status === "failed") return "upload failed";
-  return "ready for upload";
+function ExcelProcessingPanel({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center py-10">
+      <div className="relative mb-5 flex h-24 w-24 items-center justify-center">
+        <div
+          className="absolute inset-0 animate-ping rounded-full opacity-20"
+          style={{ background: "#1d6f42" }}
+        />
+        <div
+          className="absolute inset-2 animate-pulse rounded-full opacity-25"
+          style={{ background: "#1d6f42" }}
+        />
+        <div className="relative rounded-2xl p-4 shadow-sm" style={{ background: "#e8f5e9" }}>
+          <FileSpreadsheet className="h-10 w-10" style={{ color: "#1d6f42" }} />
+        </div>
+      </div>
+      <div
+        className="text-[15px] font-semibold"
+        style={{ color: "var(--color-text-primary)" }}
+      >
+        {message}
+      </div>
+      <div className="mt-1 text-[13px]" style={{ color: "var(--color-text-muted)" }}>
+        This may take a moment…
+      </div>
+    </div>
+  );
 }
 
 function uploadProgressSummary(items: SelectedUpload[]) {
@@ -793,11 +822,13 @@ function RerunExtractionModal({
 function StickyFooter({
   fileCount,
   uploadPending,
+  statusMessage,
   hasProject,
   onStart,
 }: {
   fileCount: number;
   uploadPending: boolean;
+  statusMessage: string;
   hasProject: boolean;
   onStart: () => void;
 }) {
@@ -806,6 +837,23 @@ function StickyFooter({
       className="fixed bottom-0 left-[240px] right-0 z-20 flex min-h-16 items-center justify-end border-t bg-white px-8 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.06)]"
       style={{ borderColor: "var(--color-border-default)" }}
     >
+      {!hasProject ? (
+        <div className="flex-1 text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
+          Select or create a project before uploading reports.
+        </div>
+      ) : statusMessage ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
+          {uploadPending && (
+            <Loader2
+              className="h-3.5 w-3.5 shrink-0 animate-spin"
+              style={{ color: "var(--color-brand)" }}
+            />
+          )}
+          <span className="truncate" style={{ color: "var(--color-text-primary)" }}>
+            {statusMessage}
+          </span>
+        </div>
+      ) : null}
       <button
         onClick={onStart}
         disabled={!hasProject || !fileCount || uploadPending}
