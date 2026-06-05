@@ -1,16 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
+import { Combobox } from "@/components/Combobox";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { Pencil } from "lucide-react";
 import { IconTooltip } from "@/components/IconTooltip";
 import { useSelectedProjectId } from "@/lib/project-store";
+import { usePsxCompanies } from "@/hooks/use-users";
 
 export const Route = createFileRoute("/forecast")({
   head: () => ({
     meta: [
-      { title: "5-Year Forecast — F(AI)nance" },
-      { name: "description", content: "Scenario-based revenue forecasting with what-if macro sensitivity." },
+      { title: "5-Year Forecast" },
+      {
+        name: "description",
+        content: "Scenario-based revenue forecasting with what-if macro sensitivity.",
+      },
     ],
   }),
   component: Forecast,
@@ -27,6 +32,9 @@ function Forecast() {
   const navigate = useNavigate();
   const cycle = useCycle();
   const selectedProjectId = useSelectedProjectId();
+  const psxCompanies = usePsxCompanies();
+  const [selectedSector, setSelectedSector] = useState("");
+  const [selectedSymbol, setSelectedSymbol] = useState("");
   const [scenario, setScenario] = useState<"Base" | "Bull" | "Bear">("Base");
   const [kibor, setKibor] = useState(18.5);
   const [cpi, setCpi] = useState(11.2);
@@ -48,10 +56,41 @@ function Forecast() {
     return out as Record<"Base" | "Bull" | "Bear", number[]>;
   }, [adj]);
 
-  const diagnosisReady = cycle.status === "review" || cycle.status === "approved" || cycle.status === "forecast" || cycle.status === "assumptions";
+  const diagnosisReady =
+    cycle.status === "review" ||
+    cycle.status === "approved" ||
+    cycle.status === "forecast" ||
+    cycle.status === "assumptions";
+  const sectorOptions = useMemo(() => {
+    const sectors = [...new Set((psxCompanies.data ?? []).map((company) => company.sector))]
+      .filter(Boolean)
+      .sort();
+    return sectors.map((sector) => ({ value: sector, label: sector }));
+  }, [psxCompanies.data]);
+
+  const companyOptions = useMemo(() => {
+    return (psxCompanies.data ?? [])
+      .filter((company) => !selectedSector || company.sector === selectedSector)
+      .map((company) => ({ value: company.symbol, label: `${company.name} (${company.symbol})` }));
+  }, [psxCompanies.data, selectedSector]);
+
+  const selectedCompany = useMemo(
+    () => psxCompanies.data?.find((company) => company.symbol === selectedSymbol),
+    [psxCompanies.data, selectedSymbol],
+  );
+
+  const handleSectorChange = (sector: string) => {
+    setSelectedSector(sector);
+    setSelectedSymbol("");
+  };
+
+  const canShowForecastData = Boolean(selectedSector && selectedCompany);
 
   return (
-    <PageShell title={`5-Year Forecast — ${cycle.sector} · ${cycle.company}`} subtitle="Scenario-based revenue projection driven by PSX historicals + ADB macro">
+    <PageShell
+      title="5-Year Forecast"
+      subtitle="Scenario-based revenue projection driven by PSX historicals + ADB macro"
+    >
       <div className="pb-24">
         {/* Diagnosis lock status banner */}
         <div
@@ -71,15 +110,21 @@ function Forecast() {
               </span>
             </div>
             <div>
-              <div className="text-[13px] font-semibold" style={{ color: diagnosisReady ? "#15803D" : "#B45309" }}>
+              <div
+                className="text-[13px] font-semibold"
+                style={{ color: diagnosisReady ? "#15803D" : "#B45309" }}
+              >
                 {diagnosisReady
                   ? "Diagnosis locked — forecast is using finalized figures"
-                  : "Diagnosis not yet marked ready for CEO review"}
+                  : "Diagnosis not yet marked ready for Manager's review."}
               </div>
-              <div className="text-[12px]" style={{ color: diagnosisReady ? "#15803D" : "#92400E", opacity: 0.85 }}>
+              <div
+                className="text-[12px]"
+                style={{ color: diagnosisReady ? "#15803D" : "#92400E", opacity: 0.85 }}
+              >
                 {diagnosisReady
                   ? "Balance Sheet, P&L and Cash Flow values are frozen as the baseline for projections."
-                  : "Underlying figures may still change. Lock the diagnosis to freeze the forecast baseline."}
+                  : "Underlying figures may still change. Save the diagnosis to freeze the forecast baseline."}
               </div>
             </div>
           </div>
@@ -101,145 +146,284 @@ function Forecast() {
           )}
         </div>
 
-        {/* Top — scenario + chart */}
-        <div className="rounded-xl border bg-white p-6" style={{ borderColor: "var(--color-border-default)" }}>
-          <div className="flex items-center justify-between">
-            <div className="text-[14px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              {cycle.company} · Revenue Forecast FY2026–FY2030
-            </div>
-            <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: "var(--color-border-default)" }}>
-              {(["Base", "Bull", "Bear"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setScenario(s)}
-                  className="h-7 rounded-full px-4 text-[12px] font-semibold"
-                  style={
-                    scenario === s
-                      ? { background: "var(--color-brand)", color: "#fff" }
-                      : { background: "transparent", color: "var(--color-text-secondary)" }
-                  }
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <ForecastSvg series={series} active={scenario} />
-          </div>
-
-          {/* What-if macro assumptions */}
-          <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--color-border-default)" }}>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-              What-if macro assumptions
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <MacroInput label="KIBOR" value={kibor} baseline={18.5} step={0.1} unit="%" onChange={setKibor} />
-              <MacroInput label="CPI (YoY)" value={cpi} baseline={11.2} step={0.1} unit="%" onChange={setCpi} />
-              <MacroInput label="PKR/USD" value={fx} baseline={287} step={1} unit="" onChange={setFx} />
-            </div>
+        <div
+          className="mb-5 rounded-xl border bg-white p-5"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Combobox
+              label="Sector"
+              options={sectorOptions}
+              value={selectedSector}
+              onChange={handleSectorChange}
+              placeholder={psxCompanies.isLoading ? "Loading…" : "Select sector…"}
+              disabled={psxCompanies.isLoading}
+            />
+            <Combobox
+              label="Company"
+              options={companyOptions}
+              value={selectedSymbol}
+              onChange={setSelectedSymbol}
+              placeholder={!selectedSector ? "Select sector first…" : "Select company…"}
+              disabled={psxCompanies.isLoading || !selectedSector}
+            />
           </div>
         </div>
 
-        {/* Bottom — two cards */}
-        <div className="mt-5 grid grid-cols-2 gap-4">
-          <div className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "var(--color-border-default)" }}>
-            <div className="border-b px-5 py-3 text-[13px] font-semibold" style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}>
-              Scenario summary
-            </div>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-[11px] uppercase" style={{ background: "var(--color-table-header)", color: "var(--color-text-muted)" }}>
-                  <th className="px-4 py-2">Scenario</th>
-                  <th className="px-4 py-2 text-right">FY2030 Revenue</th>
-                  <th className="px-4 py-2 text-right">CAGR</th>
-                  <th className="px-4 py-2 text-right">EBITDA Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { s: "Base", v: series.Base[5], cagr: 11.2, m: 24.8, bg: "#fff", fg: "var(--color-text-primary)" },
-                  { s: "Bull", v: series.Bull[5], cagr: 13.7, m: 27.3, bg: "#F0FDF4", fg: "var(--color-success-fg)" },
-                  { s: "Bear", v: series.Bear[5], cagr: 7.8,  m: 20.1, bg: "#FEF2F2", fg: "var(--color-danger-fg)" },
-                ].map((r) => (
-                  <tr key={r.s} style={{ background: r.bg, color: r.fg, borderTop: "1px solid var(--color-border-default)" }}>
-                    <td className="px-4 py-2.5 font-semibold">{r.s}</td>
-                    <td className="px-4 py-2.5 text-right tnum">PKR {r.v.toFixed(1)}B</td>
-                    <td className="px-4 py-2.5 text-right tnum">{r.cagr.toFixed(1)}%</td>
-                    <td className="px-4 py-2.5 text-right tnum">{r.m.toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {!canShowForecastData && (
+          <div
+            className="rounded-xl border border-dashed bg-white px-5 py-8 text-center text-[13px]"
+            style={{
+              borderColor: "var(--color-border-default)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Select a sector and company to view forecasting graphs and scenario data.
           </div>
+        )}
 
-          <div className="rounded-xl border bg-white p-5" style={{ borderColor: "var(--color-border-default)" }}>
-            <div className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              Key assumptions
-            </div>
-            <div className="mt-3 space-y-2">
-              {[
-                ["PAMA", "Tractor unit sales CAGR", "+5.6%/yr"],
-                ["SBP", "KIBOR", `${kibor.toFixed(1)}%`],
-                ["ADB", "CPI (Pakistan)", `${cpi.toFixed(1)}%`],
-              ].map(([src, k, v]) => (
-                <div key={k} className="flex items-center gap-2.5">
-                  <span
-                    className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                    style={{ background: "var(--color-tag-bg)", color: "var(--color-accent-sparkle)" }}
-                  >
-                    {src}
-                  </span>
-                  <span className="flex-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
-                    {k}
-                  </span>
-                  <span className="text-[13px] font-semibold tnum" style={{ color: "var(--color-text-primary)" }}>
-                    {v}
-                  </span>
-                  <Pencil className="h-3 w-3" style={{ color: "var(--color-text-muted)" }} />
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {[
-                "±1K tractor units = ±PKR 0.9B revenue impact",
-                "KIBOR at 22%+ compresses margin ~180bps",
-              ].map((r) => (
+        {canShowForecastData && (
+          <>
+            {/* Top — scenario + chart */}
+            <div
+              className="rounded-xl border bg-white p-6"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              <div className="flex items-center justify-between">
                 <div
-                  key={r}
-                  className="flex items-start gap-2 rounded-r-md px-3 py-2 text-[12px]"
+                  className="text-[14px] font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {selectedCompany.name} · Revenue Forecast FY2026–FY2030
+                </div>
+                <div
+                  className="inline-flex rounded-full border p-0.5"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  {(["Base", "Bull", "Bear"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setScenario(s)}
+                      className="h-7 rounded-full px-4 text-[12px] font-semibold"
+                      style={
+                        scenario === s
+                          ? { background: "var(--color-brand)", color: "#fff" }
+                          : { background: "transparent", color: "var(--color-text-secondary)" }
+                      }
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <ForecastSvg series={series} active={scenario} />
+              </div>
+
+              {/* What-if macro assumptions */}
+              <div
+                className="mt-5 border-t pt-4"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div
+                  className="mb-2 text-[11px] font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  What-if macro assumptions
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <MacroInput
+                    label="KIBOR"
+                    value={kibor}
+                    baseline={18.5}
+                    step={0.1}
+                    unit="%"
+                    onChange={setKibor}
+                  />
+                  <MacroInput
+                    label="CPI (YoY)"
+                    value={cpi}
+                    baseline={11.2}
+                    step={0.1}
+                    unit="%"
+                    onChange={setCpi}
+                  />
+                  <MacroInput
+                    label="PKR/USD"
+                    value={fx}
+                    baseline={287}
+                    step={1}
+                    unit=""
+                    onChange={setFx}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom — two cards */}
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <div
+                className="overflow-hidden rounded-xl border bg-white"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div
+                  className="border-b px-5 py-3 text-[13px] font-semibold"
                   style={{
-                    background: "var(--color-warning-bg)",
-                    borderLeft: "3px solid var(--color-warning)",
-                    color: "var(--color-warning-fg)",
+                    borderColor: "var(--color-border-default)",
+                    color: "var(--color-text-primary)",
                   }}
                 >
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full" style={{ background: "var(--color-warning)" }} />
-                  <span>{r}</span>
+                  Scenario summary
                 </div>
-              ))}
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr
+                      className="text-left text-[11px] uppercase"
+                      style={{
+                        background: "var(--color-table-header)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
+                      <th className="px-4 py-2">Scenario</th>
+                      <th className="px-4 py-2 text-right">FY2030 Revenue</th>
+                      <th className="px-4 py-2 text-right">CAGR</th>
+                      <th className="px-4 py-2 text-right">EBITDA Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      {
+                        s: "Base",
+                        v: series.Base[5],
+                        cagr: 11.2,
+                        m: 24.8,
+                        bg: "#fff",
+                        fg: "var(--color-text-primary)",
+                      },
+                      {
+                        s: "Bull",
+                        v: series.Bull[5],
+                        cagr: 13.7,
+                        m: 27.3,
+                        bg: "#F0FDF4",
+                        fg: "var(--color-success-fg)",
+                      },
+                      {
+                        s: "Bear",
+                        v: series.Bear[5],
+                        cagr: 7.8,
+                        m: 20.1,
+                        bg: "#FEF2F2",
+                        fg: "var(--color-danger-fg)",
+                      },
+                    ].map((r) => (
+                      <tr
+                        key={r.s}
+                        style={{
+                          background: r.bg,
+                          color: r.fg,
+                          borderTop: "1px solid var(--color-border-default)",
+                        }}
+                      >
+                        <td className="px-4 py-2.5 font-semibold">{r.s}</td>
+                        <td className="px-4 py-2.5 text-right tnum">PKR {r.v.toFixed(1)}B</td>
+                        <td className="px-4 py-2.5 text-right tnum">{r.cagr.toFixed(1)}%</td>
+                        <td className="px-4 py-2.5 text-right tnum">{r.m.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                className="rounded-xl border bg-white p-5"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div
+                  className="text-[13px] font-semibold"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Key assumptions
+                </div>
+                <div className="mt-3 space-y-2">
+                  {[
+                    ["PAMA", "Tractor unit sales CAGR", "+5.6%/yr"],
+                    ["SBP", "KIBOR", `${kibor.toFixed(1)}%`],
+                    ["ADB", "CPI (Pakistan)", `${cpi.toFixed(1)}%`],
+                  ].map(([src, k, v]) => (
+                    <div key={k} className="flex items-center gap-2.5">
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          background: "var(--color-tag-bg)",
+                          color: "var(--color-accent-sparkle)",
+                        }}
+                      >
+                        {src}
+                      </span>
+                      <span
+                        className="flex-1 text-[12px]"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        {k}
+                      </span>
+                      <span
+                        className="text-[13px] font-semibold tnum"
+                        style={{ color: "var(--color-text-primary)" }}
+                      >
+                        {v}
+                      </span>
+                      <Pencil className="h-3 w-3" style={{ color: "var(--color-text-muted)" }} />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {[
+                    "±1K tractor units = ±PKR 0.9B revenue impact",
+                    "KIBOR at 22%+ compresses margin ~180bps",
+                  ].map((r) => (
+                    <div
+                      key={r}
+                      className="flex items-start gap-2 rounded-r-md px-3 py-2 text-[12px]"
+                      style={{
+                        background: "var(--color-warning-bg)",
+                        borderLeft: "3px solid var(--color-warning)",
+                        color: "var(--color-warning-fg)",
+                      }}
+                    >
+                      <span
+                        className="mt-1 h-1.5 w-1.5 rounded-full"
+                        style={{ background: "var(--color-warning)" }}
+                      />
+                      <span>{r}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
-      <div
-        className="fixed bottom-0 left-[240px] right-0 z-20 flex h-16 items-center justify-end border-t bg-white px-8"
-        style={{ borderColor: "var(--color-border-default)" }}
-      >
-        <button
-          onClick={() => {
-            cycleStore.setStatus("assumptions");
-            navigate({ to: "/assumptions" });
-          }}
-          className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white"
-          style={{ background: "var(--color-brand)" }}
+      {canShowForecastData && (
+        <div
+          className="fixed bottom-0 left-[240px] right-0 z-20 flex h-16 items-center justify-end border-t bg-white px-8"
+          style={{ borderColor: "var(--color-border-default)" }}
         >
-          Review assumptions →
-        </button>
-      </div>
+          <button
+            onClick={() => {
+              cycleStore.setStatus("assumptions");
+              navigate({ to: "/assumptions" });
+            }}
+            className="h-10 rounded-lg px-5 text-[13px] font-semibold text-white"
+            style={{ background: "var(--color-brand)" }}
+          >
+            Review assumptions →
+          </button>
+        </div>
+      )}
     </PageShell>
   );
 }
@@ -282,7 +466,10 @@ function MacroInput({
       style={{ borderColor: changed ? "var(--color-brand)" : "var(--color-border-default)" }}
     >
       <div className="flex-1">
-        <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+        <div
+          className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           {label}
           {changed && (
             <span
@@ -319,12 +506,24 @@ function MacroInput({
             style={{ color: "var(--color-text-primary)" }}
           >
             {value.toFixed(step < 1 ? 1 : 0)}
-            {unit && <span className="ml-0.5 text-[13px] font-normal" style={{ color: "var(--color-text-muted)" }}>{unit}</span>}
+            {unit && (
+              <span
+                className="ml-0.5 text-[13px] font-normal"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {unit}
+              </span>
+            )}
           </button>
         )}
         {changed && (
-          <div className="text-[11px] tnum" style={{ color: diff > 0 ? "var(--color-success-fg)" : "var(--color-danger-fg)" }}>
-            {diff > 0 ? "+" : ""}{diff.toFixed(step < 1 ? 1 : 0)}{unit} vs baseline
+          <div
+            className="text-[11px] tnum"
+            style={{ color: diff > 0 ? "var(--color-success-fg)" : "var(--color-danger-fg)" }}
+          >
+            {diff > 0 ? "+" : ""}
+            {diff.toFixed(step < 1 ? 1 : 0)}
+            {unit} vs baseline
           </div>
         )}
       </div>
@@ -333,7 +532,10 @@ function MacroInput({
           <button
             onClick={() => nudge(1)}
             className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
-            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            style={{
+              borderColor: "var(--color-border-default)",
+              color: "var(--color-text-secondary)",
+            }}
             aria-label={`Increase ${label}`}
           >
             +
@@ -343,7 +545,10 @@ function MacroInput({
           <button
             onClick={() => nudge(-1)}
             className="flex h-6 w-6 items-center justify-center rounded border text-[12px] font-bold"
-            style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+            style={{
+              borderColor: "var(--color-border-default)",
+              color: "var(--color-text-secondary)",
+            }}
             aria-label={`Decrease ${label}`}
           >
             −
@@ -386,9 +591,15 @@ function ForecastSvg({
   const bandBot = xy(series.Base.map((v) => v * 0.85));
   const bandPath =
     `M ${bandTop[0][0]} ${bandTop[0][1]} ` +
-    bandTop.slice(1).map(([x, y]) => `L ${x} ${y}`).join(" ") +
+    bandTop
+      .slice(1)
+      .map(([x, y]) => `L ${x} ${y}`)
+      .join(" ") +
     " " +
-    bandBot.reverse().map(([x, y]) => `L ${x} ${y}`).join(" ") +
+    bandBot
+      .reverse()
+      .map(([x, y]) => `L ${x} ${y}`)
+      .join(" ") +
     " Z";
 
   const lineFor = (s: "Base" | "Bull" | "Bear") => {
@@ -413,14 +624,27 @@ function ForecastSvg({
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
       {[0.25, 0.5, 0.75].map((r) => (
-        <line key={r} x1={padL} y1={padT + r * (h - padT - padB)} x2={w - padR} y2={padT + r * (h - padT - padB)} stroke="#F3F4F6" />
+        <line
+          key={r}
+          x1={padL}
+          y1={padT + r * (h - padT - padB)}
+          x2={w - padR}
+          y2={padT + r * (h - padT - padB)}
+          stroke="#F3F4F6"
+        />
       ))}
       <path d={bandPath} fill="#F0FDF4" opacity={0.5} />
       {lineFor("Bear")}
       {lineFor("Bull")}
       {lineFor("Base")}
       <circle cx={activeLast[0]} cy={activeLast[1]} r={5} fill="#7B68EE" />
-      <text x={activeLast[0] + 8} y={activeLast[1] + 4} fontSize={12} fill="#7B68EE" fontWeight={700}>
+      <text
+        x={activeLast[0] + 8}
+        y={activeLast[1] + 4}
+        fontSize={12}
+        fill="#7B68EE"
+        fontWeight={700}
+      >
         PKR {series[active][5].toFixed(1)}B
       </text>
       {YEARS.map((y, i) => (
