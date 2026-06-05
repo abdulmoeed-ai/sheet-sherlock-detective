@@ -20,20 +20,21 @@ export function PageShell({ title, subtitle, actions, children, hideProgress }: 
           className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-white px-8"
           style={{ borderColor: "var(--color-border-default)" }}
         >
-          <div className="flex flex-col leading-tight">
+          <div className="flex items-center leading-tight">
             <ProductWordmark
-              className="text-[11px] tracking-wider text-[var(--color-text-muted)]"
+              prefix="f"
+              className="text-[22px] font-bold tracking-normal text-[var(--color-text-primary)]"
               aiClassName="text-[var(--color-brand)]"
             />
-            <span className="text-[14px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              {title}
-            </span>
           </div>
           <div className="flex items-center gap-2">{actions}</div>
         </header>
         <div className="px-8 py-7 pr-20">
           <div className="mb-6">
-            <h1 className="text-[22px] font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>
+            <h1
+              className="text-[22px] font-bold tracking-tight"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {title}
             </h1>
             {subtitle ? (

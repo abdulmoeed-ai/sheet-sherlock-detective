@@ -84,8 +84,8 @@ function Inbox() {
 
   return (
     <PageShell
-      title="Inbox · Teams Requests"
-      subtitle="Requests forwarded by your Finance Manager via Microsoft Teams. Accept, then begin or continue the cycle."
+      title="Inbox"
+      subtitle="Analysis requests for a company, or against a workbook can be found here"
       hideProgress
     >
       {visibleError ? (

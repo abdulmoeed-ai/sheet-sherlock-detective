@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   TrendingUp,
   ShieldCheck,
-  Sparkles,
   ChevronsLeft,
   ChevronsRight,
   Inbox,
@@ -12,7 +11,6 @@ import {
   KeyRound,
   ClipboardCheck,
   Lock,
-  Bell,
   ChevronDown,
   LogOut,
 } from "lucide-react";
@@ -48,12 +46,6 @@ const nav = [
   { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
   { to: "/sign-off", label: "CFO Sign-Off", icon: Lock, roles: ["cfo"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
-  {
-    to: "/notifications",
-    label: "Notifications",
-    icon: Bell,
-    roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
-  },
   {
     to: "/audit",
     label: "Audit Trail",
@@ -164,27 +156,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      {!collapsed && (
-        <div
-          className="mx-3 mb-4 rounded-lg p-3"
-          style={{
-            background: "var(--color-sidebar-active)",
-            border: "1px solid rgba(158,149,245,0.2)",
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" style={{ color: "var(--color-sidebar-icon)" }} />
-            <span className="text-[12px] font-semibold text-white">Ask AI</span>
-          </div>
-          <p
-            className="mt-1.5 text-[11px] leading-snug"
-            style={{ color: "var(--color-sidebar-text)" }}
-          >
-            Cell-level Q&amp;A with full source citation.
-          </p>
-        </div>
-      )}
 
       <IconTooltip
         label={collapsed ? "Expand sidebar" : "Collapse sidebar"}

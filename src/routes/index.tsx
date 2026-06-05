@@ -8,7 +8,11 @@ import { ApiError } from "@/lib/api/errors";
 import type { BackendRole } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useAnalysisRequests, useCreateAnalysisRequest, useAcknowledgeAnalysisRequest } from "@/hooks/use-analysis-requests";
+import {
+  useAnalysisRequests,
+  useCreateAnalysisRequest,
+  useAcknowledgeAnalysisRequest,
+} from "@/hooks/use-analysis-requests";
 import { useProjects } from "@/hooks/use-projects";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
@@ -37,7 +41,6 @@ const blankRequest: AnalysisRequestCreateInput = {
   note: "",
 };
 
-
 function Dashboard() {
   const { data: user } = useCurrentUser();
   const role = user?.role ?? "finance_analyst";
@@ -46,7 +49,7 @@ function Dashboard() {
     <PageShell
       title={`${roleLabel(role)} Dashboard`}
       subtitle="Live workspace entry point for your role."
-      hideProgress={role !== "finance_analyst"}
+      hideProgress
     >
       {role === "finance_manager" ? <ManagerDashboard /> : <ProjectDashboard role={role} />}
     </PageShell>
