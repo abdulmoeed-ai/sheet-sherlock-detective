@@ -475,11 +475,11 @@ function Diagnosis() {
         }}
       >
         <div className="col-span-2 flex items-center gap-3 overflow-x-auto border-b bg-white px-4">
-          <IconTooltip label="Back to Model Registry">
+          <IconTooltip label="Back to Workbooks">
             <button
               onClick={() => navigate({ to: "/registry" })}
               className="flex h-7 w-7 items-center justify-center rounded hover:bg-[#F7F8FA]"
-              aria-label="Back to Model Registry"
+              aria-label="Back to Workbooks"
             >
               <ArrowLeft className="h-4 w-4 text-[#818EA0]" />
             </button>

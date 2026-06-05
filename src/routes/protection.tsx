@@ -11,7 +11,7 @@ export const Route = createFileRoute("/protection")({
       {
         name: "description",
         content:
-          "Cell-level formula write-protection. Locked formulas, approver overrides and tamper audit for the model registry.",
+          "Cell-level formula write-protection. Locked formulas, approver overrides and tamper audit for workbooks.",
       },
     ],
   }),

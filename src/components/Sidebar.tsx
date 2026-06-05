@@ -40,7 +40,7 @@ const nav = [
   { to: "/inbox", label: "Inbox", icon: Inbox, roles: ["finance_analyst"] },
   {
     to: "/registry",
-    label: "Model Registry",
+    label: "Workbooks",
     icon: GitBranch,
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },

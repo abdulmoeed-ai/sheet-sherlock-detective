@@ -50,7 +50,7 @@ function Audit() {
       subtitle={
         projectId
           ? "Backend audit events and archive package."
-          : "Select a project from the registry to inspect audit events."
+          : "Select a workbook to inspect audit events."
       }
       actions={
         <Button variant="secondary" onClick={exportJson} disabled={!archive.data?.id}>

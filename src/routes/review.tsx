@@ -271,7 +271,7 @@ function Review() {
       {!projectId ? (
         <Card>
           <div className="text-[13px] text-[var(--color-text-secondary)]">
-            No project selected. Open the registry and choose a project to review.
+            No workbook selected. Open Workbooks and choose one to review.
           </div>
         </Card>
       ) : workspace.isLoading ? (

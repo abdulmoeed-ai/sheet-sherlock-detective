@@ -107,7 +107,7 @@ function SignOff() {
       subtitle={
         projectId
           ? "One-page executive brief. Sign-off is version-locked and recorded in the audit trail."
-          : "Select a project from the registry to review the latest executive brief."
+          : "Select a workbook to review the latest executive brief."
       }
       hideProgress
       actions={
@@ -454,7 +454,7 @@ function NoProjectState() {
         <div>
           <div className="text-[14px] font-semibold">No project selected</div>
           <div className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-            Select a project from the registry to load its CFO sign-off pack.
+            Select a workbook to load its CFO sign-off pack.
           </div>
         </div>
       </div>

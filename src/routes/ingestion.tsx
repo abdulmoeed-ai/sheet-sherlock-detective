@@ -77,7 +77,7 @@ function Ingestion() {
   const [extractionEvents, setExtractionEvents] = useState<ExtractionProgressEventResponse[]>([]);
   const [extractionError, setExtractionError] = useState<string | null>(null);
 
-  // Reset transient modal state when a new cycle starts from the registry.
+  // Reset transient modal state when a new cycle starts from Workbooks.
   useEffect(() => {
     setRerunModalOpen(false);
   }, [cycle.startedAt]);
