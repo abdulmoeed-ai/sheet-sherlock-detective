@@ -372,24 +372,42 @@ export function AskAiTrigger() {
   return (
     <>
       {!open && (
-        <button
-          onPointerDown={handleButtonPointerDown}
-          onPointerMove={handleButtonPointerMove}
-          onPointerUp={handleButtonPointerUp}
-          aria-label="Open Ask AI"
-          className="group fixed right-4 z-40 flex h-12 cursor-grab items-center gap-2 rounded-full border bg-white/95 px-3 shadow-[0_18px_45px_-22px_rgba(31,41,55,0.75)] backdrop-blur transition hover:border-[var(--color-brand)] hover:shadow-[0_20px_48px_-20px_rgba(123,104,238,0.55)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2 active:cursor-grabbing"
-          style={{
-            top: buttonY !== null ? `${buttonY}px` : "50%",
-            transform: "translateY(-50%)",
-            borderColor: "var(--color-border-default)",
-            touchAction: "none",
-          }}
-        >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-(--color-brand) text-white">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
-          <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">Ask AI</span>
-        </button>
+        <>
+          <style>{`
+            @keyframes askAiGlow {
+              0%, 100% { box-shadow: 0 4px 20px -2px rgba(123,104,238,0.45); }
+              50%       { box-shadow: 0 4px 36px 4px rgba(123,104,238,0.85); }
+            }
+            @keyframes askAiSpark {
+              0%, 100% { opacity: 1;   transform: scale(1);    }
+              50%       { opacity: 0.7; transform: scale(1.18); }
+            }
+            .ask-ai-tab          { animation: askAiGlow  2.8s ease-in-out infinite; }
+            .ask-ai-tab-icon     { animation: askAiSpark 2.8s ease-in-out infinite; }
+            .ask-ai-tab:hover    { animation: none; }
+          `}</style>
+          <button
+            onPointerDown={handleButtonPointerDown}
+            onPointerMove={handleButtonPointerMove}
+            onPointerUp={handleButtonPointerUp}
+            aria-label="Open Ask AI"
+            className="ask-ai-tab fixed right-0 z-40 flex cursor-grab flex-col items-center gap-2.5 rounded-l-2xl px-3 py-5 text-white transition-shadow active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
+            style={{
+              top: buttonY !== null ? `${buttonY}px` : "50%",
+              transform: "translateY(-50%)",
+              background: "var(--color-brand)",
+              touchAction: "none",
+            }}
+          >
+            <Sparkles className="ask-ai-tab-icon h-5 w-5" />
+            <span
+              className="text-[11px] font-bold tracking-widest"
+              style={{ writingMode: "vertical-rl" as const }}
+            >
+              Ask AI
+            </span>
+          </button>
+        </>
       )}
 
       {open && (
@@ -443,105 +461,84 @@ export function AskAiTrigger() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Header */}
           <div
-            className="flex min-h-16 items-center justify-between border-b bg-white/95 px-5 backdrop-blur"
+            className="flex min-h-[60px] shrink-0 items-center justify-between border-b bg-white/95 px-5 backdrop-blur"
             style={{ borderColor: "var(--color-border-default)" }}
           >
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-white shadow-[0_10px_24px_-14px_rgba(123,104,238,0.9)]">
-                <Bot className="h-4 w-4" />
+                <Sparkles className="h-4 w-4" />
               </span>
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-[15px] font-semibold text-[var(--color-text-primary)]">
-                    Ask Sherlock
-                  </span>
-                  {isDiagnosisRoute && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        borderColor: "rgba(123,104,238,0.3)",
-                        background: "rgba(123,104,238,0.08)",
-                        color: "var(--color-brand)",
-                      }}
-                    >
-                      <TableProperties className="h-2.5 w-2.5" />
-                      Diagnosis model
-                    </span>
-                  )}
-                  {!isDiagnosisRoute && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-success-fg)]"
-                      style={{
-                        borderColor: "var(--color-success-border)",
-                        background: "var(--color-success-bg)",
-                      }}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-                      Live
-                    </span>
-                  )}
+                <div className="text-[16px] font-bold text-[var(--color-text-primary)]">
+                  Ask Sherlock
                 </div>
                 <div className="truncate text-[11px] text-[var(--color-text-muted)]">
-                  {isDiagnosisRoute
-                    ? "Context set to open diagnosis workbook"
-                    : "Financial model Q&A with cited evidence"}
+                  {[
+                    workspace.data?.project.companyName ?? cycle.company,
+                    screenNameForPath(routePath),
+                    workspace.data?.project.fiscalYear ?? cycle.period,
+                  ].filter(Boolean).join(" · ")}
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {messages.length > 0 && (
                 <IconTooltip label="New chat">
                   <button
                     onClick={startNewChat}
-                    className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                    className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
                     aria-label="New chat"
                   >
-                    <Plus className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                    <Plus className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
                   </button>
                 </IconTooltip>
               )}
-              <IconTooltip label={showHistory ? "Back to chat" : "Past conversations"}>
-                <button
-                  onClick={() => setShowHistory((v) => !v)}
-                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-                  aria-label={showHistory ? "Back to chat" : "Past conversations"}
-                >
-                  <History
-                    className="h-[18px] w-[18px]"
-                    style={{
-                      color: showHistory ? "var(--color-brand)" : "var(--color-text-muted)",
-                    }}
-                  />
-                </button>
-              </IconTooltip>
               <IconTooltip label={expanded ? "Collapse chat" : "Expand chat"}>
                 <button
-                  onClick={() => setExpanded((value) => !value)}
-                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
                   aria-label={expanded ? "Collapse chat" : "Expand chat"}
                 >
                   {expanded ? (
-                    <Minimize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                    <Minimize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
                   ) : (
-                    <Maximize2 className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                    <Maximize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
                   )}
                 </button>
               </IconTooltip>
               <IconTooltip label="Close Ask AI">
                 <button
-                  onClick={() => {
-                    abortStream();
-                    saveCurrentChat();
-                    setOpen(false);
-                  }}
-                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                  onClick={() => { abortStream(); saveCurrentChat(); setOpen(false); }}
+                  className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
                   aria-label="Close Ask AI"
                 >
-                  <X className="h-[18px] w-[18px]" style={{ color: "var(--color-text-muted)" }} />
+                  <X className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
                 </button>
               </IconTooltip>
             </div>
           </div>
+
+          {/* Context chips row */}
+          {!showHistory && (
+            <div
+              className="flex shrink-0 flex-wrap gap-1.5 border-b px-4 py-2.5"
+              style={{ borderColor: "var(--color-border-default)", background: "var(--color-table-header)" }}
+            >
+              {context.split(" · ").filter(Boolean).map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                  style={{
+                    background: "var(--color-tag-bg)",
+                    color: "var(--color-brand)",
+                    border: "1px solid rgba(123,104,238,0.25)",
+                  }}
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Tab bar — non-expanded mode only */}
           {!expanded && (
@@ -555,7 +552,7 @@ export function AskAiTrigger() {
                   <button
                     key={tab}
                     onClick={() => setShowHistory(tab === "History")}
-                    className="flex-1 py-2.5 text-[13px] font-medium transition"
+                    className="flex-1 py-2 text-[13px] font-medium transition"
                     style={{
                       color: active ? "var(--color-brand)" : "var(--color-text-muted)",
                       borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
@@ -565,6 +562,18 @@ export function AskAiTrigger() {
                   </button>
                 );
               })}
+              {/* History toggle for expanded mode */}
+              {expanded && (
+                <IconTooltip label={showHistory ? "Close history" : "Show history"}>
+                  <button
+                    onClick={() => setShowHistory((v) => !v)}
+                    className="px-3 py-2 transition hover:bg-[var(--color-tag-bg)]"
+                    aria-label="Toggle history"
+                  >
+                    <History className="h-4 w-4" style={{ color: showHistory ? "var(--color-brand)" : "var(--color-text-muted)" }} />
+                  </button>
+                </IconTooltip>
+              )}
             </div>
           )}
 
@@ -574,56 +583,63 @@ export function AskAiTrigger() {
               <div className="shrink-0 px-3 pb-2 pt-3">
                 <button
                   onClick={startNewChat}
-                  className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
+                  className="flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
                   style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
                 >
                   <Plus className="h-4 w-4 text-[var(--color-brand)]" />
                   New chat
                 </button>
               </div>
+              <div
+                className="flex shrink-0 items-center gap-1.5 border-b px-4 py-2"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <Clock className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+                  Past Chats
+                </span>
+              </div>
               <HistoryChatList savedChats={savedChats} onLoadChat={loadChat} />
             </>
           ) : (
             <>
-              <div className="mx-4 mt-3 shrink-0">
-                <ContextSummary context={context} isDiagnosis={isDiagnosisRoute} />
-              </div>
-
               <div
                 ref={scrollRef}
-                className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4"
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
               >
                 {messages.length === 0 && (
-                  <div className={`mx-auto w-full space-y-2 ${expanded ? "max-w-[80%]" : ""}`}>
+                  <div className={`mx-auto w-full space-y-2.5 ${expanded ? "max-w-[80%]" : ""}`}>
+                    {/* Finance expert ready card */}
                     <div
-                      className="rounded-xl border bg-white p-4 shadow-sm"
-                      style={{ borderColor: "var(--color-border-default)" }}
+                      className="rounded-2xl border p-4"
+                      style={{
+                        borderColor: "rgba(123,104,238,0.3)",
+                        background: "rgba(123,104,238,0.06)",
+                      }}
                     >
-                      <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                      <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--color-text-primary)]">
                         <Sparkles className="h-4 w-4 text-[var(--color-brand)]" />
-                        {isDiagnosisRoute
-                          ? "Ask about this diagnosis model"
-                          : "Start with a model-aware prompt"}
+                        Finance expert ready
                       </div>
-                      <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
                         {isDiagnosisRoute
-                          ? "Context is set to the open diagnosis workbook. Ask about balance sheet, drivers, assumptions, or any cell in the model."
+                          ? "Ask about the active model, selected Diagnosis cell, forecast scenario, source evidence, validation blockers, or next workflow action."
                           : "Ask about uploaded PDFs, accepted cells, source-ingestion fields, or the screen you are reviewing."}
                       </p>
                     </div>
+                    {/* Suggestion pills */}
                     {suggestions.map((s) => (
                       <button
                         key={s}
                         onClick={() => void send(s)}
                         disabled={asking}
-                        className="group flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border bg-white px-3.5 py-3 text-left text-[13px] shadow-sm transition hover:border-[var(--color-brand)] hover:bg-[var(--color-tag-bg)] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-xl border bg-white px-4 py-3 text-left text-[13px] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-tag-bg)] disabled:cursor-not-allowed disabled:opacity-60"
                         style={{
                           borderColor: "var(--color-border-default)",
-                          color: "var(--color-text-secondary)",
+                          color: "var(--color-text-primary)",
                         }}
                       >
-                        <span className="min-w-0">{s}</span>
-                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
+                        {s}
                       </button>
                     ))}
                   </div>
@@ -923,6 +939,22 @@ function ContextSummary({ context, isDiagnosis }: { context: string; isDiagnosis
   );
 }
 
+function useStreamMeta(done: boolean) {
+  const startRef = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (done) return;
+    const id = window.setInterval(() => {
+      setElapsed(Date.now() - startRef.current);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [done]);
+
+  const finalElapsed = done ? elapsed || (Date.now() - startRef.current) : elapsed;
+  return { elapsed: finalElapsed };
+}
+
 function StreamingAiBubble({
   message,
   expanded,
@@ -945,10 +977,28 @@ function StreamingAiBubble({
     done: message.done,
     final: message.final,
   });
+  const { elapsed } = useStreamMeta(message.done);
+  // Estimate from live streaming text so it increments token-by-token
+  const liveText = message.final?.answer ?? message.text;
+  const estTokens = Math.round(liveText.length / 3.8);
 
   return (
     <AiBubble copyText={answer} wide expanded={expanded}>
       <div className="min-w-0 space-y-3 overflow-hidden">
+        {/* Token + time meta row */}
+        <div className="flex items-center gap-3 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+          <span className="flex items-center gap-1">
+            <Loader2 className={`h-3 w-3 ${message.done ? "hidden" : "animate-spin"}`} style={{ color: "var(--color-brand)" }} />
+            <span className="tnum font-medium" style={{ color: message.done ? "var(--color-success)" : "var(--color-brand)" }}>
+              {(elapsed / 1000).toFixed(1)}s
+            </span>
+          </span>
+          <span className="h-3 w-px" style={{ background: "var(--color-border-default)" }} />
+          <span className="tnum">
+            ~{estTokens.toLocaleString()} tokens
+          </span>
+        </div>
+
         <CurrentEventPanel summary={reasoning} message={message} />
         {message.activity.length > 0 && <EvidenceStrip activity={message.activity} />}
         {forecastVisuals && <ForecastSnapshot visuals={forecastVisuals} />}
