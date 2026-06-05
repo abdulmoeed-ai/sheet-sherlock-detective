@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Download,
-  FileSearch,
   History,
   Loader2,
   MessageSquare,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import {
+  DiagnosisSourceInlinePreview,
   DiagnosisSourcePreviewModal,
   type SourceBoundingBox,
 } from "@/components/DiagnosisSourcePreviewModal";
@@ -830,20 +830,13 @@ function DiagnosisPanel({
         <KV label="Note" value={meta.noteReference ?? "-"} />
         <KV label="Source" value={meta.documentFilename ?? "-"} />
         <KV label="Page" value={meta.printedPageNumber ? String(meta.printedPageNumber) : "-"} />
-        {previewSource && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border text-[12px] font-semibold"
-              style={{ borderColor: "#C7D2FE", color: "#4338CA", background: "#EEF2FF" }}
-            >
-              <FileSearch className="h-3.5 w-3.5" />
-              Open preview
-            </button>
-          </div>
-        )}
       </section>
+      {previewSource && (
+        <DiagnosisSourceInlinePreview
+          source={previewSource}
+          onExpand={() => setPreviewOpen(true)}
+        />
+      )}
       <section className="mt-3 rounded-lg border p-3" style={{ borderColor: "#E3E6EA" }}>
         <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: "#818EA0" }}>
           Rules

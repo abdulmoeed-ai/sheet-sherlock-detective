@@ -1,7 +1,10 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DiagnosisSourcePreviewModal } from "./DiagnosisSourcePreviewModal";
+import {
+  DiagnosisSourceInlinePreview,
+  DiagnosisSourcePreviewModal,
+} from "./DiagnosisSourcePreviewModal";
 
 vi.mock("@/lib/api/projects", () => ({
   readDocumentPageImage: vi.fn(() => Promise.resolve(new Blob(["png"], { type: "image/png" }))),
@@ -22,6 +25,36 @@ afterEach(() => {
 });
 
 describe("DiagnosisSourcePreviewModal", () => {
+  it("shows the source preview inline without requiring an open-preview click", async () => {
+    const onExpand = vi.fn();
+    render(
+      <DiagnosisSourceInlinePreview
+        onExpand={onExpand}
+        source={{
+          projectId: "project-1",
+          documentId: "doc-1",
+          documentFilename: "Millat 2025.pdf",
+          pdfPageIndex: 9,
+          printedPageNumber: 42,
+          label: "Revenue",
+          value: "10,000",
+          confidence: 91,
+          sourceText: "Revenue row",
+          boundingBox: [12, 40, 76, 5],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Source preview")).not.toBeNull();
+    expect((await screen.findByAltText("Millat 2025.pdf page 42")).getAttribute("src")).toBe(
+      "blob:preview",
+    );
+    expect(screen.queryByRole("button", { name: "Open preview" })).toBeNull();
+    expect(screen.getByLabelText("Highlighted source row").style.border).toBe(
+      "2px solid rgb(220, 38, 38)",
+    );
+  });
+
   it("renders page image controls and a red source row highlight", async () => {
     render(
       <DiagnosisSourcePreviewModal
@@ -42,12 +75,16 @@ describe("DiagnosisSourcePreviewModal", () => {
       />,
     );
 
-    expect((await screen.findByAltText("Millat 2025.pdf page 42")).getAttribute("src")).toBe("blob:preview");
+    expect((await screen.findByAltText("Millat 2025.pdf page 42")).getAttribute("src")).toBe(
+      "blob:preview",
+    );
     expect(screen.getByRole("button", { name: "Zoom in" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("button", { name: "Zoom out" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("button", { name: "Reset zoom" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("button", { name: "Fit page" }).hasAttribute("disabled")).toBe(false);
-    expect(screen.getByLabelText("Highlighted source row").style.border).toBe("2px solid rgb(220, 38, 38)");
+    expect(screen.getByLabelText("Highlighted source row").style.border).toBe(
+      "2px solid rgb(220, 38, 38)",
+    );
   });
 
   it("renders backend normalized object bounding boxes as red source row highlights", async () => {
