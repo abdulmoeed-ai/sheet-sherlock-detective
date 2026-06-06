@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DragEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
@@ -7,6 +8,7 @@ import { IconTooltip } from "@/components/IconTooltip";
 import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
 import { readExtractionEvents, readExtractionJob, readWorkspace } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
+import { filesFromDrop, ingestionPageTitle } from "@/lib/ingestion-page";
 import type {
   DocumentResponse,
   ExtractionJobResponse,
@@ -75,6 +77,14 @@ function Ingestion() {
   const [extractionProgress, setExtractionProgress] = useState<ExtractionJobResponse | null>(null);
   const [extractionEvents, setExtractionEvents] = useState<ExtractionProgressEventResponse[]>([]);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [isDraggingUpload, setIsDraggingUpload] = useState(false);
+  const workspace = useQuery({
+    queryKey: queryKeys.workspace(projectId),
+    queryFn: () => readWorkspace(projectId),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const pageTitle = ingestionPageTitle({ workspace: workspace.data, cycle });
 
   // Reset transient modal state when a new cycle starts from Workbooks.
   useEffect(() => {
@@ -171,7 +181,7 @@ function Ingestion() {
     }
   };
 
-  const handleFileSelection = (files: FileList | null) => {
+  const handleFileSelection = (files: FileList | File[] | null) => {
     setExtractionProgress(null);
     setExtractionEvents([]);
     setExtractionError(null);
@@ -190,6 +200,19 @@ function Ingestion() {
         .map((file): SelectedUpload => ({ file, status: "pending" }));
       return [...current, ...next];
     });
+  };
+
+  const handleDroppedFiles = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingUpload(false);
+    handleFileSelection(filesFromDrop(event.dataTransfer));
+  };
+
+  const handleUploadDrag = (event: DragEvent<HTMLElement>, active: boolean) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingUpload(active);
   };
 
   const updateUploadStatus = (status: UploadFileStatus<DocumentResponse>) => {
@@ -253,7 +276,7 @@ function Ingestion() {
 
   return (
     <PageShell
-      title={`Ingestion — ${cycle.period} · ${cycle.company}`}
+      title={pageTitle}
       subtitle="Upload source PDFs and trigger extraction"
       hideProgress
     >
@@ -278,26 +301,35 @@ function Ingestion() {
 
             {!selectedUploads.length ? (
               <label
-                className="block cursor-pointer rounded-[10px] px-6 py-9 text-center transition-colors"
-                style={{ border: "2px dashed var(--color-brand)", background: "transparent" }}
+                className="block min-h-[380px] w-full cursor-pointer rounded-[12px] px-6 py-20 text-center transition-colors sm:px-10 sm:py-24"
+                style={{
+                  border: "2px dashed var(--color-brand)",
+                  background: isDraggingUpload ? "var(--color-tag-bg)" : "transparent",
+                }}
+                onDragEnter={(event) => handleUploadDrag(event, true)}
+                onDragOver={(event) => handleUploadDrag(event, true)}
+                onDragLeave={(event) => handleUploadDrag(event, false)}
+                onDrop={handleDroppedFiles}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--color-tag-bg)";
+                  if (!isDraggingUpload) e.currentTarget.style.background = "var(--color-tag-bg)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.background = isDraggingUpload
+                    ? "var(--color-tag-bg)"
+                    : "transparent";
                 }}
               >
                 <CloudUpload
-                  className="mx-auto h-7 w-7"
+                  className="mx-auto h-10 w-10"
                   style={{ color: "var(--color-text-muted)" }}
                 />
-                <div className="mt-3 text-[14px]">
+                <div className="mt-5 text-[17px]">
                   <span className="font-bold" style={{ color: "var(--color-brand)" }}>
                     Click to upload
                   </span>{" "}
                   <span style={{ color: "var(--color-text-secondary)" }}>or drag and drop</span>
                 </div>
-                <div className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                <div className="mx-auto mt-2 max-w-md text-[14px] leading-6" style={{ color: "var(--color-text-muted)" }}>
                   Select one or more PDF annual reports (max. 50MB each)
                 </div>
                 <input
