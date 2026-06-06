@@ -78,6 +78,11 @@ type ExternalSourcePreview = {
   meta: string;
 };
 
+type HistoryDialogState =
+  | { type: "rename"; chat: AskAiChatSessionSummary }
+  | { type: "delete"; chat: AskAiChatSessionSummary }
+  | null;
+
 const SUGGESTIONS = [
   "Analyse Millat Tractors' financial strength for the next 5 years",
   "Why doesn't my balance sheet balance?",
@@ -99,6 +104,10 @@ export function AskAiTrigger() {
   const [asking, setAsking] = useState(false);
   const [previewSource, setPreviewSource] = useState<DiagnosisSourcePreview | null>(null);
   const [externalPreviewSource, setExternalPreviewSource] = useState<ExternalSourcePreview | null>(null);
+  const [historyDialog, setHistoryDialog] = useState<HistoryDialogState>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [historyDialogBusy, setHistoryDialogBusy] = useState(false);
+  const [historyDialogError, setHistoryDialogError] = useState<string | null>(null);
   const [buttonY, setButtonY] = useState<number | null>(null);
   const [activeSession, setActiveSession] = useState<AskAiChatSessionSummary | null>(null);
 
@@ -171,20 +180,69 @@ export function AskAiTrigger() {
     setShowHistory(false);
   };
 
-  const renameChat = async (chat: AskAiChatSessionSummary) => {
-    const title = window.prompt("Rename Ask AI thread", chat.title ?? "");
-    if (!title?.trim()) return;
-    const updated = await sessionsApi.renameSession(chat.id, title.trim());
-    if (activeSession?.id === updated.id) setActiveSession(updated);
-    await sessionsApi.refreshSessions();
+  const closeHistoryDialog = () => {
+    if (historyDialogBusy) return;
+    setHistoryDialog(null);
+    setHistoryDialogError(null);
   };
 
-  const deleteChat = async (chat: AskAiChatSessionSummary) => {
-    if (!window.confirm("Permanently delete this Ask AI thread? This cannot be undone.")) return;
-    await sessionsApi.deleteSession(chat.id);
-    if (activeSession?.id === chat.id) startNewChat();
-    await sessionsApi.refreshSessions();
+  const openRenameChatDialog = (chat: AskAiChatSessionSummary) => {
+    setRenameTitle(chat.title || "Untitled Ask AI thread");
+    setHistoryDialogError(null);
+    setHistoryDialog({ type: "rename", chat });
   };
+
+  const openDeleteChatDialog = (chat: AskAiChatSessionSummary) => {
+    setHistoryDialogError(null);
+    setHistoryDialog({ type: "delete", chat });
+  };
+
+  const confirmRenameChat = async () => {
+    if (historyDialog?.type !== "rename") return;
+    const title = renameTitle.trim();
+    if (!title) {
+      setHistoryDialogError("Enter a thread name before saving.");
+      return;
+    }
+    setHistoryDialogBusy(true);
+    setHistoryDialogError(null);
+    try {
+      const updated = await sessionsApi.renameSession(historyDialog.chat.id, title);
+      if (activeSession?.id === updated.id) setActiveSession(updated);
+      await sessionsApi.refreshSessions();
+      setHistoryDialog(null);
+    } catch (error) {
+      setHistoryDialogError(error instanceof Error ? error.message : "Could not rename this thread.");
+    } finally {
+      setHistoryDialogBusy(false);
+    }
+  };
+
+  const confirmDeleteChat = async () => {
+    if (historyDialog?.type !== "delete") return;
+    const chat = historyDialog.chat;
+    setHistoryDialogBusy(true);
+    setHistoryDialogError(null);
+    try {
+      await sessionsApi.deleteSession(chat.id);
+      if (activeSession?.id === chat.id) startNewChat();
+      await sessionsApi.refreshSessions();
+      setHistoryDialog(null);
+    } catch (error) {
+      setHistoryDialogError(error instanceof Error ? error.message : "Could not delete this thread.");
+    } finally {
+      setHistoryDialogBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!historyDialog || historyDialogBusy) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeHistoryDialog();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [historyDialog, historyDialogBusy]);
 
   // Draggable button handlers
   const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -450,8 +508,8 @@ export function AskAiTrigger() {
                 error={sessionsApi.error}
                 onRetry={() => void sessionsApi.refreshSessions()}
                 onLoadChat={(chat) => void loadChat(chat)}
-                onRenameChat={(chat) => void renameChat(chat)}
-                onDeleteChat={(chat) => void deleteChat(chat)}
+                onRenameChat={openRenameChatDialog}
+                onDeleteChat={openDeleteChatDialog}
               />
             </div>
           )}
@@ -604,8 +662,8 @@ export function AskAiTrigger() {
                 error={sessionsApi.error}
                 onRetry={() => void sessionsApi.refreshSessions()}
                 onLoadChat={(chat) => void loadChat(chat)}
-                onRenameChat={(chat) => void renameChat(chat)}
-                onDeleteChat={(chat) => void deleteChat(chat)}
+                onRenameChat={openRenameChatDialog}
+                onDeleteChat={openDeleteChatDialog}
               />
             </>
           ) : (
@@ -815,7 +873,172 @@ export function AskAiTrigger() {
         expandedLeft={expandedLeft}
         onClose={() => setExternalPreviewSource(null)}
       />
+      <HistoryThreadDialog
+        dialog={historyDialog}
+        renameTitle={renameTitle}
+        busy={historyDialogBusy}
+        error={historyDialogError}
+        onRenameTitleChange={setRenameTitle}
+        onClose={closeHistoryDialog}
+        onConfirmRename={() => void confirmRenameChat()}
+        onConfirmDelete={() => void confirmDeleteChat()}
+      />
     </>
+  );
+}
+
+function HistoryThreadDialog({
+  dialog,
+  renameTitle,
+  busy,
+  error,
+  onRenameTitleChange,
+  onClose,
+  onConfirmRename,
+  onConfirmDelete,
+}: {
+  dialog: HistoryDialogState;
+  renameTitle: string;
+  busy: boolean;
+  error: string | null;
+  onRenameTitleChange: (value: string) => void;
+  onClose: () => void;
+  onConfirmRename: () => void;
+  onConfirmDelete: () => void;
+}) {
+  if (!dialog) return null;
+
+  const isRename = dialog.type === "rename";
+  const title = isRename ? "Rename thread" : "Delete thread";
+  const description = isRename
+    ? "Update the title shown in Ask AI history."
+    : "This Ask AI thread will be permanently removed from history.";
+  const chatTitle = dialog.chat.title || "Untitled Ask AI thread";
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(15,23,42,0.42)] px-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-ai-history-dialog-title"
+        aria-describedby="ask-ai-history-dialog-description"
+        className="w-full max-w-[420px] overflow-hidden rounded-2xl border bg-white shadow-[0_24px_70px_-32px_rgba(15,23,42,0.55)]"
+        style={{ borderColor: "var(--color-border-default)" }}
+      >
+        <div
+          className="flex items-start justify-between gap-4 border-b px-4 py-3.5"
+          style={{ borderColor: "var(--color-border-default)", background: "#FAFBFF" }}
+        >
+          <div className="min-w-0">
+            <h2
+              id="ask-ai-history-dialog-title"
+              className="text-[14px] font-semibold text-[var(--color-text-primary)]"
+            >
+              {title}
+            </h2>
+            <p
+              id="ask-ai-history-dialog-description"
+              className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]"
+            >
+              {description}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border bg-white text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+            aria-label="Close dialog"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <form
+          className="space-y-4 px-4 py-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (isRename) onConfirmRename();
+            else onConfirmDelete();
+          }}
+        >
+          {isRename ? (
+            <div>
+              <label
+                htmlFor="ask-ai-thread-title"
+                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]"
+              >
+                Thread name
+              </label>
+              <input
+                id="ask-ai-thread-title"
+                autoFocus
+                value={renameTitle}
+                onChange={(event) => onRenameTitleChange(event.target.value)}
+                disabled={busy}
+                className="h-10 w-full rounded-lg border bg-white px-3 text-[13px] text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[rgba(123,104,238,0.16)] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ borderColor: "var(--color-border-default)" }}
+                placeholder="Name this Ask AI thread"
+              />
+            </div>
+          ) : (
+            <div
+              className="rounded-xl border px-3 py-3"
+              style={{ borderColor: "rgba(220,38,38,0.18)", background: "var(--color-danger-bg)" }}
+            >
+              <div className="flex items-start gap-2.5">
+                <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger-fg)]" />
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]">
+                    {chatTitle}
+                  </div>
+                  <div className="mt-1 text-[12px] leading-relaxed text-[var(--color-danger-fg)]">
+                    This action cannot be undone.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="rounded-lg px-3 py-2 text-[12px]"
+              style={{ background: "var(--color-danger-bg)", color: "var(--color-danger-fg)" }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="h-9 cursor-pointer rounded-lg border bg-white px-3 text-[12px] font-semibold text-[var(--color-text-secondary)] transition hover:bg-[var(--color-table-header)] disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || (isRename && !renameTitle.trim())}
+              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
+              style={{ background: isRename ? "var(--color-brand)" : "var(--color-danger-fg)" }}
+            >
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {isRename ? "Save" : "Delete"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -2144,14 +2367,41 @@ function HistoryChatList({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
       {loading ? (
-        <div className="space-y-2 px-2 py-4">
-          {[0, 1, 2].map((item) => (
-            <div
-              key={item}
-              className="h-10 animate-pulse rounded-lg"
-              style={{ background: "var(--color-table-header)" }}
-            />
-          ))}
+        <div className="px-2 py-4" role="status" aria-live="polite" aria-label="Loading past Ask AI chats">
+          <div
+            className="mb-3 flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-tag-bg)]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-brand)]" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold text-[var(--color-text-primary)]">
+                Loading past chats
+              </div>
+              <div className="text-[11px] text-[var(--color-text-muted)]">
+                Fetching your Ask AI thread history...
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2" aria-hidden="true">
+            {[0, 1, 2].map((item) => (
+              <div
+                key={item}
+                className="rounded-lg border bg-white px-3 py-2"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div
+                  className="h-3 w-3/4 animate-pulse rounded-full"
+                  style={{ background: "var(--color-table-header)" }}
+                />
+                <div
+                  className="mt-2 h-2.5 w-1/2 animate-pulse rounded-full"
+                  style={{ background: "var(--color-table-header)" }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       ) : error ? (
         <div className="px-2 py-8 text-center">
