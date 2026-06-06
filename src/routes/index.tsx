@@ -1,23 +1,38 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   BarChart3,
   ClipboardList,
   CloudUpload,
+  Copy,
+  Download,
+  Eye,
   FolderOpen,
+  Globe2,
   Loader2,
+  Lock,
+  Pencil,
   Plus,
+  Search,
   ShieldCheck,
+  Trash2,
+  X,
 } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
-import { searchSources } from "@/lib/api/projects";
+import { readWorkspace, searchSources } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { BackendRole, ProjectResponse } from "@/lib/api/types";
+import type {
+  BackendRole,
+  PortfolioCompanySelection,
+  PortfolioDashboardResponse,
+  PortfolioDashboardVisibility,
+  ProjectResponse,
+} from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
@@ -26,6 +41,13 @@ import {
   useAcknowledgeAnalysisRequest,
 } from "@/hooks/use-analysis-requests";
 import { useProjects, useCreateProject, useWorkspace } from "@/hooks/use-projects";
+import {
+  useCreatePortfolioDashboard,
+  useDeletePortfolioDashboard,
+  useMarkPortfolioDashboardExported,
+  usePortfolioDashboards,
+  useUpdatePortfolioDashboard,
+} from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
@@ -57,6 +79,18 @@ import {
   type SourceSyncStatus,
   type SourceTaggedMetric,
 } from "@/lib/financial-dashboard";
+import {
+  filterPortfolioDashboards,
+  buildPortfolioApprovedModelCoverage,
+  buildPortfolioSectorAllocation,
+  normalizePortfolioCompanies,
+  portfolioCompanySummary,
+  portfolioSourceSyncRange,
+  portfolioVisibilityDescription,
+  portfolioVisibilityLabel,
+  sortPortfolioDashboardsByUpdated,
+} from "@/lib/portfolio-dashboard";
+import { dashboardMetrics } from "@/lib/mappers/workspace";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -130,7 +164,7 @@ function Dashboard() {
 
   return (
     <PageShell title="Dashboards" hideProgress>
-      {role === "finance_manager" ? <ManagerDashboard /> : <ProjectDashboard role={role} />}
+      <ProjectDashboard role={role} />
     </PageShell>
   );
 }
@@ -290,7 +324,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
   const [startError, setStartError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "financial">("financial");
+  const [activeTab, setActiveTab] = useState<"overview" | "financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
 
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
@@ -348,16 +382,17 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   };
 
   const tabs =
-    role === "finance_analyst"
+    role === "finance_analyst" || role === "finance_manager"
       ? [
           { id: "financial" as const, label: "Financial Dashboard" },
+          { id: "portfolio" as const, label: "Portfolio Dashboards" },
           { id: "overview" as const, label: "My Tasks Overview" },
         ]
       : null;
 
   return (
     <div className="space-y-4">
-      {/* Sub-tabs — analyst only */}
+      {/* Sub-tabs */}
       {tabs && (
         <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
           {tabs.map((tab) => (
@@ -379,7 +414,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
 
       {/* Financial Dashboard tab */}
       {activeTab === "financial" &&
-        role === "finance_analyst" &&
+        (role === "finance_analyst" || role === "finance_manager") &&
         (!allDataReady ? (
           <AnalystDashboardLoading />
         ) : (
@@ -392,145 +427,1401 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
           />
         ))}
 
-      {/* Overview tab (original dashboard) */}
-      {(activeTab === "overview" || role !== "finance_analyst") && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Projects" value={projectList.length} />
-            {role === "finance_analyst" && (
-              <StatCard label="Pending requests" value={pendingRequests.length} />
-            )}
-            <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
-          </div>
+      {activeTab === "portfolio" && <PortfolioDashboardsTab role={role} />}
 
-          {role === "finance_analyst" && (
-            <Card>
-              <div className="mb-3 flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
-                <h2 className="text-[16px] font-semibold">Assigned requests</h2>
-                <Badge tone="info">Analyst</Badge>
-              </div>
-              {requests.isLoading ? (
-                <div className="text-[13px] text-[var(--color-text-muted)]">
-                  Loading requests...
+      {/* Overview tab (original dashboard) */}
+      {activeTab === "overview" && role === "finance_manager" && <ManagerDashboard />}
+
+      {(activeTab === "overview" || role === "cfo" || role === "admin") &&
+        role !== "finance_manager" && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard label="Projects" value={projectList.length} />
+              {role === "finance_analyst" && (
+                <StatCard label="Pending requests" value={pendingRequests.length} />
+              )}
+              <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
+            </div>
+
+            {role === "finance_analyst" && (
+              <Card>
+                <div className="mb-3 flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+                  <h2 className="text-[16px] font-semibold">Assigned requests</h2>
+                  <Badge tone="info">Analyst</Badge>
                 </div>
-              ) : pendingRequests.length === 0 ? (
+                {requests.isLoading ? (
+                  <div className="text-[13px] text-[var(--color-text-muted)]">
+                    Loading requests...
+                  </div>
+                ) : pendingRequests.length === 0 ? (
+                  <div
+                    className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    No pending requests assigned to you.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center justify-between rounded-md border px-4 py-3"
+                        style={{ borderColor: "var(--color-border-default)" }}
+                      >
+                        <div>
+                          <div className="text-[13px] font-semibold">
+                            {request.companyName}
+                            {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
+                            {request.fiscalYear ?? "Current"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                            Priority: {request.priority ?? "normal"} · Received{" "}
+                            {new Date(request.createdAt).toLocaleDateString()}
+                            {request.note ? ` · ${request.note}` : ""}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => acknowledge.mutate(request.id)}
+                          disabled={acknowledge.isPending}
+                        >
+                          {acknowledge.isPending && acknowledge.variables === request.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          Acknowledge
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            <Card>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
+                  <h2 className="text-[16px] font-semibold">Projects</h2>
+                </div>
+                <input
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Search projects"
+                  className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                />
+              </div>
+              {projects.isLoading ? (
+                <div className="text-[13px] text-[var(--color-text-muted)]">
+                  Loading projects...
+                </div>
+              ) : projectList.length === 0 ? (
                 <div
                   className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
                   style={{ borderColor: "var(--color-border-default)" }}
                 >
-                  No pending requests assigned to you.
+                  No projects are available for this account.
+                </div>
+              ) : filteredProjects.length === 0 ? (
+                <div
+                  className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  No projects match that search.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {pendingRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="flex items-center justify-between rounded-md border px-4 py-3"
+                  {filteredProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => {
+                        setSelectedProjectId(project.id);
+                        navigate({ to: role === "cfo" ? "/sign-off" : "/registry" });
+                      }}
+                      className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
                       style={{ borderColor: "var(--color-border-default)" }}
                     >
                       <div>
-                        <div className="text-[13px] font-semibold">
-                          {request.companyName}
-                          {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
-                          {request.fiscalYear ?? "Current"}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold">{project.companyName}</span>
+                          <Badge tone={dashboardProjectStatusTone(project.status)}>
+                            {dashboardProjectStatusLabel(project.status)}
+                          </Badge>
                         </div>
-                        <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
-                          Priority: {request.priority ?? "normal"} · Received{" "}
-                          {new Date(request.createdAt).toLocaleDateString()}
-                          {request.note ? ` · ${request.note}` : ""}
+                        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                          {project.fiscalYear ?? "Current period"}
+                          {project.sector ? ` · ${project.sector}` : ""}
+                          {project.projectLabel ? ` · ${project.projectLabel}` : ""}
+                          {" · "}Last edited {formatProjectDate(project.updatedAt)}
                         </div>
                       </div>
-                      <Button
-                        onClick={() => acknowledge.mutate(request.id)}
-                        disabled={acknowledge.isPending}
-                      >
-                        {acknowledge.isPending && acknowledge.variables === request.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        Acknowledge
-                      </Button>
-                    </div>
+                      <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
+                    </button>
                   ))}
                 </div>
               )}
             </Card>
-          )}
-
-          <Card>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
-                <h2 className="text-[16px] font-semibold">Projects</h2>
-              </div>
-              <input
-                value={projectSearch}
-                onChange={(event) => setProjectSearch(event.target.value)}
-                placeholder="Search projects"
-                className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              />
-            </div>
-            {projects.isLoading ? (
-              <div className="text-[13px] text-[var(--color-text-muted)]">Loading projects...</div>
-            ) : projectList.length === 0 ? (
-              <div
-                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                No projects are available for this account.
-              </div>
-            ) : filteredProjects.length === 0 ? (
-              <div
-                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                No projects match that search.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredProjects.map((project) => (
-                  <button
-                    key={project.id}
-                    onClick={() => {
-                      setSelectedProjectId(project.id);
-                      navigate({ to: role === "cfo" ? "/sign-off" : "/registry" });
-                    }}
-                    className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-semibold">{project.companyName}</span>
-                        <Badge tone={dashboardProjectStatusTone(project.status)}>
-                          {dashboardProjectStatusLabel(project.status)}
-                        </Badge>
-                      </div>
-                      <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                        {project.fiscalYear ?? "Current period"}
-                        {project.sector ? ` · ${project.sector}` : ""}
-                        {project.projectLabel ? ` · ${project.projectLabel}` : ""}
-                        {" · "}Last edited {formatProjectDate(project.updatedAt)}
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
-                  </button>
-                ))}
-              </div>
+            {role === "admin" && (
+              <Card>
+                <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+                  <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
+                  Admin source controls are available from Sources Admin.
+                </div>
+              </Card>
             )}
-          </Card>
-          {role === "admin" && (
-            <Card>
-              <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
-                <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
-                Admin source controls are available from Sources Admin.
+          </div>
+        )}
+    </div>
+  );
+}
+
+type PortfolioDashboardView = "list" | "create" | "edit" | "detail";
+
+interface PortfolioDashboardDraft {
+  name: string;
+  description: string;
+  visibility: PortfolioDashboardVisibility;
+  companySelections: PortfolioCompanySelection[];
+}
+
+const emptyPortfolioDashboardDraft: PortfolioDashboardDraft = {
+  name: "",
+  description: "",
+  visibility: "private",
+  companySelections: [],
+};
+
+function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
+  const isManagerView = role === "finance_manager";
+  const { data: user } = useCurrentUser();
+  const psxCompanies = usePsxCompanies();
+  const projects = useProjects();
+  const myDashboards = usePortfolioDashboards("my");
+  const publicDashboards = usePortfolioDashboards("public");
+  const createPortfolio = useCreatePortfolioDashboard();
+  const updatePortfolio = useUpdatePortfolioDashboard();
+  const deletePortfolio = useDeletePortfolioDashboard();
+  const markExported = useMarkPortfolioDashboardExported();
+  const [view, setView] = useState<PortfolioDashboardView>("list");
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
+  const [managerCreatorFilter, setManagerCreatorFilter] = useState("");
+
+  const myItems = useMemo(() => myDashboards.data ?? [], [myDashboards.data]);
+  const publicItems = useMemo(() => publicDashboards.data ?? [], [publicDashboards.data]);
+  const visibleItems = useMemo(() => [...myItems, ...publicItems], [myItems, publicItems]);
+  const selectedDashboard = useMemo(
+    () => visibleItems.find((dashboard) => dashboard.id === selectedDashboardId) ?? null,
+    [selectedDashboardId, visibleItems],
+  );
+  const creatorOptions = useMemo(
+    () => [...new Set(publicItems.map((dashboard) => dashboard.createdByName))].sort(),
+    [publicItems],
+  );
+  const filteredPublicItems = useMemo(
+    () => filterPortfolioDashboards(publicItems, "", managerCreatorFilter || null),
+    [managerCreatorFilter, publicItems],
+  );
+  const createError = createPortfolio.error instanceof Error ? createPortfolio.error.message : null;
+  const updateError = updatePortfolio.error instanceof Error ? updatePortfolio.error.message : null;
+  const deleteError = deletePortfolio.error instanceof Error ? deletePortfolio.error.message : null;
+  const exportError = markExported.error instanceof Error ? markExported.error.message : null;
+  const canCreate = role === "finance_analyst" || role === "admin";
+
+  const openDashboard = (dashboard: PortfolioDashboardResponse) => {
+    setSelectedDashboardId(dashboard.id);
+    setView("detail");
+  };
+
+  const startEdit = (dashboard: PortfolioDashboardResponse) => {
+    setSelectedDashboardId(dashboard.id);
+    setView("edit");
+  };
+
+  const duplicateDashboard = async (dashboard: PortfolioDashboardResponse) => {
+    const duplicated = await createPortfolio.mutateAsync({
+      name: `${dashboard.name} Copy`,
+      description: dashboard.description,
+      visibility: "private",
+      companySelections: dashboard.companySelections,
+    });
+    setSelectedDashboardId(duplicated.id);
+    setView("detail");
+  };
+
+  const removeDashboard = async (dashboard: PortfolioDashboardResponse) => {
+    if (!window.confirm(`Delete ${dashboard.name}? This dashboard will be removed.`)) {
+      return;
+    }
+    await deletePortfolio.mutateAsync(dashboard.id);
+    if (selectedDashboardId === dashboard.id) {
+      setSelectedDashboardId(null);
+      setView("list");
+    }
+  };
+
+  const saveNewDashboard = async (draft: PortfolioDashboardDraft) => {
+    const created = await createPortfolio.mutateAsync({
+      name: draft.name,
+      description: draft.description || null,
+      visibility: draft.visibility,
+      companySelections: draft.companySelections,
+    });
+    setSelectedDashboardId(created.id);
+    setView("detail");
+  };
+
+  const saveExistingDashboard = async (draft: PortfolioDashboardDraft) => {
+    if (!selectedDashboard) return;
+    const updated = await updatePortfolio.mutateAsync({
+      dashboardId: selectedDashboard.id,
+      payload: {
+        name: draft.name,
+        description: draft.description || null,
+        visibility: draft.visibility,
+        companySelections: draft.companySelections,
+      },
+    });
+    setSelectedDashboardId(updated.id);
+    setView("detail");
+  };
+
+  const exportDashboard = async (dashboard: PortfolioDashboardResponse) => {
+    await markExported.mutateAsync(dashboard.id);
+    window.setTimeout(() => window.print(), 100);
+  };
+
+  if (view === "create") {
+    return (
+      <PortfolioDashboardBuilder
+        title="New Portfolio Dashboard"
+        psxCompanies={psxCompanies.data ?? []}
+        loadingCompanies={psxCompanies.isLoading}
+        initialDraft={emptyPortfolioDashboardDraft}
+        saving={createPortfolio.isPending}
+        error={createError}
+        onCancel={() => setView("list")}
+        onSave={saveNewDashboard}
+      />
+    );
+  }
+
+  if (view === "edit" && selectedDashboard) {
+    return (
+      <PortfolioDashboardBuilder
+        title="Edit Portfolio Dashboard"
+        psxCompanies={psxCompanies.data ?? []}
+        loadingCompanies={psxCompanies.isLoading}
+        initialDraft={portfolioDraftFromDashboard(selectedDashboard)}
+        saving={updatePortfolio.isPending}
+        error={updateError}
+        onCancel={() => setView("detail")}
+        onSave={saveExistingDashboard}
+      />
+    );
+  }
+
+  if (view === "detail" && selectedDashboard) {
+    return (
+      <PortfolioDashboardDetail
+        dashboard={selectedDashboard}
+        canEdit={selectedDashboard.createdByUserId === user?.id}
+        readOnly={selectedDashboard.createdByUserId !== user?.id}
+        deleting={deletePortfolio.isPending}
+        duplicating={createPortfolio.isPending}
+        exporting={markExported.isPending}
+        projects={projects.data ?? []}
+        error={deleteError ?? createError ?? exportError}
+        onBack={() => setView("list")}
+        onEdit={() => startEdit(selectedDashboard)}
+        onDelete={() => removeDashboard(selectedDashboard)}
+        onDuplicate={() => duplicateDashboard(selectedDashboard)}
+        onExport={() => exportDashboard(selectedDashboard)}
+      />
+    );
+  }
+
+  if (isManagerView) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Globe2 className="h-4 w-4 text-[var(--color-brand)]" />
+                <h2 className="text-[16px] font-semibold">Public Portfolio Dashboards</h2>
               </div>
-            </Card>
-          )}
+              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                Open public dashboards in read-only mode and see who created them.
+              </p>
+            </div>
+            <label className="min-w-[220px]">
+              <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-muted)]">
+                Creator
+              </span>
+              <select
+                value={managerCreatorFilter}
+                onChange={(event) => setManagerCreatorFilter(event.target.value)}
+                className="h-9 w-full rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <option value="">All creators</option>
+                {creatorOptions.map((creator) => (
+                  <option key={creator} value={creator}>
+                    {creator}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </Card>
+        <PortfolioDashboardList
+          dashboards={filteredPublicItems}
+          loading={publicDashboards.isLoading}
+          emptyLabel="Create a dashboard to compare companies across one or more sectors."
+          currentUserId={user?.id ?? null}
+          readOnly
+          showCreatorFilter={false}
+          onOpen={openDashboard}
+          onDuplicate={duplicateDashboard}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
+              <h2 className="text-[16px] font-semibold">Portfolio Dashboards</h2>
+            </div>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Build saved views for same-sector or cross-sector company comparisons.
+            </p>
+          </div>
+          <Button onClick={() => setView("create")} disabled={!canCreate}>
+            <Plus className="h-4 w-4" />
+            New Dashboard
+          </Button>
+        </div>
+        {createError ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {createError}
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <Lock className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-[15px] font-semibold">My Portfolio Dashboards</h3>
+          </div>
+          <PortfolioDashboardList
+            dashboards={myItems}
+            loading={myDashboards.isLoading}
+            emptyLabel="Create a dashboard to compare companies across one or more sectors."
+            currentUserId={user?.id ?? null}
+            onOpen={openDashboard}
+            onEdit={startEdit}
+            onDelete={removeDashboard}
+            onDuplicate={duplicateDashboard}
+          />
+        </Card>
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <Globe2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-[15px] font-semibold">Public Portfolio Dashboards</h3>
+          </div>
+          <PortfolioDashboardList
+            dashboards={publicItems}
+            loading={publicDashboards.isLoading}
+            emptyLabel="Create a dashboard to compare companies across one or more sectors."
+            currentUserId={user?.id ?? null}
+            readOnly
+            onOpen={openDashboard}
+            onEdit={startEdit}
+            onDelete={removeDashboard}
+            onDuplicate={duplicateDashboard}
+          />
+        </Card>
+      </div>
+      {deleteError ? (
+        <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+          {deleteError}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PortfolioDashboardList({
+  dashboards,
+  loading,
+  emptyLabel,
+  currentUserId,
+  readOnly = false,
+  showCreatorFilter = true,
+  onOpen,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  dashboards: PortfolioDashboardResponse[];
+  loading: boolean;
+  emptyLabel: string;
+  currentUserId: string | null;
+  readOnly?: boolean;
+  showCreatorFilter?: boolean;
+  onOpen: (dashboard: PortfolioDashboardResponse) => void;
+  onEdit?: (dashboard: PortfolioDashboardResponse) => void;
+  onDelete?: (dashboard: PortfolioDashboardResponse) => void;
+  onDuplicate: (dashboard: PortfolioDashboardResponse) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<PortfolioDashboardVisibility | "all">(
+    "all",
+  );
+  const [creatorFilter, setCreatorFilter] = useState("");
+  const creatorOptions = useMemo(
+    () => [...new Set(dashboards.map((dashboard) => dashboard.createdByName))].sort(),
+    [dashboards],
+  );
+  const filteredDashboards = useMemo(
+    () =>
+      sortPortfolioDashboardsByUpdated(
+        filterPortfolioDashboards(
+          dashboards,
+          search,
+          showCreatorFilter ? creatorFilter || null : null,
+          visibilityFilter,
+        ),
+      ),
+    [creatorFilter, dashboards, search, showCreatorFilter, visibilityFilter],
+  );
+
+  if (loading) {
+    return <div className="text-[13px] text-[var(--color-text-muted)]">Loading portfolios...</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_150px_180px]">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by portfolio, company, ticker, sector, or creator"
+            className="h-9 w-full rounded-md border bg-white pl-9 pr-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          />
+        </label>
+        <select
+          value={visibilityFilter}
+          onChange={(event) =>
+            setVisibilityFilter(event.target.value as PortfolioDashboardVisibility | "all")
+          }
+          className="h-9 rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          <option value="all">All visibility</option>
+          <option value="private">Private</option>
+          <option value="public">Public</option>
+        </select>
+        {showCreatorFilter ? (
+          <select
+            value={creatorFilter}
+            onChange={(event) => setCreatorFilter(event.target.value)}
+            className="h-9 rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <option value="">All creators</option>
+            {creatorOptions.map((creator) => (
+              <option key={creator} value={creator}>
+                {creator}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+
+      {dashboards.length === 0 ? (
+        <PortfolioDashboardEmptyState label={emptyLabel} />
+      ) : filteredDashboards.length === 0 ? (
+        <div
+          className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          No dashboards match that search.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredDashboards.map((dashboard) => (
+            <PortfolioDashboardRow
+              key={dashboard.id}
+              dashboard={dashboard}
+              currentUserId={currentUserId}
+              readOnly={readOnly}
+              onOpen={onOpen}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+            />
+          ))}
         </div>
       )}
     </div>
   );
+}
+
+function PortfolioDashboardEmptyState({ label }: { label: string }) {
+  return (
+    <div
+      className="flex min-h-[180px] flex-col items-center justify-center rounded-md border px-4 py-6 text-center"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <BarChart3 className="h-9 w-9 text-[var(--color-brand)]" />
+      <div className="mt-3 max-w-[520px] text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioDashboardRow({
+  dashboard,
+  currentUserId,
+  readOnly,
+  onOpen,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  dashboard: PortfolioDashboardResponse;
+  currentUserId: string | null;
+  readOnly: boolean;
+  onOpen: (dashboard: PortfolioDashboardResponse) => void;
+  onEdit?: (dashboard: PortfolioDashboardResponse) => void;
+  onDelete?: (dashboard: PortfolioDashboardResponse) => void;
+  onDuplicate: (dashboard: PortfolioDashboardResponse) => void;
+}) {
+  const summary = portfolioCompanySummary(dashboard.companySelections);
+  const isCreator = dashboard.createdByUserId === currentUserId;
+  return (
+    <div
+      className="rounded-md border px-4 py-3"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-[13px] font-semibold">{dashboard.name}</h4>
+            <Badge tone={dashboard.visibility === "public" ? "success" : "info"}>
+              {portfolioVisibilityLabel(dashboard.visibility)}
+            </Badge>
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+            {summary.companyCount} {summary.companyCount === 1 ? "company" : "companies"} ·{" "}
+            {summary.sectorLabel} · Created by {dashboard.createdByName}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+            {portfolioVisibilityDescription(dashboard.visibility)}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => onOpen(dashboard)}>
+            <Eye className="h-4 w-4" />
+            Open Dashboard
+          </Button>
+          <Button variant="ghost" onClick={() => onDuplicate(dashboard)}>
+            <Copy className="h-4 w-4" />
+            Duplicate
+          </Button>
+          {isCreator && onEdit ? (
+            <Button variant="ghost" onClick={() => onEdit(dashboard)}>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+          ) : null}
+          {isCreator && onDelete ? (
+            <Button variant="ghost" onClick={() => onDelete(dashboard)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {dashboard.companySelections.slice(0, 5).map((company) => (
+          <span
+            key={company.symbol}
+            className="rounded-md bg-[var(--color-tag-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)]"
+          >
+            {company.symbol} · {company.sector}
+          </span>
+        ))}
+        {dashboard.companySelections.length > 5 ? (
+          <span className="rounded-md bg-[var(--color-tag-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            +{dashboard.companySelections.length - 5} more
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioDashboardBuilder({
+  title,
+  psxCompanies,
+  loadingCompanies,
+  initialDraft,
+  saving,
+  error,
+  onCancel,
+  onSave,
+}: {
+  title: string;
+  psxCompanies: PsxCompany[];
+  loadingCompanies: boolean;
+  initialDraft: PortfolioDashboardDraft;
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (draft: PortfolioDashboardDraft) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<PortfolioDashboardDraft>(initialDraft);
+  const [selectedSector, setSelectedSector] = useState("");
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const sectorItems = useMemo(() => sectorOptions(psxCompanies), [psxCompanies]);
+  const companyItems = useMemo(
+    () => companyOptionsForSector(psxCompanies, selectedSector),
+    [psxCompanies, selectedSector],
+  );
+  const selectedCompany = useMemo(
+    () => psxCompanies.find((company) => company.symbol === selectedSymbol) ?? null,
+    [psxCompanies, selectedSymbol],
+  );
+
+  const addSelectedCompany = () => {
+    if (!selectedCompany) return;
+    setDraft((current) => ({
+      ...current,
+      companySelections: normalizePortfolioCompanies([
+        ...current.companySelections,
+        {
+          symbol: selectedCompany.symbol,
+          name: selectedCompany.name,
+          sector: selectedCompany.sector,
+        },
+      ]),
+    }));
+    setSelectedSymbol("");
+  };
+
+  const removeCompany = (symbol: string) => {
+    setDraft((current) => ({
+      ...current,
+      companySelections: current.companySelections.filter((company) => company.symbol !== symbol),
+    }));
+  };
+
+  const changeVisibility = (visibility: PortfolioDashboardVisibility) => {
+    if (visibility === draft.visibility) return;
+    if (
+      visibility === "public" &&
+      !window.confirm("Make this dashboard public for everyone with Dashboard access?")
+    ) {
+      return;
+    }
+    if (
+      visibility === "private" &&
+      !window.confirm("Make this dashboard private? It will disappear from public listings.")
+    ) {
+      return;
+    }
+    setDraft({ ...draft, visibility });
+  };
+
+  const save = async () => {
+    const normalizedCompanies = normalizePortfolioCompanies(draft.companySelections);
+    if (!draft.name.trim()) {
+      setValidationError("Portfolio name is required.");
+      return;
+    }
+    if (normalizedCompanies.length === 0) {
+      setValidationError("Select at least one company.");
+      return;
+    }
+    setValidationError(null);
+    await onSave({
+      ...draft,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      companySelections: normalizedCompanies,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[18px] font-semibold">{title}</h2>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Select companies across one or more sectors and save a dashboard for repeat analysis.
+            </p>
+          </div>
+          <Button variant="ghost" onClick={onCancel}>
+            <X className="h-4 w-4" />
+            Cancel
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px]">
+          <label>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Portfolio Name
+            </span>
+            <input
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              className="h-10 w-full rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+              placeholder="e.g. Auto assemblers watchlist"
+            />
+          </label>
+          <div>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Visibility
+            </span>
+            <div
+              className="grid grid-cols-2 rounded-md border p-1"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              {(["private", "public"] as const).map((visibility) => (
+                <button
+                  key={visibility}
+                  type="button"
+                  onClick={() => changeVisibility(visibility)}
+                  className="h-8 rounded text-[12px] font-semibold transition"
+                  style={{
+                    background:
+                      draft.visibility === visibility ? "var(--color-brand)" : "transparent",
+                    color: draft.visibility === visibility ? "#fff" : "var(--color-text-secondary)",
+                  }}
+                >
+                  {portfolioVisibilityLabel(visibility)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="xl:col-span-2">
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Description
+            </span>
+            <textarea
+              value={draft.description}
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+              className="min-h-[76px] w-full rounded-md border bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+              placeholder="Optional context for this dashboard"
+            />
+          </label>
+          <div className="xl:col-span-2 rounded-md bg-[var(--color-tag-bg)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+            {portfolioVisibilityDescription(draft.visibility)}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <Combobox
+            label="Sector"
+            options={sectorItems}
+            value={selectedSector}
+            onChange={(sector) => {
+              setSelectedSector(sector);
+              setSelectedSymbol("");
+            }}
+            placeholder={loadingCompanies ? "Loading sectors..." : "Select sector..."}
+            disabled={loadingCompanies}
+          />
+          <Combobox
+            label="Company"
+            options={companyItems}
+            value={selectedSymbol}
+            onChange={setSelectedSymbol}
+            placeholder={!selectedSector ? "Select sector first..." : "Select company..."}
+            disabled={!selectedSector || loadingCompanies}
+          />
+          <div className="flex items-end">
+            <Button onClick={addSelectedCompany} disabled={!selectedCompany}>
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="text-[15px] font-semibold">Selected Companies</h3>
+          <Badge tone={draft.companySelections.length > 0 ? "success" : "warning"}>
+            {draft.companySelections.length} selected
+          </Badge>
+        </div>
+        {draft.companySelections.length === 0 ? (
+          <div
+            className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            Add at least one company to create a dashboard.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
+              <thead>
+                <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                  <th className="py-2 pr-3 font-semibold">Company</th>
+                  <th className="py-2 pr-3 font-semibold">Ticker</th>
+                  <th className="py-2 pr-3 font-semibold">Sector</th>
+                  <th className="py-2 text-right font-semibold">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.companySelections.map((company) => (
+                  <tr
+                    key={company.symbol}
+                    className="border-b last:border-0"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <td className="py-2 pr-3 font-semibold">{company.name}</td>
+                    <td className="py-2 pr-3 tnum">{company.symbol}</td>
+                    <td className="py-2 pr-3">{company.sector}</td>
+                    <td className="py-2 text-right">
+                      <Button variant="ghost" onClick={() => removeCompany(company.symbol)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {validationError || error ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {validationError ?? error}
+          </div>
+        ) : null}
+        <div className="mt-4 flex justify-end">
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save Dashboard
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function PortfolioDashboardDetail({
+  dashboard,
+  canEdit,
+  readOnly,
+  deleting,
+  duplicating,
+  exporting,
+  projects,
+  error,
+  onBack,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onExport,
+}: {
+  dashboard: PortfolioDashboardResponse;
+  canEdit: boolean;
+  readOnly: boolean;
+  deleting: boolean;
+  duplicating: boolean;
+  exporting: boolean;
+  projects: ProjectResponse[];
+  error: string | null;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onExport: () => void;
+}) {
+  const summary = portfolioCompanySummary(dashboard.companySelections);
+  return (
+    <div className="portfolio-print-root space-y-4">
+      <Card className="portfolio-print-header">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Button variant="ghost" onClick={onBack} className="portfolio-print-hide mb-3 px-0">
+              <ArrowRight className="h-4 w-4 rotate-180" />
+              Back to portfolios
+            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[20px] font-semibold">{dashboard.name}</h2>
+              <Badge tone={dashboard.visibility === "public" ? "success" : "info"}>
+                {portfolioVisibilityLabel(dashboard.visibility)}
+              </Badge>
+              {readOnly ? <Badge tone="warning">Read-only</Badge> : null}
+            </div>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+              {dashboard.description || "No description provided."}
+            </p>
+            <div className="mt-2 text-[11px] text-[var(--color-text-muted)]">
+              Created by {dashboard.createdByName} · Updated{" "}
+              {formatProjectDate(dashboard.updatedAt)}
+            </div>
+          </div>
+          <div className="portfolio-print-hide flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={onExport} disabled={exporting}>
+              {exporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Download PDF Report
+            </Button>
+            <Button variant="secondary" onClick={onDuplicate} disabled={duplicating}>
+              {duplicating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              Duplicate
+            </Button>
+            {canEdit ? (
+              <>
+                <Button variant="secondary" onClick={onEdit}>
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button variant="danger" onClick={onDelete} disabled={deleting}>
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {error ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {error}
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <StatCard label="Companies" value={summary.companyCount} />
+        <StatCard label="Sectors" value={summary.sectors.length} />
+        <StatCard label="Visibility" value={portfolioVisibilityLabel(dashboard.visibility)} />
+      </div>
+
+      <PortfolioDashboardReport dashboard={dashboard} projects={projects} />
+
+      <Card className="portfolio-print-section">
+        <h3 className="mb-3 text-[15px] font-semibold">Companies In Portfolio</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                <th className="py-2 pr-3 font-semibold">Company</th>
+                <th className="py-2 pr-3 font-semibold">Ticker</th>
+                <th className="py-2 pr-3 font-semibold">Sector</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboard.companySelections.map((company) => (
+                <tr
+                  key={company.symbol}
+                  className="border-b last:border-0"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  <td className="py-2 pr-3 font-semibold">{company.name}</td>
+                  <td className="py-2 pr-3 tnum">{company.symbol}</td>
+                  <td className="py-2 pr-3">{company.sector}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <div className="portfolio-print-footer hidden text-[10px] text-[var(--color-text-muted)]">
+        Exported from FINaiNCE portfolio dashboards. Market data, valuation fields, and model
+        coverage are estimates and source-backed views, not investment advice.
+      </div>
+    </div>
+  );
+}
+
+function PortfolioDashboardReport({
+  dashboard,
+  projects,
+}: {
+  dashboard: PortfolioDashboardResponse;
+  projects: ProjectResponse[];
+}) {
+  const askAnalystResults = useQueries({
+    queries: dashboard.companySelections.map((company) => ({
+      queryKey: ["portfolio-dashboard", dashboard.id, "ask-analyst", company.symbol],
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        fetchAskAnalystOverview(
+          { name: company.name, symbol: company.symbol, sector: company.sector },
+          { signal },
+        ),
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const modelCoverage = useMemo(
+    () => buildPortfolioApprovedModelCoverage(dashboard.companySelections, projects),
+    [dashboard.companySelections, projects],
+  );
+  const approvedProjectIds = useMemo(
+    () =>
+      modelCoverage.rows
+        .map((row) => row.project?.id)
+        .filter((projectId): projectId is string => Boolean(projectId)),
+    [modelCoverage.rows],
+  );
+  const approvedWorkspaceResults = useQueries({
+    queries: approvedProjectIds.map((projectId) => ({
+      queryKey: queryKeys.workspace(projectId),
+      queryFn: () => readWorkspace(projectId),
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const workspaceByProjectId = useMemo(
+    () =>
+      new Map(
+        approvedProjectIds.map((projectId, index) => [
+          projectId,
+          approvedWorkspaceResults[index]?.data ?? null,
+        ]),
+      ),
+    [approvedProjectIds, approvedWorkspaceResults],
+  );
+  const analyticsRows = useMemo(
+    () =>
+      dashboard.companySelections.map((company, index) => {
+        const fallback = getMockCompanyIntelligence(
+          { name: company.name, symbol: company.symbol, sector: company.sector },
+          "FY2025",
+        );
+        const overview = askAnalystResults[index]?.data;
+        const intelligence = overview
+          ? companyIntelligenceFromAskAnalyst(overview, fallback)
+          : fallback;
+        return {
+          company,
+          intelligence,
+          loading: askAnalystResults[index]?.isLoading ?? false,
+          liveSource: overview ? "AskAnalyst" : "Local fallback",
+          modelCoverage: modelCoverage.rows[index],
+        };
+      }),
+    [askAnalystResults, dashboard.companySelections, modelCoverage.rows],
+  );
+  const sectorAllocation = useMemo(
+    () => buildPortfolioSectorAllocation(dashboard.companySelections),
+    [dashboard.companySelections],
+  );
+  const syncRange = portfolioSourceSyncRange(
+    analyticsRows.map((row) => row.intelligence.marketSignals.updatedAt),
+  );
+  const maxTrendPrice = Math.max(
+    ...analyticsRows.flatMap((row) =>
+      row.intelligence.marketSignals.sharePriceTrend.map((point) => point.price),
+    ),
+    1,
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card className="portfolio-print-section">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[16px] font-semibold">Portfolio Analytics</h3>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{syncRange.label}</p>
+          </div>
+          <Badge tone={modelCoverage.availableCount > 0 ? "success" : "warning"}>
+            {modelCoverage.label}
+          </Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Companies" value={dashboard.companySelections.length} />
+          <StatCard label="Sectors" value={sectorAllocation.length} />
+          <StatCard label="Market Data" value="AskAnalyst" />
+          <StatCard label="Models Available" value={modelCoverage.availableCount} />
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]">
+        <Card className="portfolio-print-section">
+          <h3 className="text-[15px] font-semibold">Sector Allocation</h3>
+          <div className="mt-4 space-y-3">
+            {sectorAllocation.map((allocation) => (
+              <div key={allocation.sector}>
+                <div className="flex items-center justify-between gap-3 text-[12px]">
+                  <span className="font-semibold">{allocation.sector}</span>
+                  <span className="tnum text-[var(--color-text-muted)]">
+                    {allocation.count} · {(allocation.share * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-[var(--color-border-default)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-brand)]"
+                    style={{ width: `${Math.max(8, allocation.share * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="portfolio-print-section">
+          <h3 className="text-[15px] font-semibold">Company Comparison</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
+              <thead>
+                <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                  <th className="py-2 pr-3 font-semibold">Company</th>
+                  <th className="py-2 pr-3 font-semibold">Source</th>
+                  <th className="py-2 pr-3 font-semibold">Last Price</th>
+                  <th className="py-2 pr-3 font-semibold">Change</th>
+                  <th className="py-2 pr-3 font-semibold">Last Synced</th>
+                  <th className="py-2 pr-3 font-semibold">Model Availability</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analyticsRows.map((row) => (
+                  <tr
+                    key={row.company.symbol}
+                    className="border-b last:border-0"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <td className="py-2 pr-3">
+                      <div className="font-semibold">{row.company.name}</div>
+                      <div className="text-[11px] text-[var(--color-text-muted)]">
+                        {row.company.symbol} · {row.company.sector}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">{row.loading ? "Loading" : row.liveSource}</td>
+                    <td className="py-2 pr-3 tnum">
+                      PKR {row.intelligence.marketSignals.lastPrice.toFixed(2)}
+                    </td>
+                    <td
+                      className="py-2 pr-3 tnum"
+                      style={{
+                        color:
+                          row.intelligence.marketSignals.changePct30d >= 0
+                            ? "var(--color-success-fg)"
+                            : "var(--color-danger-fg)",
+                      }}
+                    >
+                      {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
+                      {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
+                    </td>
+                    <td className="py-2 pr-3">{row.intelligence.marketSignals.updatedAt}</td>
+                    <td className="py-2 pr-3">{row.modelCoverage.statusLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="portfolio-print-section">
+          <h3 className="text-[15px] font-semibold">Valuation Matrix</h3>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {analyticsRows.map((row) => (
+              <div
+                key={row.company.symbol}
+                className="rounded-md border px-3 py-3"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div className="mb-2 text-[12px] font-semibold">{row.company.symbol}</div>
+                {valuationMetrics(row.intelligence).map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="flex items-center justify-between gap-2 py-1 text-[12px]"
+                  >
+                    <span className="text-[var(--color-text-muted)]">{metric.label}</span>
+                    <span className="font-semibold tnum">{metric.value}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="portfolio-print-section">
+          <h3 className="text-[15px] font-semibold">Price Performance Comparison</h3>
+          <div className="mt-4 space-y-4">
+            {analyticsRows.map((row) => (
+              <div key={row.company.symbol}>
+                <div className="mb-2 flex items-center justify-between gap-3 text-[12px]">
+                  <span className="font-semibold">{row.company.symbol}</span>
+                  <span className="tnum text-[var(--color-text-muted)]">
+                    {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
+                    {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="flex h-14 items-end gap-1 rounded-md bg-[var(--color-tag-bg)] px-2 py-2">
+                  {row.intelligence.marketSignals.sharePriceTrend.slice(-14).map((point, index) => (
+                    <div
+                      key={`${row.company.symbol}-${point.label}-${index}`}
+                      className="flex-1 rounded-sm bg-[var(--color-brand)]"
+                      style={{ height: `${Math.max(10, (point.price / maxTrendPrice) * 100)}%` }}
+                      title={`${point.label}: PKR ${point.price.toFixed(2)}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="portfolio-print-section">
+        <h3 className="text-[15px] font-semibold">Model Availability</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {modelCoverage.rows.map((row) => {
+            const metrics = row.project
+              ? dashboardMetrics(workspaceByProjectId.get(row.project.id)).slice(0, 3)
+              : [];
+            return (
+              <div
+                key={row.company.symbol}
+                className="rounded-md border px-3 py-3"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[13px] font-semibold">{row.company.name}</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)]">
+                      {row.company.symbol}
+                    </div>
+                  </div>
+                  <Badge tone={row.available ? "success" : "warning"}>
+                    {row.available ? "Available" : "Missing"}
+                  </Badge>
+                </div>
+                {row.project ? (
+                  <div className="mt-3 space-y-1 text-[12px]">
+                    <div className="text-[var(--color-text-muted)]">
+                      Approved model: {row.project.projectLabel ?? row.project.companyName}
+                    </div>
+                    {metrics.length > 0 ? (
+                      metrics.map((metric) => (
+                        <div key={metric.label} className="flex justify-between gap-3">
+                          <span>{metric.label}</span>
+                          <span className="font-semibold tnum">{metric.value}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[var(--color-text-muted)]">
+                        Metrics load from approved workbook when workspace data is available.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-[12px] text-[var(--color-text-muted)]">
+                    Approved financial model not available yet. Market data remains available.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="portfolio-print-section">
+        <h3 className="text-[15px] font-semibold">Source Coverage And Caveats</h3>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <SourceCoverageTile
+            source="AskAnalyst / PSX"
+            status="Live market data"
+            detail="Quote, change, price history, valuation context, and market fields are external provider data."
+          />
+          <SourceCoverageTile
+            source="Approved Financial Models"
+            status={modelCoverage.label}
+            detail="Model metrics appear only where a manager-approved workbook exists."
+          />
+          <SourceCoverageTile
+            source="Broker Research"
+            status="Availability varies by company"
+            detail="Broker target prices and commentary are separate from long-term model forecasts."
+          />
+          <SourceCoverageTile
+            source="Portfolio Export"
+            status="Snapshot view"
+            detail="PDF output captures the current page view and timestamps; market values may change after export."
+          />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SourceCoverageTile({
+  source,
+  status,
+  detail,
+}: {
+  source: string;
+  status: string;
+  detail: string;
+}) {
+  return (
+    <div
+      className="rounded-md border px-3 py-3 text-[12px]"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <div className="font-semibold">{source}</div>
+      <div className="mt-1 text-[var(--color-text-secondary)]">{status}</div>
+      <div className="mt-2 leading-relaxed text-[var(--color-text-muted)]">{detail}</div>
+    </div>
+  );
+}
+
+function valuationMetrics(intelligence: CompanyIntelligence): IntelligenceMetric[] {
+  return (
+    intelligence.metricGroups
+      .find((group) => group.title === "Valuation Context")
+      ?.items.slice(0, 4) ?? []
+  );
+}
+
+function portfolioDraftFromDashboard(
+  dashboard: PortfolioDashboardResponse,
+): PortfolioDashboardDraft {
+  return {
+    name: dashboard.name,
+    description: dashboard.description ?? "",
+    visibility: dashboard.visibility,
+    companySelections: dashboard.companySelections,
+  };
 }
 
 function FinancialDashboardTab({
