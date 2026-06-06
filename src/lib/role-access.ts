@@ -32,7 +32,7 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/": ["finance_analyst", "finance_manager", "cfo", "admin"],
   "/inbox": ["finance_analyst"],
   "/registry": ["finance_analyst", "finance_manager", "cfo", "admin"],
-  "/ingestion": ["finance_analyst"],
+  "/ingestion/$projectId": ["finance_analyst"],
   "/forecast": ["finance_analyst"],
   "/assumptions": ["finance_analyst"],
   "/review": ["finance_manager"],
@@ -49,6 +49,9 @@ export function canSeeRoute(role: BackendRole, pathname: string): boolean {
   if (pathname === "/login") return true;
   if (pathname.startsWith("/diagnosis/")) {
     return diagnosisRoles.includes(role);
+  }
+  if (pathname.startsWith("/ingestion/")) {
+    return role === "finance_analyst";
   }
   return routeRoles[pathname]?.includes(role) ?? false;
 }

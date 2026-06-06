@@ -44,9 +44,9 @@ export function CycleProgress() {
 
           return (
             <div key={step.key} className="flex flex-1 items-center gap-1.5">
-              {step.key === "diagnosis" ? (
+              {step.key === "diagnosis" || step.key === "ingestion" ? (
                 <Link
-                  to="/diagnosis/$projectId"
+                  to={step.key === "diagnosis" ? "/diagnosis/$projectId" : "/ingestion/$projectId"}
                   params={{ projectId: selectedProjectId ?? "" }}
                   className="flex items-center gap-2 group"
                   style={{ pointerEvents: upcoming || !selectedProjectId ? "none" : undefined }}

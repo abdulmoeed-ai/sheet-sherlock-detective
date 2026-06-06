@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
-import { useSelectedProjectId } from "@/lib/project-store";
 import { IconTooltip } from "@/components/IconTooltip";
 import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
 import { readExtractionEvents, readExtractionJob, readWorkspace } from "@/lib/api/projects";
@@ -42,7 +41,7 @@ import {
   X,
 } from "lucide-react";
 
-export const Route = createFileRoute("/ingestion")({
+export const Route = createFileRoute("/ingestion/$projectId")({
   head: () => ({
     meta: [
       { title: "Ingestion — finance" },
@@ -66,9 +65,9 @@ function Ingestion() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const cycle = useCycle();
-  const projectId = useSelectedProjectId();
-  const uploadDocuments = useUploadDocuments(projectId ?? "__no_project__");
-  const startExtractionMutation = useStartExtraction(projectId ?? "__no_project__");
+  const { projectId } = Route.useParams();
+  const uploadDocuments = useUploadDocuments(projectId);
+  const startExtractionMutation = useStartExtraction(projectId);
   const [selectedUploads, setSelectedUploads] = useState<SelectedUpload[]>([]);
   const [rejectedFiles, setRejectedFiles] = useState<string[]>([]);
   const [rerunModalOpen, setRerunModalOpen] = useState(false);
@@ -419,7 +418,7 @@ function Ingestion() {
         fileCount={selectedUploads.length}
         uploadPending={uploadPending}
         statusMessage={uploadPending ? statusMessage : uploadSummary.failed ? `Upload failed: ${uploadSummary.failed}` : ""}
-        hasProject={!!projectId}
+        hasProject={true}
         onStart={startIngestion}
       />
     </PageShell>

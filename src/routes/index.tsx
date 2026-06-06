@@ -375,7 +375,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
         company: company.name,
         period: company.fiscalYear,
       });
-      navigate({ to: "/ingestion" });
+      navigate({ to: "/ingestion/$projectId", params: { projectId } });
     } catch (error) {
       setStartError(error instanceof Error ? error.message : "Unable to start model setup.");
     }

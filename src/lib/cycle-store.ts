@@ -73,7 +73,7 @@ export function useCycle(): CycleState {
 }
 
 export const CYCLE_STEPS: { key: CycleStatus; label: string; to?: string }[] = [
-  { key: "ingestion", label: "Ingestion", to: "/ingestion" },
+  { key: "ingestion", label: "Ingestion" },
   { key: "diagnosis", label: "Diagnosis" },
   { key: "forecast", label: "Forecast", to: "/forecast" },
   { key: "assumptions", label: "Assumptions", to: "/assumptions" },

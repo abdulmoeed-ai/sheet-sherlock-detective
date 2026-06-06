@@ -172,7 +172,7 @@ function Registry() {
       company: selectedCompany.name,
       period: selectedFY,
     });
-    navigate({ to: "/ingestion" });
+    navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
   };
 
   const handleResume = (project: ProjectResponse & { versionNum?: number }) => {
