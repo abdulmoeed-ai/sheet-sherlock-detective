@@ -20,7 +20,6 @@ import { useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { initialsFor, roleLabel } from "@/lib/role-access";
 import { IconTooltip } from "@/components/IconTooltip";
 import { ProductLogo } from "@/components/ProductLogo";
-import { ProductWordmark } from "@/components/ProductWordmark";
 import {
   sidebarStore,
   useSidebarCollapsed,
@@ -78,26 +77,7 @@ export function Sidebar() {
       }}
     >
       <div className={collapsed ? "flex justify-center px-0 pt-5 pb-4" : "px-3 pt-4 pb-3"}>
-        {collapsed ? (
-          <ProductLogo className="h-10 w-10" />
-        ) : (
-          <div
-            className="flex items-center gap-3 rounded-lg border px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(2,6,23,0.18)]"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(123,104,238,0.26), rgba(255,255,255,0.055))",
-              borderColor: "rgba(158,149,245,0.28)",
-            }}
-          >
-            <ProductLogo className="h-9 w-9" />
-            <div className="min-w-0 leading-tight">
-              <ProductWordmark
-                className="block truncate text-[18px] font-bold tracking-[0.01em] text-white"
-                aiClassName="text-[#DAD7FF]"
-              />
-            </div>
-          </div>
-        )}
+        <ProductLogo className={collapsed ? "h-10 w-10" : "h-11 w-11"} />
       </div>
 
       {!collapsed && (
@@ -214,7 +194,7 @@ export function Sidebar() {
               collapsed ? "h-10 w-10 text-[13px]" : "h-8 w-8 text-[12px]"
             }`}
             style={{ background: "var(--color-brand)" }}
-            title={user?.name ?? "F(AI)nance"}
+            title={user?.name ?? "finance"}
           >
             {initials}
           </div>

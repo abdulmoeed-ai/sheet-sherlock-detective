@@ -24,7 +24,7 @@ describe("LoginPage", () => {
   it("renders the minimal market-ready login experience", () => {
     render(<LoginPage />);
 
-    expect(screen.getByRole("heading", { name: "F(AI)nance" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "finance" })).toBeTruthy();
     expect(screen.getByText("AI-Enabled Finance Command Center")).toBeTruthy();
     expect(
       screen.getByRole("heading", { name: "Financial models, built for review." }),
