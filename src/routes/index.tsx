@@ -52,6 +52,7 @@ import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
 import { cycleStore } from "@/lib/cycle-store";
+import { templateForSector } from "@/lib/sector-template";
 import {
   companyIntelligenceFromAskAnalyst,
   getMockCompanyIntelligence,
@@ -360,7 +361,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
         sector: company.sector,
         fiscalYear: company.fiscalYear,
         currencyUnit: "Rs in Thousands",
-        template: "Millat - Template.xlsx",
+        template: templateForSector(company.sector),
         teamMembers: [],
       });
       const projectId = project.id;

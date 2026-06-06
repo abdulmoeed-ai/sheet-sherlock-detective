@@ -33,7 +33,7 @@ export function createProject(input: {
   sector?: string | null;
   fiscalYear?: string | null;
   currencyUnit?: string | null;
-  template: "Millat - Template.xlsx";
+  template: "Millat - Template.xlsx" | "Cement Sector Template Presentation.xlsx" | "E&P Sector Template Presentation.xlsx";
   teamMembers: Array<{
     name: string;
     email: string;

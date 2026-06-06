@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight, Eye, FileClock, GitBranch, Plus, Search } from "lucide-react";
+import { ArrowRight, Eye, FileClock, GitBranch, Loader2, Plus, Search } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
@@ -9,6 +9,7 @@ import { useProjects, useCreateProject } from "@/hooks/use-projects";
 import { usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore } from "@/lib/cycle-store";
+import { templateForSector } from "@/lib/sector-template";
 import type { ProjectResponse } from "@/lib/api/types";
 
 const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
@@ -159,19 +160,20 @@ function Registry() {
   // ── New version ───────────────────────────────────────────────────────────
   const handleNewVersion = async () => {
     if (!selectedCompany) return;
-    const project = await createProject.mutateAsync({
-      companyName: selectedCompany.name,
-      sector: selectedCompany.sector,
-      fiscalYear: selectedFY,
-      template: "Millat - Template.xlsx",
-      teamMembers: [],
-    });
-    setSelectedProjectId(project.id);
+    // Start cycle immediately so the sidebar + progress bar respond before the API returns
     cycleStore.startCycle({
       sector: selectedCompany.sector,
       company: selectedCompany.name,
       period: selectedFY,
     });
+    const project = await createProject.mutateAsync({
+      companyName: selectedCompany.name,
+      sector: selectedCompany.sector,
+      fiscalYear: selectedFY,
+      template: templateForSector(selectedCompany.sector),
+      teamMembers: [],
+    });
+    setSelectedProjectId(project.id);
     navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
   };
 
@@ -307,8 +309,8 @@ function Registry() {
                       Resume {versionId(selectedSymbol, selectedFY, activeProject.versionNum)}
                     </Button>
                     <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                      <Plus className="h-4 w-4" />
-                      New version
+                      {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {createProject.isPending ? "Creating…" : "New version"}
                     </Button>
                   </div>
                 </div>
@@ -328,8 +330,8 @@ function Registry() {
                     </p>
                   </div>
                   <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                    <Plus className="h-4 w-4" />
-                    Start {versionId(selectedSymbol, selectedFY, 1)}
+                    {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {createProject.isPending ? "Creating…" : `Start ${versionId(selectedSymbol, selectedFY, 1)}`}
                   </Button>
                 </div>
               </Card>

@@ -7,7 +7,7 @@ export interface AnalysisRequestCreateInput {
   companySymbol?: string | null;
   sector?: string | null;
   fiscalYear?: string | null;
-  template: "Millat - Template.xlsx";
+  template: "Millat - Template.xlsx" | "Cement Sector Template Presentation.xlsx" | "E&P Sector Template Presentation.xlsx";
   priority: "low" | "normal" | "high" | "urgent";
   dueDate?: string | null;
   note?: string | null;

@@ -16,12 +16,12 @@ import { Route as RegistryRouteImport } from './routes/registry'
 import { Route as ProtectionRouteImport } from './routes/protection'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as IngestionRouteImport } from './routes/ingestion'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as ForecastRouteImport } from './routes/forecast'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AssumptionsRouteImport } from './routes/assumptions'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IngestionProjectIdRouteImport } from './routes/ingestion.$projectId'
 import { Route as DiagnosisProjectIdRouteImport } from './routes/diagnosis.$projectId'
 
 const SourcesRoute = SourcesRouteImport.update({
@@ -59,11 +59,6 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IngestionRoute = IngestionRouteImport.update({
-  id: '/ingestion',
-  path: '/ingestion',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -89,6 +84,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IngestionProjectIdRoute = IngestionProjectIdRouteImport.update({
+  id: '/ingestion/$projectId',
+  path: '/ingestion/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DiagnosisProjectIdRoute = DiagnosisProjectIdRouteImport.update({
   id: '/diagnosis/$projectId',
   path: '/diagnosis/$projectId',
@@ -101,7 +101,6 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AuditRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
-  '/ingestion': typeof IngestionRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
@@ -110,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/sign-off': typeof SignOffRoute
   '/sources': typeof SourcesRoute
   '/diagnosis/$projectId': typeof DiagnosisProjectIdRoute
+  '/ingestion/$projectId': typeof IngestionProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -117,7 +117,6 @@ export interface FileRoutesByTo {
   '/audit': typeof AuditRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
-  '/ingestion': typeof IngestionRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
@@ -126,6 +125,7 @@ export interface FileRoutesByTo {
   '/sign-off': typeof SignOffRoute
   '/sources': typeof SourcesRoute
   '/diagnosis/$projectId': typeof DiagnosisProjectIdRoute
+  '/ingestion/$projectId': typeof IngestionProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -134,7 +134,6 @@ export interface FileRoutesById {
   '/audit': typeof AuditRoute
   '/forecast': typeof ForecastRoute
   '/inbox': typeof InboxRoute
-  '/ingestion': typeof IngestionRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/protection': typeof ProtectionRoute
@@ -143,6 +142,7 @@ export interface FileRoutesById {
   '/sign-off': typeof SignOffRoute
   '/sources': typeof SourcesRoute
   '/diagnosis/$projectId': typeof DiagnosisProjectIdRoute
+  '/ingestion/$projectId': typeof IngestionProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -152,7 +152,6 @@ export interface FileRouteTypes {
     | '/audit'
     | '/forecast'
     | '/inbox'
-    | '/ingestion'
     | '/login'
     | '/notifications'
     | '/protection'
@@ -161,6 +160,7 @@ export interface FileRouteTypes {
     | '/sign-off'
     | '/sources'
     | '/diagnosis/$projectId'
+    | '/ingestion/$projectId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -168,7 +168,6 @@ export interface FileRouteTypes {
     | '/audit'
     | '/forecast'
     | '/inbox'
-    | '/ingestion'
     | '/login'
     | '/notifications'
     | '/protection'
@@ -177,6 +176,7 @@ export interface FileRouteTypes {
     | '/sign-off'
     | '/sources'
     | '/diagnosis/$projectId'
+    | '/ingestion/$projectId'
   id:
     | '__root__'
     | '/'
@@ -184,7 +184,6 @@ export interface FileRouteTypes {
     | '/audit'
     | '/forecast'
     | '/inbox'
-    | '/ingestion'
     | '/login'
     | '/notifications'
     | '/protection'
@@ -193,6 +192,7 @@ export interface FileRouteTypes {
     | '/sign-off'
     | '/sources'
     | '/diagnosis/$projectId'
+    | '/ingestion/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -201,7 +201,6 @@ export interface RootRouteChildren {
   AuditRoute: typeof AuditRoute
   ForecastRoute: typeof ForecastRoute
   InboxRoute: typeof InboxRoute
-  IngestionRoute: typeof IngestionRoute
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
   ProtectionRoute: typeof ProtectionRoute
@@ -210,6 +209,7 @@ export interface RootRouteChildren {
   SignOffRoute: typeof SignOffRoute
   SourcesRoute: typeof SourcesRoute
   DiagnosisProjectIdRoute: typeof DiagnosisProjectIdRoute
+  IngestionProjectIdRoute: typeof IngestionProjectIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -263,13 +263,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ingestion': {
-      id: '/ingestion'
-      path: '/ingestion'
-      fullPath: '/ingestion'
-      preLoaderRoute: typeof IngestionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/inbox': {
       id: '/inbox'
       path: '/inbox'
@@ -305,6 +298,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ingestion/$projectId': {
+      id: '/ingestion/$projectId'
+      path: '/ingestion/$projectId'
+      fullPath: '/ingestion/$projectId'
+      preLoaderRoute: typeof IngestionProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/diagnosis/$projectId': {
       id: '/diagnosis/$projectId'
       path: '/diagnosis/$projectId'
@@ -321,7 +321,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuditRoute: AuditRoute,
   ForecastRoute: ForecastRoute,
   InboxRoute: InboxRoute,
-  IngestionRoute: IngestionRoute,
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
   ProtectionRoute: ProtectionRoute,
@@ -330,6 +329,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignOffRoute: SignOffRoute,
   SourcesRoute: SourcesRoute,
   DiagnosisProjectIdRoute: DiagnosisProjectIdRoute,
+  IngestionProjectIdRoute: IngestionProjectIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
