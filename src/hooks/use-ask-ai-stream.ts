@@ -15,9 +15,10 @@ export function useAskAiStream(projectId: string | null) {
     async (
       input: Record<string, unknown>,
       options: AskAiStreamCallbacks = {},
-      requestOptions: { signal?: AbortSignal } = {},
+      requestOptions: { signal?: AbortSignal; projectIdOverride?: string | null } = {},
     ): Promise<AskAiFinalResponse | null> => {
-      if (!projectId) {
+      const effectiveProjectId = requestOptions.projectIdOverride ?? projectId;
+      if (!effectiveProjectId) {
         setError("Select a project before using Ask AI.");
         return null;
       }
@@ -25,7 +26,7 @@ export function useAskAiStream(projectId: string | null) {
       setError(null);
       setAnswer("");
       try {
-        const response = await askAi(projectId, input, requestOptions);
+        const response = await askAi(effectiveProjectId, input, requestOptions);
         return await readAskAiSseStream(response, {
           ...options,
           onChunk: (nextAnswer) => {
