@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight, Eye, FileClock, GitBranch, Plus } from "lucide-react";
+import { ArrowRight, Eye, FileClock, GitBranch, Plus, Search } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
+import { useCurrentUser } from "@/hooks/use-auth";
 import { useProjects, useCreateProject } from "@/hooks/use-projects";
 import { usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
@@ -11,11 +12,13 @@ import { cycleStore } from "@/lib/cycle-store";
 import type { ProjectResponse } from "@/lib/api/types";
 
 const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
+const WORKBOOK_TABLE_COLUMNS =
+  "minmax(190px,1.4fr) minmax(190px,1.5fr) 88px 76px 150px minmax(150px,1fr) 76px";
 
 export const Route = createFileRoute("/registry")({
   head: () => ({
     meta: [
-      { title: "Workbooks — F(AI)nance" },
+      { title: "Excel Workbooks — F(AI)nance" },
       {
         name: "description",
         content: "Silent pre-initiation lookup, version timeline, and CFO-grade decision cards.",
@@ -37,11 +40,16 @@ function completeness(project: ProjectResponse) {
 
 // Projects the analyst can still act on (not yet submitted to manager/CFO/approved)
 const ACTIVE_STATUSES = new Set([
+  "draft",
+  "setup",
   "created",
   "documents_uploaded",
   "extracting",
   "extraction_failed",
+  "ready_for_diagnosis",
+  "in_diagnosis",
   "awaiting_review",
+  "manager_changes_requested",
   "cfo_changes_requested",
 ]);
 
@@ -51,24 +59,42 @@ function isActive(status: string) {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    created: "DRAFT",
-    documents_uploaded: "DRAFT",
-    extracting: "EXTRACTING",
-    extraction_failed: "FAILED",
-    awaiting_review: "PENDING REVIEW",
-    manager_review: "IN REVIEW",
-    cfo_review: "CFO REVIEW",
-    cfo_changes_requested: "CHANGES REQUESTED",
-    approved: "APPROVED",
+    draft: "Draft",
+    setup: "Draft",
+    created: "Draft",
+    documents_uploaded: "Documents Uploaded",
+    extracting: "Extracting",
+    extraction_failed: "Extraction Failed",
+    ready_for_diagnosis: "Ready for Diagnosis",
+    in_diagnosis: "In Diagnosis",
+    awaiting_review: "Ready for Diagnosis",
+    manager_changes_requested: "Manager Changes Requested",
+    manager_review: "Submitted to Manager",
+    cfo_review: "CFO Review",
+    cfo_changes_requested: "CFO Changes Requested",
+    approved: "Approved",
   };
   return map[status] ?? status.toUpperCase().replace(/_/g, " ");
 }
 
 function statusTone(status: string): "success" | "warning" | "info" | "neutral" {
   if (status === "approved") return "success";
-  if (status === "created" || status === "documents_uploaded" || status === "extraction_failed")
+  if (status === "extraction_failed") return "warning";
+  if (
+    status === "draft" ||
+    status === "setup" ||
+    status === "created" ||
+    status === "documents_uploaded"
+  )
     return "info";
-  if (status.includes("review") || status === "cfo_changes_requested") return "warning";
+  if (
+    status.includes("review") ||
+    status === "ready_for_diagnosis" ||
+    status === "in_diagnosis" ||
+    status === "manager_changes_requested" ||
+    status === "cfo_changes_requested"
+  )
+    return "warning";
   return "neutral";
 }
 
@@ -78,6 +104,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function Registry() {
   const navigate = useNavigate();
+  const { data: user } = useCurrentUser();
   const projects = useProjects();
   const psxCompanies = usePsxCompanies();
   const createProject = useCreateProject();
@@ -85,6 +112,7 @@ function Registry() {
   const [selectedSector, setSelectedSector] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedFY, setSelectedFY] = useState("FY2025");
+  const [workbookSearch, setWorkbookSearch] = useState("");
 
   // ── Sector options from PSX data ──────────────────────────────────────────
   const sectorOptions = useMemo(() => {
@@ -177,8 +205,18 @@ function Registry() {
         result.push({ ...p, versionNum: i + 1, symbol });
       });
     });
-    return result.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [projects.data, psxCompanies.data]);
+
+  const filteredProjects = useMemo(() => {
+    const query = workbookSearch.trim().toLowerCase();
+    if (!query) return versionedProjects;
+
+    return versionedProjects.filter((project) => {
+      const vid = versionId(project.symbol, project.fiscalYear ?? "FY", project.versionNum);
+      return project.companyName.toLowerCase().includes(query) || vid.toLowerCase().includes(query);
+    });
+  }, [versionedProjects, workbookSearch]);
 
   const handleOpenFromTable = (project: ProjectResponse) => {
     setSelectedProjectId(project.id);
@@ -192,9 +230,11 @@ function Registry() {
     navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
   };
 
+  const workbookTableTitle = user?.role === "finance_analyst" ? "My Workbooks" : "All Workbooks";
+
   return (
     <PageShell
-      title="Workbooks"
+      title="Excel Workbooks"
       subtitle="All available financial models can be found here"
       hideProgress
     >
@@ -369,18 +409,36 @@ function Registry() {
           </>
         )}
 
-        {/* ── All workbooks table ───────────────────────────────────────────── */}
+        {/* ── Workbooks table ───────────────────────────────────────────────── */}
         <Card>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <FileClock className="h-4 w-4 text-[var(--color-brand)]" />
-              <h3 className="text-[15px] font-semibold">All workbooks</h3>
+              <h3 className="text-[15px] font-semibold">{workbookTableTitle}</h3>
             </div>
-            {versionedProjects.length > 0 && (
-              <span className="text-[12px] text-[var(--color-text-muted)]">
-                {versionedProjects.length} workbook{versionedProjects.length !== 1 ? "s" : ""}
-              </span>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {versionedProjects.length > 0 && (
+                <span className="text-[12px] text-[var(--color-text-muted)]">
+                  {filteredProjects.length} of {versionedProjects.length} workbook
+                  {versionedProjects.length !== 1 ? "s" : ""}
+                </span>
+              )}
+              <label
+                className="flex h-9 w-[320px] max-w-full items-center gap-2 rounded-md border px-3"
+                style={{
+                  borderColor: "var(--color-border-strong)",
+                  background: "#fff",
+                }}
+              >
+                <Search className="h-4 w-4 text-[var(--color-text-muted)]" />
+                <input
+                  value={workbookSearch}
+                  onChange={(event) => setWorkbookSearch(event.target.value)}
+                  placeholder="Search company or version ID"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--color-text-muted)]"
+                />
+              </label>
+            </div>
           </div>
 
           {projects.isLoading ? (
@@ -403,54 +461,70 @@ function Registry() {
                 No workbooks for this account.
               </p>
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <div
+              className="rounded-lg border px-6 py-8 text-center"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              <Search className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              <p className="text-[13px] text-[var(--color-text-secondary)]">
+                No workbooks match that company name or version ID.
+              </p>
+            </div>
           ) : (
             <>
               {/* Header */}
               <div
                 className="mb-1 grid items-center gap-4 border-b px-4 pb-2 text-[10px] font-semibold uppercase tracking-wider"
                 style={{
-                  gridTemplateColumns: "2fr 80px 72px 130px 140px 1fr auto",
+                  gridTemplateColumns: WORKBOOK_TABLE_COLUMNS,
                   borderColor: "var(--color-border-default)",
                   color: "var(--color-text-muted)",
                 }}
               >
+                <span>Company Name</span>
                 <span>Version ID</span>
-                <span>Ticker</span>
-                <span>FY</span>
+                <span className="text-center">Ticker</span>
+                <span className="text-center">FY</span>
                 <span>Status</span>
-                <span>Completeness</span>
                 <span>Last edited</span>
                 <span />
               </div>
 
               {/* Rows */}
               <div className="space-y-1">
-                {versionedProjects.map((project) => {
-                  const pct = completeness(project);
+                {filteredProjects.map((project) => {
                   const vid = versionId(
                     project.symbol,
                     project.fiscalYear ?? "FY",
                     project.versionNum,
                   );
-                  const active = isActive(project.status);
                   return (
                     <div
                       key={project.id}
                       onClick={() => handleOpenFromTable(project)}
                       className="group grid cursor-pointer items-center gap-4 rounded-lg px-4 py-3 transition-colors hover:bg-[var(--color-tag-bg)]"
-                      style={{ gridTemplateColumns: "2fr 80px 72px 130px 140px 1fr auto" }}
+                      style={{ gridTemplateColumns: WORKBOOK_TABLE_COLUMNS }}
                     >
-                      {/* Version ID + company name */}
+                      {/* Company name */}
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-semibold">
+                          {project.companyName}
+                        </div>
+                        {project.sector && (
+                          <div className="mt-0.5 truncate text-[11px] text-[var(--color-text-muted)]">
+                            {project.sector}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Version ID */}
                       <div className="min-w-0">
                         <div className="truncate text-[13px] font-semibold tnum">{vid}</div>
-                        <div className="mt-0.5 truncate text-[11px] text-[var(--color-text-muted)]">
-                          {project.companyName}
-                          {project.sector ? ` · ${project.sector}` : ""}
-                        </div>
                       </div>
 
                       {/* Ticker chip */}
-                      <div>
+                      <div className="text-center">
                         <span
                           className="inline-block rounded-md px-2 py-0.5 text-[11px] font-bold"
                           style={{
@@ -463,47 +537,13 @@ function Registry() {
                       </div>
 
                       {/* FY */}
-                      <div className="text-[13px] tnum">{project.fiscalYear ?? "—"}</div>
+                      <div className="text-center text-[13px] tnum">
+                        {project.fiscalYear ?? "—"}
+                      </div>
 
                       {/* Status */}
                       <div>
                         <StatusBadge status={project.status} />
-                      </div>
-
-                      {/* Completeness with progress bar */}
-                      <div>
-                        <div className="mb-1 flex items-center justify-between">
-                          <span
-                            className="text-[12px] font-semibold tnum"
-                            style={{
-                              color:
-                                pct === 100
-                                  ? "var(--color-success)"
-                                  : active
-                                    ? "var(--color-brand)"
-                                    : "var(--color-text-secondary)",
-                            }}
-                          >
-                            {pct}%
-                          </span>
-                        </div>
-                        <div
-                          className="h-1.5 w-full overflow-hidden rounded-full"
-                          style={{ background: "var(--color-border-default)" }}
-                        >
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${pct}%`,
-                              background:
-                                pct === 100
-                                  ? "var(--color-success)"
-                                  : active
-                                    ? "var(--color-brand)"
-                                    : "var(--color-text-muted)",
-                            }}
-                          />
-                        </div>
                       </div>
 
                       {/* Last edited */}
@@ -521,8 +561,8 @@ function Registry() {
                         </span>
                       </div>
 
-                      {/* Open button — revealed on hover */}
-                      <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                      {/* Open button */}
+                      <div className="justify-self-end">
                         <button
                           className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold"
                           style={{
