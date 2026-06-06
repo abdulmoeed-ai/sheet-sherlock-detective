@@ -4,6 +4,7 @@ import type {
   AskAiChatSessionResponse,
   AskAiChatSessionSummary,
   AskAiModelSearchResponse,
+  AskAiWorkbookInventoryResponse,
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
@@ -218,6 +219,10 @@ export function searchAskAiModels(input: { query: string }) {
     method: "POST",
     body: input,
   });
+}
+
+export function listAskAiWorkbooks() {
+  return apiFetch<AskAiWorkbookInventoryResponse>("/api/ask-ai/workbooks");
 }
 
 export function listAskAiSessions(input: { limit?: number; cursor?: string | null } = {}) {
