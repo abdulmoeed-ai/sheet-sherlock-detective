@@ -109,7 +109,9 @@ export function buildPortfolioApprovedModelCoverage(
       company,
       project: project ?? null,
       available: Boolean(project),
-      statusLabel: project ? "Approved model available" : "Approved model not available",
+      statusLabel: project
+        ? "Approved financial model available"
+        : "Approved financial model not available yet",
     };
   });
   const availableCount = rows.filter((row) => row.available).length;

@@ -649,7 +649,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
   };
 
   const removeDashboard = async (dashboard: PortfolioDashboardResponse) => {
-    if (!window.confirm(`Delete ${dashboard.name}? This portfolio dashboard will be removed.`)) {
+    if (!window.confirm(`Delete ${dashboard.name}? This dashboard will be removed.`)) {
       return;
     }
     await deletePortfolio.mutateAsync(dashboard.id);
@@ -751,7 +751,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
                 <h2 className="text-[16px] font-semibold">Public Portfolio Dashboards</h2>
               </div>
               <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                Open shared portfolio dashboards in read-only mode with creator attribution.
+                Open public dashboards in read-only mode and see who created them.
               </p>
             </div>
             <label className="min-w-[220px]">
@@ -777,7 +777,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
         <PortfolioDashboardList
           dashboards={filteredPublicItems}
           loading={publicDashboards.isLoading}
-          emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+          emptyLabel="Create a dashboard to compare companies across one or more sectors."
           currentUserId={user?.id ?? null}
           readOnly
           showCreatorFilter={false}
@@ -803,7 +803,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
           </div>
           <Button onClick={() => setView("create")} disabled={!canCreate}>
             <Plus className="h-4 w-4" />
-            New Portfolio Dashboard
+            New Dashboard
           </Button>
         </div>
         {createError ? (
@@ -822,7 +822,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
           <PortfolioDashboardList
             dashboards={myItems}
             loading={myDashboards.isLoading}
-            emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+            emptyLabel="Create a dashboard to compare companies across one or more sectors."
             currentUserId={user?.id ?? null}
             onOpen={openDashboard}
             onEdit={startEdit}
@@ -838,7 +838,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
           <PortfolioDashboardList
             dashboards={publicItems}
             loading={publicDashboards.isLoading}
-            emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+            emptyLabel="Create a dashboard to compare companies across one or more sectors."
             currentUserId={user?.id ?? null}
             readOnly
             onOpen={openDashboard}
@@ -955,7 +955,7 @@ function PortfolioDashboardList({
           className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
           style={{ borderColor: "var(--color-border-default)" }}
         >
-          No portfolio dashboards match that search.
+          No dashboards match that search.
         </div>
       ) : (
         <div className="space-y-2">
@@ -1034,7 +1034,7 @@ function PortfolioDashboardRow({
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => onOpen(dashboard)}>
             <Eye className="h-4 w-4" />
-            {readOnly && !isCreator ? "Open read-only" : "Open"}
+            Open Dashboard
           </Button>
           <Button variant="ghost" onClick={() => onDuplicate(dashboard)}>
             <Copy className="h-4 w-4" />
@@ -1129,31 +1129,17 @@ function PortfolioDashboardBuilder({
     }));
   };
 
-  const updateWeight = (symbol: string, value: string) => {
-    const parsed = value.trim() === "" ? null : Number(value);
-    setDraft((current) => ({
-      ...current,
-      companySelections: current.companySelections.map((company) =>
-        company.symbol === symbol
-          ? { ...company, weight: parsed === null || Number.isNaN(parsed) ? null : parsed }
-          : company,
-      ),
-    }));
-  };
-
   const changeVisibility = (visibility: PortfolioDashboardVisibility) => {
     if (visibility === draft.visibility) return;
     if (
       visibility === "public" &&
-      !window.confirm("Make this portfolio dashboard public for everyone with Dashboard access?")
+      !window.confirm("Make this dashboard public for everyone with Dashboard access?")
     ) {
       return;
     }
     if (
       visibility === "private" &&
-      !window.confirm(
-        "Make this portfolio dashboard private? It will disappear from public listings.",
-      )
+      !window.confirm("Make this dashboard private? It will disappear from public listings.")
     ) {
       return;
     }
@@ -1168,12 +1154,6 @@ function PortfolioDashboardBuilder({
     }
     if (normalizedCompanies.length === 0) {
       setValidationError("Select at least one company.");
-      return;
-    }
-    if (
-      normalizedCompanies.some((company) => company.weight !== null && Number(company.weight) <= 0)
-    ) {
-      setValidationError("Weights must be positive when entered.");
       return;
     }
     setValidationError(null);
@@ -1192,8 +1172,7 @@ function PortfolioDashboardBuilder({
           <div>
             <h2 className="text-[18px] font-semibold">{title}</h2>
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-              Select companies across one or more sectors and save the dashboard for repeated
-              analysis.
+              Select companies across one or more sectors and save a dashboard for repeat analysis.
             </p>
           </div>
           <Button variant="ghost" onClick={onCancel}>
@@ -1251,7 +1230,7 @@ function PortfolioDashboardBuilder({
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
               className="min-h-[76px] w-full rounded-md border bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand)]"
               style={{ borderColor: "var(--color-border-default)" }}
-              placeholder="Optional context for this portfolio dashboard"
+              placeholder="Optional context for this dashboard"
             />
           </label>
           <div className="xl:col-span-2 rounded-md bg-[var(--color-tag-bg)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -1302,17 +1281,16 @@ function PortfolioDashboardBuilder({
             className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
             style={{ borderColor: "var(--color-border-default)" }}
           >
-            Add at least one company to create a portfolio dashboard.
+            Add at least one company to create a dashboard.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
               <thead>
                 <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
                   <th className="py-2 pr-3 font-semibold">Company</th>
                   <th className="py-2 pr-3 font-semibold">Ticker</th>
                   <th className="py-2 pr-3 font-semibold">Sector</th>
-                  <th className="py-2 pr-3 font-semibold">Optional Weight</th>
                   <th className="py-2 text-right font-semibold">Remove</th>
                 </tr>
               </thead>
@@ -1326,17 +1304,6 @@ function PortfolioDashboardBuilder({
                     <td className="py-2 pr-3 font-semibold">{company.name}</td>
                     <td className="py-2 pr-3 tnum">{company.symbol}</td>
                     <td className="py-2 pr-3">{company.sector}</td>
-                    <td className="py-2 pr-3">
-                      <input
-                        value={company.weight ?? ""}
-                        onChange={(event) => updateWeight(company.symbol, event.target.value)}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="h-8 w-28 rounded-md border bg-white px-2 text-[12px] outline-none focus:border-[var(--color-brand)]"
-                        style={{ borderColor: "var(--color-border-default)" }}
-                      />
-                    </td>
                     <td className="py-2 text-right">
                       <Button variant="ghost" onClick={() => removeCompany(company.symbol)}>
                         <X className="h-4 w-4" />
@@ -1356,7 +1323,7 @@ function PortfolioDashboardBuilder({
         <div className="mt-4 flex justify-end">
           <Button onClick={save} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save Portfolio Dashboard
+            Save Dashboard
           </Button>
         </div>
       </Card>
@@ -1425,7 +1392,7 @@ function PortfolioDashboardDetail({
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              Download PDF
+              Download PDF Report
             </Button>
             <Button variant="secondary" onClick={onDuplicate} disabled={duplicating}>
               {duplicating ? (
@@ -1469,15 +1436,14 @@ function PortfolioDashboardDetail({
       <PortfolioDashboardReport dashboard={dashboard} projects={projects} />
 
       <Card className="portfolio-print-section">
-        <h3 className="mb-3 text-[15px] font-semibold">Portfolio Constituents</h3>
+        <h3 className="mb-3 text-[15px] font-semibold">Companies In Portfolio</h3>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
+          <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
                 <th className="py-2 pr-3 font-semibold">Company</th>
                 <th className="py-2 pr-3 font-semibold">Ticker</th>
                 <th className="py-2 pr-3 font-semibold">Sector</th>
-                <th className="py-2 pr-3 font-semibold">Weight</th>
               </tr>
             </thead>
             <tbody>
@@ -1490,9 +1456,6 @@ function PortfolioDashboardDetail({
                   <td className="py-2 pr-3 font-semibold">{company.name}</td>
                   <td className="py-2 pr-3 tnum">{company.symbol}</td>
                   <td className="py-2 pr-3">{company.sector}</td>
-                  <td className="py-2 pr-3">
-                    {company.weight ? `${company.weight}%` : "Unweighted"}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1605,8 +1568,8 @@ function PortfolioDashboardReport({
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Companies" value={dashboard.companySelections.length} />
           <StatCard label="Sectors" value={sectorAllocation.length} />
-          <StatCard label="Live Source" value="AskAnalyst" />
-          <StatCard label="Approved Models" value={modelCoverage.availableCount} />
+          <StatCard label="Market Data" value="AskAnalyst" />
+          <StatCard label="Models Available" value={modelCoverage.availableCount} />
         </div>
       </Card>
 
@@ -1644,7 +1607,7 @@ function PortfolioDashboardReport({
                   <th className="py-2 pr-3 font-semibold">Last Price</th>
                   <th className="py-2 pr-3 font-semibold">Change</th>
                   <th className="py-2 pr-3 font-semibold">Last Synced</th>
-                  <th className="py-2 pr-3 font-semibold">Model Coverage</th>
+                  <th className="py-2 pr-3 font-semibold">Model Availability</th>
                 </tr>
               </thead>
               <tbody>
@@ -1740,7 +1703,7 @@ function PortfolioDashboardReport({
       </div>
 
       <Card className="portfolio-print-section">
-        <h3 className="text-[15px] font-semibold">Approved Model Coverage</h3>
+        <h3 className="text-[15px] font-semibold">Model Availability</h3>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {modelCoverage.rows.map((row) => {
             const metrics = row.project
@@ -1783,7 +1746,7 @@ function PortfolioDashboardReport({
                   </div>
                 ) : (
                   <div className="mt-3 text-[12px] text-[var(--color-text-muted)]">
-                    Approved model not available. Live market analytics remain available.
+                    Approved financial model not available yet. Market data remains available.
                   </div>
                 )}
               </div>
@@ -1801,9 +1764,9 @@ function PortfolioDashboardReport({
             detail="Quote, change, price history, valuation context, and market fields are external provider data."
           />
           <SourceCoverageTile
-            source="Approved Models"
+            source="Approved Financial Models"
             status={modelCoverage.label}
-            detail="Approved model metrics appear only where a manager-approved workbook exists."
+            detail="Model metrics appear only where a manager-approved workbook exists."
           />
           <SourceCoverageTile
             source="Broker Research"

@@ -60,7 +60,6 @@ export interface PortfolioCompanySelection {
   symbol: string;
   name: string;
   sector: string;
-  weight?: number | null;
 }
 
 export interface PortfolioDashboardResponse {

@@ -133,8 +133,8 @@ describe("portfolio dashboard helpers", () => {
 
     expect(coverage.label).toBe("1 of 2 companies have approved models");
     expect(coverage.rows.map((row) => row.statusLabel)).toEqual([
-      "Approved model available",
-      "Approved model not available",
+      "Approved financial model available",
+      "Approved financial model not available yet",
     ]);
   });
 
