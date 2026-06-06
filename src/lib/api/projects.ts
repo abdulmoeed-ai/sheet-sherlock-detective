@@ -3,8 +3,10 @@ import type {
   AssumptionsGenerateResponse,
   AskAiChatSessionResponse,
   AskAiChatSessionSummary,
+  DashboardPresentationRequest,
   ExcelExportResponse,
   ExecutiveBriefResponse,
+  PresentationExportResponse,
   ExtractionJobResponse,
   ExtractionProgressEventResponse,
   ForecastRunResponse,
@@ -307,6 +309,26 @@ export function createExcelExport(projectId: string) {
 
 export function downloadExcelExport(projectId: string, exportId: string) {
   return apiBlob(`/api/projects/${projectId}/exports/${exportId}/download`);
+}
+
+export function createPresentationExport(projectId: string) {
+  return apiFetch<PresentationExportResponse>(
+    `/api/projects/${projectId}/exports/presentation`,
+    { method: "POST" },
+  );
+}
+
+export function downloadPresentationExport(projectId: string, exportId: string) {
+  return apiBlob(
+    `/api/projects/${projectId}/exports/presentation/${exportId}/download`,
+  );
+}
+
+export function createPresentationFromDashboard(input: DashboardPresentationRequest) {
+  return apiBlob("/api/presentations/from-dashboard", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function submitForManagerReview(projectId: string, note: string | null) {

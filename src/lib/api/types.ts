@@ -246,6 +246,32 @@ export interface ExcelExportResponse {
   downloadUrl: string;
 }
 
+export interface PresentationExportResponse {
+  id: string;
+  projectId: string;
+  status: string;
+  downloadUrl: string;
+  generatedBy: string;
+  warnings: string[];
+}
+
+export interface DashboardPresentationRequest {
+  companyName: string;
+  sector: string;
+  fiscalYear: string;
+  currencyUnit?: string;
+  headline?: string | null;
+  identifiers?: Record<string, unknown> | null;
+  provider?: Record<string, unknown> | null;
+  marketSignals?: Record<string, unknown> | null;
+  metricGroups?: Array<Record<string, unknown>> | null;
+  dataReadiness?: Record<string, unknown> | null;
+  sourceCoverage?: Record<string, unknown> | null;
+  forecastLocked?: Record<string, unknown> | null;
+  dashboardMetrics?: Array<Record<string, unknown>> | null;
+  revenueTrend?: Array<Record<string, unknown>> | null;
+}
+
 export interface ForecastRunResponse {
   status: string;
   projectId: string;

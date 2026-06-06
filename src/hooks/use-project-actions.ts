@@ -3,10 +3,13 @@ import {
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
   createExcelExport,
+  createPresentationExport,
+  createPresentationFromDashboard,
   createComment,
   deleteComment,
   decideBalanceSheetDiagnosis,
   downloadExcelExport,
+  downloadPresentationExport,
   generateAssumptions,
   generateExecutiveBrief,
   recordCfoSignoff,
@@ -26,7 +29,7 @@ import {
   uploadDocument,
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { DocumentResponse, ExtractionJobResponse, ReviewCommentInput, WorkbookSaveInput } from "@/lib/api/types";
+import type { DashboardPresentationRequest, DocumentResponse, ExtractionJobResponse, ReviewCommentInput, WorkbookSaveInput } from "@/lib/api/types";
 import { uploadDocumentsSequential } from "@/lib/upload-documents";
 
 function invalidateProject(queryClient: QueryClient, projectId: string) {
@@ -80,6 +83,24 @@ export function useSaveWorkbook(projectId: string) {
 export function useDownloadExcelExport(projectId: string) {
   return useMutation({
     mutationFn: (exportId: string) => downloadExcelExport(projectId, exportId),
+  });
+}
+
+export function useCreatePresentationExport(projectId: string) {
+  return useMutation({
+    mutationFn: () => createPresentationExport(projectId),
+  });
+}
+
+export function useDownloadPresentationExport(projectId: string) {
+  return useMutation({
+    mutationFn: (exportId: string) => downloadPresentationExport(projectId, exportId),
+  });
+}
+
+export function useCreateDashboardPresentation() {
+  return useMutation({
+    mutationFn: (input: DashboardPresentationRequest) => createPresentationFromDashboard(input),
   });
 }
 

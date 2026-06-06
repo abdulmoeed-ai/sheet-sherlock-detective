@@ -8,10 +8,13 @@ import {
   FolderOpen,
   Loader2,
   Plus,
+  Presentation,
   ShieldCheck,
 } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { useCreateDashboardPresentation } from "@/hooks/use-project-actions";
+import { toast } from "sonner";
 import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -477,6 +480,8 @@ function AnalystNoModelDashboard({
   startError: string | null;
   onStartModel: () => void;
 }) {
+  const generatePresentation = useCreateDashboardPresentation();
+
   const fallbackIntelligence = useMemo(
     () =>
       getMockCompanyIntelligence(
@@ -511,8 +516,65 @@ function AnalystNoModelDashboard({
     [askAnalystOverview.data, fallbackIntelligence],
   );
 
+  const handleGeneratePresentation = async () => {
+    try {
+      const blob = await generatePresentation.mutateAsync({
+        companyName: intelligence.identifiers.name,
+        sector: intelligence.identifiers.sector,
+        fiscalYear: intelligence.identifiers.fiscalYear,
+        currencyUnit: intelligence.identifiers.currency,
+        headline: intelligence.headline,
+        identifiers: intelligence.identifiers as unknown as Record<string, unknown>,
+        provider: intelligence.provider as unknown as Record<string, unknown>,
+        marketSignals: intelligence.marketSignals as unknown as Record<string, unknown>,
+        metricGroups: intelligence.metricGroups as unknown as Array<Record<string, unknown>>,
+        dataReadiness: intelligence.dataReadiness as unknown as Record<string, unknown>,
+        sourceCoverage: intelligence.sourceCoverage as unknown as Record<string, unknown>,
+        forecastLocked: intelligence.forecastLocked as unknown as Record<string, unknown>,
+        dashboardMetrics: null,
+        revenueTrend: null,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${intelligence.identifiers.name.replace(/\s+/g, "_")}_${intelligence.identifiers.fiscalYear}_Dashboard_Report.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Presentation downloaded.");
+    } catch {
+      toast.error("Failed to generate presentation. Please try again.");
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Dashboard header with Generate Presentation button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[15px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            {intelligence.identifiers.name}
+          </p>
+          <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+            {intelligence.identifiers.sector} · {intelligence.identifiers.fiscalYear}
+          </p>
+        </div>
+        <button
+          onClick={handleGeneratePresentation}
+          disabled={generatePresentation.isPending}
+          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 transition-colors hover:bg-[var(--color-bg-subtle)]"
+          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-primary)" }}
+        >
+          {generatePresentation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Presentation className="h-3.5 w-3.5" />
+          )}
+          {generatePresentation.isPending ? "Generating…" : "Generate Presentation"}
+        </button>
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <StartModelCard
           company={state.company}

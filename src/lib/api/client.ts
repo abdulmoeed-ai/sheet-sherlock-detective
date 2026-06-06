@@ -15,8 +15,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return parseResponse<T>(response);
 }
 
-export async function apiBlob(path: string): Promise<Blob> {
-  const response = await fetchWithAuthRetry(path);
+export async function apiBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const response = await fetchWithAuthRetry(path, options);
   if (!response.ok) {
     const payload = await safeJson(response);
     throw new ApiError(response.status, backendMessage(payload, response.status), payload);

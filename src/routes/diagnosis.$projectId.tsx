@@ -17,6 +17,7 @@ import {
   Stethoscope,
   X,
 } from "lucide-react";
+import { PresentationExportButton } from "@/components/PresentationExportButton";
 import { Sidebar } from "@/components/Sidebar";
 import {
   DiagnosisSourceInlinePreview,
@@ -657,6 +658,7 @@ function Diagnosis() {
               )}
               Export to Excel
             </button>
+            {projectId && <PresentationExportButton projectId={projectId} />}
             <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
               {draftSaveLabel}
             </span>
