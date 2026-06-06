@@ -15,6 +15,7 @@ import type {
   ReviewCommentInput,
   ReviewCommentResponse,
   ReviewHandoffResponse,
+  SourceSearchResponse,
   WorkbookRevisionResponse,
   WorkbookSaveInput,
   WorkbookSaveResponse,
@@ -185,13 +186,17 @@ export function searchSources(
   projectId: string,
   input: { query: string; sourceIds?: string[]; sourceGroup?: string | null },
 ) {
-  return apiFetch<Record<string, unknown>>(`/api/projects/${projectId}/search`, {
+  return apiFetch<SourceSearchResponse>(`/api/projects/${projectId}/search`, {
     method: "POST",
     body: input,
   });
 }
 
-export function askAi(projectId: string, input: Record<string, unknown>, options: { signal?: AbortSignal } = {}) {
+export function askAi(
+  projectId: string,
+  input: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {},
+) {
   return apiStream(`/api/projects/${projectId}/ask-ai`, {
     method: "POST",
     body: input,
@@ -208,7 +213,9 @@ export function listAskAiSessions(input: { limit?: number; cursor?: string | nul
 }
 
 export function readAskAiSession(sessionId: string) {
-  return apiFetch<AskAiChatSessionResponse>(`/api/ask-ai/sessions/${encodeURIComponent(sessionId)}`);
+  return apiFetch<AskAiChatSessionResponse>(
+    `/api/ask-ai/sessions/${encodeURIComponent(sessionId)}`,
+  );
 }
 
 export function renameAskAiSession(sessionId: string, title: string) {

@@ -142,9 +142,9 @@ export function getMockCompanyIntelligence(
     },
     headline: "No approved model exists. Start with the annual report.",
     provider: {
-      label: "Dashboard mock",
+      label: "Local fallback",
       statusLabel: "Fallback source",
-      detail: "Local market-style fallback used while AskAnalyst data is unavailable.",
+      detail: "Local PSX-style fallback used while AskAnalyst data is unavailable.",
       url: "https://www.askanalyst.com.pk/company/overview",
     },
     marketSignals: {
