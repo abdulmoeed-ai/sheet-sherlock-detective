@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import {
@@ -17,6 +18,7 @@ import {
   useConvertAnalysisRequestToProject,
 } from "@/hooks/use-analysis-requests";
 import { setSelectedProjectId } from "@/lib/project-store";
+import { paginateItems } from "@/lib/pagination";
 import type { AnalysisRequestResponse } from "@/lib/api/types";
 
 export const Route = createFileRoute("/inbox")({
@@ -41,8 +43,10 @@ function Inbox() {
   const convertRequest = useConvertAnalysisRequestToProject();
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const items = requests.data ?? [];
+  const paginatedItems = useMemo(() => paginateItems(items, page), [items, page]);
   const openCount = items.filter((i) => requestStatus(i) === "pending").length;
   const readyCount = items.filter((i) => requestStatus(i) === "acknowledged").length;
   const convertedCount = items.filter((i) => requestStatus(i) === "converted").length;
@@ -143,7 +147,7 @@ function Inbox() {
           </Card>
         ) : null}
 
-        {items.map((r) => (
+        {paginatedItems.map((r) => (
           <Card key={r.id}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
@@ -202,6 +206,12 @@ function Inbox() {
             </div>
           </Card>
         ))}
+        <PaginationControls
+          totalItems={items.length}
+          page={page}
+          onPageChange={setPage}
+          label="requests"
+        />
       </div>
     </PageShell>
   );

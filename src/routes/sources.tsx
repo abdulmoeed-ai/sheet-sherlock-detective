@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { readSourceRegistry } from "@/lib/api/source-registry";
@@ -7,6 +9,7 @@ import { readAdminMappingRules } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 import { useToggleMappingRule } from "@/hooks/use-project-actions";
 import { useSelectedProjectId } from "@/lib/project-store";
+import { paginateItems } from "@/lib/pagination";
 import { RefreshCw, AlertTriangle, CheckCircle2, Activity, Globe2 } from "lucide-react";
 
 export const Route = createFileRoute("/sources")({
@@ -192,48 +195,60 @@ function Sources() {
 }
 
 function SourceTable({ sources }: { sources: SourceRow[] }) {
+  const [page, setPage] = useState(1);
+  const paginatedSources = useMemo(() => paginateItems(sources, page), [sources, page]);
+
   return (
-    <table className="w-full text-[13px]">
-      <thead className="border-b text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
-        <tr>
-          <th className="py-2 text-left">Source</th>
-          <th className="text-left">Category</th>
-          <th className="text-left">Status</th>
-          <th className="text-left">Groups</th>
-          <th className="text-left">Allowed domains</th>
-          <th className="text-left">Metadata</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sources.map((source) => (
-          <tr key={source.id ?? source.name} className="border-b align-top last:border-0">
-            <td className="py-3">
-              <div className="font-semibold">{source.name}</div>
-              {source.id ? (
-                <div className="mt-1 font-mono text-[11px] text-[var(--color-text-muted)]">
-                  {source.id}
-                </div>
-              ) : null}
-            </td>
-            <td className="py-3">{formatLabel(source.category ?? "uncategorized")}</td>
-            <td className="py-3">{statusBadge(source.enabled)}</td>
-            <td className="py-3">
-              <TokenList items={source.groups} emptyLabel="No groups" />
-            </td>
-            <td className="py-3">
-              <TokenList
-                items={source.allowedDomains}
-                emptyLabel="No domains"
-                icon={<Globe2 className="h-3 w-3" />}
-              />
-            </td>
-            <td className="py-3 text-[var(--color-text-muted)]">
-              <Metadata source={source} />
-            </td>
+    <>
+      <table className="w-full text-[13px]">
+        <thead className="border-b text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
+          <tr>
+            <th className="py-2 text-left">Source</th>
+            <th className="text-left">Category</th>
+            <th className="text-left">Status</th>
+            <th className="text-left">Groups</th>
+            <th className="text-left">Allowed domains</th>
+            <th className="text-left">Metadata</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {paginatedSources.map((source) => (
+            <tr key={source.id ?? source.name} className="border-b align-top last:border-0">
+              <td className="py-3">
+                <div className="font-semibold">{source.name}</div>
+                {source.id ? (
+                  <div className="mt-1 font-mono text-[11px] text-[var(--color-text-muted)]">
+                    {source.id}
+                  </div>
+                ) : null}
+              </td>
+              <td className="py-3">{formatLabel(source.category ?? "uncategorized")}</td>
+              <td className="py-3">{statusBadge(source.enabled)}</td>
+              <td className="py-3">
+                <TokenList items={source.groups} emptyLabel="No groups" />
+              </td>
+              <td className="py-3">
+                <TokenList
+                  items={source.allowedDomains}
+                  emptyLabel="No domains"
+                  icon={<Globe2 className="h-3 w-3" />}
+                />
+              </td>
+              <td className="py-3 text-[var(--color-text-muted)]">
+                <Metadata source={source} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <PaginationControls
+        className="mt-4"
+        totalItems={sources.length}
+        page={page}
+        onPageChange={setPage}
+        label="sources"
+      />
+    </>
   );
 }
 
@@ -291,55 +306,67 @@ function MappingRulesTable({
   pending: boolean;
   onToggle: (rule: MappingRuleRow) => void;
 }) {
+  const [page, setPage] = useState(1);
+  const paginatedRules = useMemo(() => paginateItems(rules, page), [rules, page]);
+
   return (
-    <div className="max-h-[520px] overflow-auto">
-      <table className="w-full text-[13px]">
-        <thead className="border-b text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
-          <tr>
-            <th className="py-2 text-left">Rule</th>
-            <th className="text-left">Category</th>
-            <th className="text-left">Severity</th>
-            <th className="text-left">Status</th>
-            <th className="text-right">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rules.map((rule) => (
-            <tr key={rule.code} className="border-b align-top last:border-0">
-              <td className="py-3">
-                <div className="font-semibold">
-                  {rule.code} · {rule.title}
-                </div>
-                <div className="mt-1 max-w-[620px] text-[12px] text-[var(--color-text-muted)]">
-                  {rule.description}
-                </div>
-                {rule.sourceReference ? (
-                  <div className="mt-1 font-mono text-[11px] text-[var(--color-text-muted)]">
-                    {rule.sourceReference}
-                  </div>
-                ) : null}
-              </td>
-              <td className="py-3">{rule.category}</td>
-              <td className="py-3">
-                <Badge tone={rule.severity === "Critical" ? "danger" : "neutral"}>
-                  {rule.severity}
-                </Badge>
-              </td>
-              <td className="py-3">{statusBadge(rule.enabled)}</td>
-              <td className="py-3 text-right">
-                <Button
-                  variant={rule.enabled ? "secondary" : "primary"}
-                  onClick={() => onToggle(rule)}
-                  disabled={pending}
-                >
-                  {rule.enabled ? "Disable" : "Enable"}
-                </Button>
-              </td>
+    <>
+      <div className="max-h-[520px] overflow-auto">
+        <table className="w-full text-[13px]">
+          <thead className="border-b text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">
+            <tr>
+              <th className="py-2 text-left">Rule</th>
+              <th className="text-left">Category</th>
+              <th className="text-left">Severity</th>
+              <th className="text-left">Status</th>
+              <th className="text-right">Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {paginatedRules.map((rule) => (
+              <tr key={rule.code} className="border-b align-top last:border-0">
+                <td className="py-3">
+                  <div className="font-semibold">
+                    {rule.code} · {rule.title}
+                  </div>
+                  <div className="mt-1 max-w-[620px] text-[12px] text-[var(--color-text-muted)]">
+                    {rule.description}
+                  </div>
+                  {rule.sourceReference ? (
+                    <div className="mt-1 font-mono text-[11px] text-[var(--color-text-muted)]">
+                      {rule.sourceReference}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="py-3">{rule.category}</td>
+                <td className="py-3">
+                  <Badge tone={rule.severity === "Critical" ? "danger" : "neutral"}>
+                    {rule.severity}
+                  </Badge>
+                </td>
+                <td className="py-3">{statusBadge(rule.enabled)}</td>
+                <td className="py-3 text-right">
+                  <Button
+                    variant={rule.enabled ? "secondary" : "primary"}
+                    onClick={() => onToggle(rule)}
+                    disabled={pending}
+                  >
+                    {rule.enabled ? "Disable" : "Enable"}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls
+        className="mt-4"
+        totalItems={rules.length}
+        page={page}
+        onPageChange={setPage}
+        label="rules"
+      />
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -20,6 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
@@ -50,6 +51,7 @@ import {
 } from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
+import { paginateItems } from "@/lib/pagination";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
 import { cycleStore } from "@/lib/cycle-store";
 import { templateForSector } from "@/lib/sector-template";
@@ -327,6 +329,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const [startError, setStartError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
+  const [projectPage, setProjectPage] = useState(1);
 
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
   const projectList = useMemo(() => projects.data ?? [], [projects.data]);
@@ -348,6 +351,14 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [projectList, projectSearch]);
+  const paginatedProjects = useMemo(
+    () => paginateItems(filteredProjects, projectPage),
+    [filteredProjects, projectPage],
+  );
+
+  useEffect(() => {
+    setProjectPage(1);
+  }, [projectSearch]);
   // Show skeleton until ALL key data is ready — prevents old-dashboard flash on re-navigation
   const allDataReady =
     projects.data !== undefined && requests.data !== undefined && psxCompanies.data !== undefined;
@@ -532,7 +543,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredProjects.map((project) => (
+                  {paginatedProjects.map((project) => (
                     <button
                       key={project.id}
                       onClick={() => {
@@ -559,6 +570,12 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                       <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
                     </button>
                   ))}
+                  <PaginationControls
+                    totalItems={filteredProjects.length}
+                    page={projectPage}
+                    onPageChange={setProjectPage}
+                    label="projects"
+                  />
                 </div>
               )}
             </Card>
@@ -886,6 +903,7 @@ function PortfolioDashboardList({
     "all",
   );
   const [creatorFilter, setCreatorFilter] = useState("");
+  const [page, setPage] = useState(1);
   const creatorOptions = useMemo(
     () => [...new Set(dashboards.map((dashboard) => dashboard.createdByName))].sort(),
     [dashboards],
@@ -902,6 +920,14 @@ function PortfolioDashboardList({
       ),
     [creatorFilter, dashboards, search, showCreatorFilter, visibilityFilter],
   );
+  const paginatedDashboards = useMemo(
+    () => paginateItems(filteredDashboards, page),
+    [filteredDashboards, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [creatorFilter, search, visibilityFilter]);
 
   if (loading) {
     return <div className="text-[13px] text-[var(--color-text-muted)]">Loading portfolios...</div>;
@@ -960,7 +986,7 @@ function PortfolioDashboardList({
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredDashboards.map((dashboard) => (
+          {paginatedDashboards.map((dashboard) => (
             <PortfolioDashboardRow
               key={dashboard.id}
               dashboard={dashboard}
@@ -972,6 +998,12 @@ function PortfolioDashboardList({
               onDuplicate={onDuplicate}
             />
           ))}
+          <PaginationControls
+            totalItems={filteredDashboards.length}
+            page={page}
+            onPageChange={setPage}
+            label="dashboards"
+          />
         </div>
       )}
     </div>
@@ -2933,6 +2965,9 @@ function RequestList({
     projectId: string | null;
   }>;
 }) {
+  const [page, setPage] = useState(1);
+  const paginatedRequests = useMemo(() => paginateItems(requests, page), [requests, page]);
+
   if (loading)
     return <div className="text-[13px] text-[var(--color-text-muted)]">Loading requests...</div>;
   if (requests.length === 0)
@@ -2941,7 +2976,7 @@ function RequestList({
     );
   return (
     <div className="space-y-2">
-      {requests.map((request) => (
+      {paginatedRequests.map((request) => (
         <div
           key={request.id}
           className="rounded-md border px-4 py-3"
@@ -2970,6 +3005,12 @@ function RequestList({
           </div>
         </div>
       ))}
+      <PaginationControls
+        totalItems={requests.length}
+        page={page}
+        onPageChange={setPage}
+        label="requests"
+      />
     </div>
   );
 }
