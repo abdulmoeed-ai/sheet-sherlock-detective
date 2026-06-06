@@ -45,6 +45,7 @@ export function filterPortfolioDashboards(
   dashboards: PortfolioDashboardResponse[],
   searchTerm: string,
   creator: string | null = null,
+  visibility: PortfolioDashboardVisibility | "all" = "all",
 ) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const normalizedCreator = creator?.trim().toLowerCase() || null;
@@ -65,6 +66,13 @@ export function filterPortfolioDashboards(
     const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
     const matchesCreator =
       !normalizedCreator || dashboard.createdByName.toLowerCase() === normalizedCreator;
-    return matchesSearch && matchesCreator;
+    const matchesVisibility = visibility === "all" || dashboard.visibility === visibility;
+    return matchesSearch && matchesCreator && matchesVisibility;
   });
+}
+
+export function sortPortfolioDashboardsByUpdated(dashboards: PortfolioDashboardResponse[]) {
+  return [...dashboards].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
 }

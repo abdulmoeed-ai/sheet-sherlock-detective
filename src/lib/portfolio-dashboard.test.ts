@@ -5,6 +5,7 @@ import {
   portfolioCompanySummary,
   portfolioVisibilityDescription,
   portfolioVisibilityLabel,
+  sortPortfolioDashboardsByUpdated,
 } from "./portfolio-dashboard";
 import type { PortfolioDashboardResponse } from "@/lib/api/types";
 
@@ -72,5 +73,15 @@ describe("portfolio dashboard helpers", () => {
     expect(filterPortfolioDashboards(dashboards, "luck")).toHaveLength(1);
     expect(filterPortfolioDashboards(dashboards, "Automobile")).toHaveLength(1);
     expect(filterPortfolioDashboards(dashboards, "", "Portfolio Manager")).toHaveLength(1);
+    expect(filterPortfolioDashboards(dashboards, "", null, "public")).toHaveLength(1);
+  });
+
+  it("sorts dashboards by most recently updated", () => {
+    expect(
+      sortPortfolioDashboardsByUpdated([
+        dashboard({ id: "old", updatedAt: "2026-06-01T10:00:00Z" }),
+        dashboard({ id: "new", updatedAt: "2026-06-06T10:00:00Z" }),
+      ]).map((item) => item.id),
+    ).toEqual(["new", "old"]);
   });
 });

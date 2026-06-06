@@ -6,14 +6,18 @@ import {
   BarChart3,
   ClipboardList,
   CloudUpload,
+  Copy,
   Eye,
   FolderOpen,
   Globe2,
   Loader2,
   Lock,
+  Pencil,
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
+  X,
 } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
@@ -21,7 +25,13 @@ import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
 import { searchSources } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { BackendRole, PortfolioDashboardResponse, ProjectResponse } from "@/lib/api/types";
+import type {
+  BackendRole,
+  PortfolioCompanySelection,
+  PortfolioDashboardResponse,
+  PortfolioDashboardVisibility,
+  ProjectResponse,
+} from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
@@ -30,7 +40,12 @@ import {
   useAcknowledgeAnalysisRequest,
 } from "@/hooks/use-analysis-requests";
 import { useProjects, useCreateProject, useWorkspace } from "@/hooks/use-projects";
-import { usePortfolioDashboards } from "@/hooks/use-portfolio-dashboards";
+import {
+  useCreatePortfolioDashboard,
+  useDeletePortfolioDashboard,
+  usePortfolioDashboards,
+  useUpdatePortfolioDashboard,
+} from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
@@ -64,9 +79,11 @@ import {
 } from "@/lib/financial-dashboard";
 import {
   filterPortfolioDashboards,
+  normalizePortfolioCompanies,
   portfolioCompanySummary,
   portfolioVisibilityDescription,
   portfolioVisibilityLabel,
+  sortPortfolioDashboardsByUpdated,
 } from "@/lib/portfolio-dashboard";
 
 export const Route = createFileRoute("/")({
@@ -552,14 +569,42 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   );
 }
 
+type PortfolioDashboardView = "list" | "create" | "edit" | "detail";
+
+interface PortfolioDashboardDraft {
+  name: string;
+  description: string;
+  visibility: PortfolioDashboardVisibility;
+  companySelections: PortfolioCompanySelection[];
+}
+
+const emptyPortfolioDashboardDraft: PortfolioDashboardDraft = {
+  name: "",
+  description: "",
+  visibility: "private",
+  companySelections: [],
+};
+
 function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
   const isManagerView = role === "finance_manager";
+  const { data: user } = useCurrentUser();
+  const psxCompanies = usePsxCompanies();
   const myDashboards = usePortfolioDashboards("my");
   const publicDashboards = usePortfolioDashboards("public");
+  const createPortfolio = useCreatePortfolioDashboard();
+  const updatePortfolio = useUpdatePortfolioDashboard();
+  const deletePortfolio = useDeletePortfolioDashboard();
+  const [view, setView] = useState<PortfolioDashboardView>("list");
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
   const [managerCreatorFilter, setManagerCreatorFilter] = useState("");
 
   const myItems = useMemo(() => myDashboards.data ?? [], [myDashboards.data]);
   const publicItems = useMemo(() => publicDashboards.data ?? [], [publicDashboards.data]);
+  const visibleItems = useMemo(() => [...myItems, ...publicItems], [myItems, publicItems]);
+  const selectedDashboard = useMemo(
+    () => visibleItems.find((dashboard) => dashboard.id === selectedDashboardId) ?? null,
+    [selectedDashboardId, visibleItems],
+  );
   const creatorOptions = useMemo(
     () => [...new Set(publicItems.map((dashboard) => dashboard.createdByName))].sort(),
     [publicItems],
@@ -568,6 +613,115 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
     () => filterPortfolioDashboards(publicItems, "", managerCreatorFilter || null),
     [managerCreatorFilter, publicItems],
   );
+  const createError = createPortfolio.error instanceof Error ? createPortfolio.error.message : null;
+  const updateError = updatePortfolio.error instanceof Error ? updatePortfolio.error.message : null;
+  const deleteError = deletePortfolio.error instanceof Error ? deletePortfolio.error.message : null;
+  const canCreate = role === "finance_analyst" || role === "admin";
+
+  const openDashboard = (dashboard: PortfolioDashboardResponse) => {
+    setSelectedDashboardId(dashboard.id);
+    setView("detail");
+  };
+
+  const startEdit = (dashboard: PortfolioDashboardResponse) => {
+    setSelectedDashboardId(dashboard.id);
+    setView("edit");
+  };
+
+  const duplicateDashboard = async (dashboard: PortfolioDashboardResponse) => {
+    const duplicated = await createPortfolio.mutateAsync({
+      name: `${dashboard.name} Copy`,
+      description: dashboard.description,
+      visibility: "private",
+      companySelections: dashboard.companySelections,
+    });
+    setSelectedDashboardId(duplicated.id);
+    setView("detail");
+  };
+
+  const removeDashboard = async (dashboard: PortfolioDashboardResponse) => {
+    if (!window.confirm(`Delete ${dashboard.name}? This portfolio dashboard will be removed.`)) {
+      return;
+    }
+    await deletePortfolio.mutateAsync(dashboard.id);
+    if (selectedDashboardId === dashboard.id) {
+      setSelectedDashboardId(null);
+      setView("list");
+    }
+  };
+
+  const saveNewDashboard = async (draft: PortfolioDashboardDraft) => {
+    const created = await createPortfolio.mutateAsync({
+      name: draft.name,
+      description: draft.description || null,
+      visibility: draft.visibility,
+      companySelections: draft.companySelections,
+    });
+    setSelectedDashboardId(created.id);
+    setView("detail");
+  };
+
+  const saveExistingDashboard = async (draft: PortfolioDashboardDraft) => {
+    if (!selectedDashboard) return;
+    const updated = await updatePortfolio.mutateAsync({
+      dashboardId: selectedDashboard.id,
+      payload: {
+        name: draft.name,
+        description: draft.description || null,
+        visibility: draft.visibility,
+        companySelections: draft.companySelections,
+      },
+    });
+    setSelectedDashboardId(updated.id);
+    setView("detail");
+  };
+
+  if (view === "create") {
+    return (
+      <PortfolioDashboardBuilder
+        title="New Portfolio Dashboard"
+        psxCompanies={psxCompanies.data ?? []}
+        loadingCompanies={psxCompanies.isLoading}
+        initialDraft={emptyPortfolioDashboardDraft}
+        saving={createPortfolio.isPending}
+        error={createError}
+        onCancel={() => setView("list")}
+        onSave={saveNewDashboard}
+      />
+    );
+  }
+
+  if (view === "edit" && selectedDashboard) {
+    return (
+      <PortfolioDashboardBuilder
+        title="Edit Portfolio Dashboard"
+        psxCompanies={psxCompanies.data ?? []}
+        loadingCompanies={psxCompanies.isLoading}
+        initialDraft={portfolioDraftFromDashboard(selectedDashboard)}
+        saving={updatePortfolio.isPending}
+        error={updateError}
+        onCancel={() => setView("detail")}
+        onSave={saveExistingDashboard}
+      />
+    );
+  }
+
+  if (view === "detail" && selectedDashboard) {
+    return (
+      <PortfolioDashboardDetail
+        dashboard={selectedDashboard}
+        canEdit={selectedDashboard.createdByUserId === user?.id}
+        readOnly={selectedDashboard.createdByUserId !== user?.id}
+        deleting={deletePortfolio.isPending}
+        duplicating={createPortfolio.isPending}
+        error={deleteError ?? createError}
+        onBack={() => setView("list")}
+        onEdit={() => startEdit(selectedDashboard)}
+        onDelete={() => removeDashboard(selectedDashboard)}
+        onDuplicate={() => duplicateDashboard(selectedDashboard)}
+      />
+    );
+  }
 
   if (isManagerView) {
     return (
@@ -607,7 +761,11 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
           dashboards={filteredPublicItems}
           loading={publicDashboards.isLoading}
           emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+          currentUserId={user?.id ?? null}
           readOnly
+          showCreatorFilter={false}
+          onOpen={openDashboard}
+          onDuplicate={duplicateDashboard}
         />
       </div>
     );
@@ -626,11 +784,16 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
               Build saved views for same-sector or cross-sector company comparisons.
             </p>
           </div>
-          <Button disabled title="Portfolio builder comes in the next slice">
+          <Button onClick={() => setView("create")} disabled={!canCreate}>
             <Plus className="h-4 w-4" />
             New Portfolio Dashboard
           </Button>
         </div>
+        {createError ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {createError}
+          </div>
+        ) : null}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -643,6 +806,11 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
             dashboards={myItems}
             loading={myDashboards.isLoading}
             emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+            currentUserId={user?.id ?? null}
+            onOpen={openDashboard}
+            onEdit={startEdit}
+            onDelete={removeDashboard}
+            onDuplicate={duplicateDashboard}
           />
         </Card>
         <Card>
@@ -654,10 +822,20 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
             dashboards={publicItems}
             loading={publicDashboards.isLoading}
             emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+            currentUserId={user?.id ?? null}
             readOnly
+            onOpen={openDashboard}
+            onEdit={startEdit}
+            onDelete={removeDashboard}
+            onDuplicate={duplicateDashboard}
           />
         </Card>
       </div>
+      {deleteError ? (
+        <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+          {deleteError}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -666,17 +844,45 @@ function PortfolioDashboardList({
   dashboards,
   loading,
   emptyLabel,
+  currentUserId,
   readOnly = false,
+  showCreatorFilter = true,
+  onOpen,
+  onEdit,
+  onDelete,
+  onDuplicate,
 }: {
   dashboards: PortfolioDashboardResponse[];
   loading: boolean;
   emptyLabel: string;
+  currentUserId: string | null;
   readOnly?: boolean;
+  showCreatorFilter?: boolean;
+  onOpen: (dashboard: PortfolioDashboardResponse) => void;
+  onEdit?: (dashboard: PortfolioDashboardResponse) => void;
+  onDelete?: (dashboard: PortfolioDashboardResponse) => void;
+  onDuplicate: (dashboard: PortfolioDashboardResponse) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<PortfolioDashboardVisibility | "all">(
+    "all",
+  );
+  const [creatorFilter, setCreatorFilter] = useState("");
+  const creatorOptions = useMemo(
+    () => [...new Set(dashboards.map((dashboard) => dashboard.createdByName))].sort(),
+    [dashboards],
+  );
   const filteredDashboards = useMemo(
-    () => filterPortfolioDashboards(dashboards, search),
-    [dashboards, search],
+    () =>
+      sortPortfolioDashboardsByUpdated(
+        filterPortfolioDashboards(
+          dashboards,
+          search,
+          showCreatorFilter ? creatorFilter || null : null,
+          visibilityFilter,
+        ),
+      ),
+    [creatorFilter, dashboards, search, showCreatorFilter, visibilityFilter],
   );
 
   if (loading) {
@@ -685,7 +891,7 @@ function PortfolioDashboardList({
 
   return (
     <div className="space-y-3">
-      {dashboards.length > 0 ? (
+      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_150px_180px]">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
@@ -696,7 +902,34 @@ function PortfolioDashboardList({
             style={{ borderColor: "var(--color-border-default)" }}
           />
         </label>
-      ) : null}
+        <select
+          value={visibilityFilter}
+          onChange={(event) =>
+            setVisibilityFilter(event.target.value as PortfolioDashboardVisibility | "all")
+          }
+          className="h-9 rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          <option value="all">All visibility</option>
+          <option value="private">Private</option>
+          <option value="public">Public</option>
+        </select>
+        {showCreatorFilter ? (
+          <select
+            value={creatorFilter}
+            onChange={(event) => setCreatorFilter(event.target.value)}
+            className="h-9 rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <option value="">All creators</option>
+            {creatorOptions.map((creator) => (
+              <option key={creator} value={creator}>
+                {creator}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
 
       {dashboards.length === 0 ? (
         <PortfolioDashboardEmptyState label={emptyLabel} />
@@ -710,7 +943,16 @@ function PortfolioDashboardList({
       ) : (
         <div className="space-y-2">
           {filteredDashboards.map((dashboard) => (
-            <PortfolioDashboardRow key={dashboard.id} dashboard={dashboard} readOnly={readOnly} />
+            <PortfolioDashboardRow
+              key={dashboard.id}
+              dashboard={dashboard}
+              currentUserId={currentUserId}
+              readOnly={readOnly}
+              onOpen={onOpen}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+            />
           ))}
         </div>
       )}
@@ -734,12 +976,23 @@ function PortfolioDashboardEmptyState({ label }: { label: string }) {
 
 function PortfolioDashboardRow({
   dashboard,
+  currentUserId,
   readOnly,
+  onOpen,
+  onEdit,
+  onDelete,
+  onDuplicate,
 }: {
   dashboard: PortfolioDashboardResponse;
+  currentUserId: string | null;
   readOnly: boolean;
+  onOpen: (dashboard: PortfolioDashboardResponse) => void;
+  onEdit?: (dashboard: PortfolioDashboardResponse) => void;
+  onDelete?: (dashboard: PortfolioDashboardResponse) => void;
+  onDuplicate: (dashboard: PortfolioDashboardResponse) => void;
 }) {
   const summary = portfolioCompanySummary(dashboard.companySelections);
+  const isCreator = dashboard.createdByUserId === currentUserId;
   return (
     <div
       className="rounded-md border px-4 py-3"
@@ -761,10 +1014,28 @@ function PortfolioDashboardRow({
             {portfolioVisibilityDescription(dashboard.visibility)}
           </div>
         </div>
-        <Button variant="secondary" disabled title="Portfolio detail view comes in the next slice">
-          <Eye className="h-4 w-4" />
-          {readOnly ? "Open read-only" : "Open"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => onOpen(dashboard)}>
+            <Eye className="h-4 w-4" />
+            {readOnly && !isCreator ? "Open read-only" : "Open"}
+          </Button>
+          <Button variant="ghost" onClick={() => onDuplicate(dashboard)}>
+            <Copy className="h-4 w-4" />
+            Duplicate
+          </Button>
+          {isCreator && onEdit ? (
+            <Button variant="ghost" onClick={() => onEdit(dashboard)}>
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+          ) : null}
+          {isCreator && onDelete ? (
+            <Button variant="ghost" onClick={() => onDelete(dashboard)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {dashboard.companySelections.slice(0, 5).map((company) => (
@@ -783,6 +1054,412 @@ function PortfolioDashboardRow({
       </div>
     </div>
   );
+}
+
+function PortfolioDashboardBuilder({
+  title,
+  psxCompanies,
+  loadingCompanies,
+  initialDraft,
+  saving,
+  error,
+  onCancel,
+  onSave,
+}: {
+  title: string;
+  psxCompanies: PsxCompany[];
+  loadingCompanies: boolean;
+  initialDraft: PortfolioDashboardDraft;
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (draft: PortfolioDashboardDraft) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<PortfolioDashboardDraft>(initialDraft);
+  const [selectedSector, setSelectedSector] = useState("");
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const sectorItems = useMemo(() => sectorOptions(psxCompanies), [psxCompanies]);
+  const companyItems = useMemo(
+    () => companyOptionsForSector(psxCompanies, selectedSector),
+    [psxCompanies, selectedSector],
+  );
+  const selectedCompany = useMemo(
+    () => psxCompanies.find((company) => company.symbol === selectedSymbol) ?? null,
+    [psxCompanies, selectedSymbol],
+  );
+
+  const addSelectedCompany = () => {
+    if (!selectedCompany) return;
+    setDraft((current) => ({
+      ...current,
+      companySelections: normalizePortfolioCompanies([
+        ...current.companySelections,
+        {
+          symbol: selectedCompany.symbol,
+          name: selectedCompany.name,
+          sector: selectedCompany.sector,
+        },
+      ]),
+    }));
+    setSelectedSymbol("");
+  };
+
+  const removeCompany = (symbol: string) => {
+    setDraft((current) => ({
+      ...current,
+      companySelections: current.companySelections.filter((company) => company.symbol !== symbol),
+    }));
+  };
+
+  const updateWeight = (symbol: string, value: string) => {
+    const parsed = value.trim() === "" ? null : Number(value);
+    setDraft((current) => ({
+      ...current,
+      companySelections: current.companySelections.map((company) =>
+        company.symbol === symbol
+          ? { ...company, weight: parsed === null || Number.isNaN(parsed) ? null : parsed }
+          : company,
+      ),
+    }));
+  };
+
+  const save = async () => {
+    const normalizedCompanies = normalizePortfolioCompanies(draft.companySelections);
+    if (!draft.name.trim()) {
+      setValidationError("Portfolio name is required.");
+      return;
+    }
+    if (normalizedCompanies.length === 0) {
+      setValidationError("Select at least one company.");
+      return;
+    }
+    if (
+      normalizedCompanies.some((company) => company.weight !== null && Number(company.weight) <= 0)
+    ) {
+      setValidationError("Weights must be positive when entered.");
+      return;
+    }
+    setValidationError(null);
+    await onSave({
+      ...draft,
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      companySelections: normalizedCompanies,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[18px] font-semibold">{title}</h2>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Select companies across one or more sectors and save the dashboard for repeated
+              analysis.
+            </p>
+          </div>
+          <Button variant="ghost" onClick={onCancel}>
+            <X className="h-4 w-4" />
+            Cancel
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px]">
+          <label>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Portfolio Name
+            </span>
+            <input
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              className="h-10 w-full rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+              placeholder="e.g. Auto assemblers watchlist"
+            />
+          </label>
+          <div>
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Visibility
+            </span>
+            <div
+              className="grid grid-cols-2 rounded-md border p-1"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              {(["private", "public"] as const).map((visibility) => (
+                <button
+                  key={visibility}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, visibility })}
+                  className="h-8 rounded text-[12px] font-semibold transition"
+                  style={{
+                    background:
+                      draft.visibility === visibility ? "var(--color-brand)" : "transparent",
+                    color: draft.visibility === visibility ? "#fff" : "var(--color-text-secondary)",
+                  }}
+                >
+                  {portfolioVisibilityLabel(visibility)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="xl:col-span-2">
+            <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              Description
+            </span>
+            <textarea
+              value={draft.description}
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+              className="min-h-[76px] w-full rounded-md border bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+              placeholder="Optional context for this portfolio dashboard"
+            />
+          </label>
+          <div className="xl:col-span-2 rounded-md bg-[var(--color-tag-bg)] px-3 py-2 text-[12px] text-[var(--color-text-secondary)]">
+            {portfolioVisibilityDescription(draft.visibility)}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <Combobox
+            label="Sector"
+            options={sectorItems}
+            value={selectedSector}
+            onChange={(sector) => {
+              setSelectedSector(sector);
+              setSelectedSymbol("");
+            }}
+            placeholder={loadingCompanies ? "Loading sectors..." : "Select sector..."}
+            disabled={loadingCompanies}
+          />
+          <Combobox
+            label="Company"
+            options={companyItems}
+            value={selectedSymbol}
+            onChange={setSelectedSymbol}
+            placeholder={!selectedSector ? "Select sector first..." : "Select company..."}
+            disabled={!selectedSector || loadingCompanies}
+          />
+          <div className="flex items-end">
+            <Button onClick={addSelectedCompany} disabled={!selectedCompany}>
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="text-[15px] font-semibold">Selected Companies</h3>
+          <Badge tone={draft.companySelections.length > 0 ? "success" : "warning"}>
+            {draft.companySelections.length} selected
+          </Badge>
+        </div>
+        {draft.companySelections.length === 0 ? (
+          <div
+            className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            Add at least one company to create a portfolio dashboard.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
+              <thead>
+                <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                  <th className="py-2 pr-3 font-semibold">Company</th>
+                  <th className="py-2 pr-3 font-semibold">Ticker</th>
+                  <th className="py-2 pr-3 font-semibold">Sector</th>
+                  <th className="py-2 pr-3 font-semibold">Optional Weight</th>
+                  <th className="py-2 text-right font-semibold">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.companySelections.map((company) => (
+                  <tr
+                    key={company.symbol}
+                    className="border-b last:border-0"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <td className="py-2 pr-3 font-semibold">{company.name}</td>
+                    <td className="py-2 pr-3 tnum">{company.symbol}</td>
+                    <td className="py-2 pr-3">{company.sector}</td>
+                    <td className="py-2 pr-3">
+                      <input
+                        value={company.weight ?? ""}
+                        onChange={(event) => updateWeight(company.symbol, event.target.value)}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="h-8 w-28 rounded-md border bg-white px-2 text-[12px] outline-none focus:border-[var(--color-brand)]"
+                        style={{ borderColor: "var(--color-border-default)" }}
+                      />
+                    </td>
+                    <td className="py-2 text-right">
+                      <Button variant="ghost" onClick={() => removeCompany(company.symbol)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {validationError || error ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {validationError ?? error}
+          </div>
+        ) : null}
+        <div className="mt-4 flex justify-end">
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save Portfolio Dashboard
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function PortfolioDashboardDetail({
+  dashboard,
+  canEdit,
+  readOnly,
+  deleting,
+  duplicating,
+  error,
+  onBack,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  dashboard: PortfolioDashboardResponse;
+  canEdit: boolean;
+  readOnly: boolean;
+  deleting: boolean;
+  duplicating: boolean;
+  error: string | null;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
+  const summary = portfolioCompanySummary(dashboard.companySelections);
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Button variant="ghost" onClick={onBack} className="mb-3 px-0">
+              <ArrowRight className="h-4 w-4 rotate-180" />
+              Back to portfolios
+            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[20px] font-semibold">{dashboard.name}</h2>
+              <Badge tone={dashboard.visibility === "public" ? "success" : "info"}>
+                {portfolioVisibilityLabel(dashboard.visibility)}
+              </Badge>
+              {readOnly ? <Badge tone="warning">Read-only</Badge> : null}
+            </div>
+            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+              {dashboard.description || "No description provided."}
+            </p>
+            <div className="mt-2 text-[11px] text-[var(--color-text-muted)]">
+              Created by {dashboard.createdByName} · Updated{" "}
+              {formatProjectDate(dashboard.updatedAt)}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={onDuplicate} disabled={duplicating}>
+              {duplicating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              Duplicate
+            </Button>
+            {canEdit ? (
+              <>
+                <Button variant="secondary" onClick={onEdit}>
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button variant="danger" onClick={onDelete} disabled={deleting}>
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {error ? (
+          <div className="mt-3 rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[12px] text-[var(--color-danger-fg)]">
+            {error}
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <StatCard label="Companies" value={summary.companyCount} />
+        <StatCard label="Sectors" value={summary.sectors.length} />
+        <StatCard label="Visibility" value={portfolioVisibilityLabel(dashboard.visibility)} />
+      </div>
+
+      <Card>
+        <h3 className="mb-3 text-[15px] font-semibold">Portfolio Constituents</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] border-collapse text-left text-[13px]">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+                <th className="py-2 pr-3 font-semibold">Company</th>
+                <th className="py-2 pr-3 font-semibold">Ticker</th>
+                <th className="py-2 pr-3 font-semibold">Sector</th>
+                <th className="py-2 pr-3 font-semibold">Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboard.companySelections.map((company) => (
+                <tr
+                  key={company.symbol}
+                  className="border-b last:border-0"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  <td className="py-2 pr-3 font-semibold">{company.name}</td>
+                  <td className="py-2 pr-3 tnum">{company.symbol}</td>
+                  <td className="py-2 pr-3">{company.sector}</td>
+                  <td className="py-2 pr-3">
+                    {company.weight ? `${company.weight}%` : "Unweighted"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function portfolioDraftFromDashboard(
+  dashboard: PortfolioDashboardResponse,
+): PortfolioDashboardDraft {
+  return {
+    name: dashboard.name,
+    description: dashboard.description ?? "",
+    visibility: dashboard.visibility,
+    companySelections: dashboard.companySelections,
+  };
 }
 
 function FinancialDashboardTab({
