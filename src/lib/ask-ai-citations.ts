@@ -10,7 +10,7 @@ export function getAskAiCitationTitle(citation: Record<string, unknown>): string
   if (citation.kind === "uploaded_pdf") {
     return String(citation.filename ?? "Uploaded PDF");
   }
-  return String(citation.sourceName ?? citation.kind ?? "Source");
+  return String(citation.title ?? citation.sourceName ?? citation.kind ?? "Source");
 }
 
 export function getAskAiCitationPillLabel(citation: Record<string, unknown>): string {
@@ -42,7 +42,10 @@ export function getAskAiCitationDetail(citation: Record<string, unknown>): strin
   }
 
   if (citation.kind === "model") {
-    const title = [citation.sheetName, citation.cellReference].filter(Boolean).map(String).join(" ");
+    const title = [citation.sheetName, citation.cellReference]
+      .filter(Boolean)
+      .map(String)
+      .join(" ");
     const value = citation.currentValue ?? citation.value;
     return [`Model cell: ${title || "Model evidence"}`, value ? `Value: ${String(value)}` : null]
       .filter(Boolean)
@@ -85,18 +88,24 @@ export type AskAiCitationPreview =
       title: string;
     };
 
-export function getAskAiCitationPreview(citation: Record<string, unknown>): AskAiCitationPreview | null {
+export function getAskAiCitationPreview(
+  citation: Record<string, unknown>,
+): AskAiCitationPreview | null {
   const title = getAskAiCitationTitle(citation);
   const url = typeof citation.url === "string" && citation.url.trim() ? citation.url.trim() : null;
   if (url) {
     return { type: "external_url", url, title };
   }
 
-  const documentId = typeof citation.documentId === "string" && citation.documentId.trim() ? citation.documentId.trim() : null;
+  const documentId =
+    typeof citation.documentId === "string" && citation.documentId.trim()
+      ? citation.documentId.trim()
+      : null;
   if (!documentId) return null;
 
   const pageValue = citation.pdfPageIndex ?? citation.pageNumber ?? citation.page;
-  const pageNumber = typeof pageValue === "number" ? pageValue : Number.parseInt(String(pageValue ?? ""), 10);
+  const pageNumber =
+    typeof pageValue === "number" ? pageValue : Number.parseInt(String(pageValue ?? ""), 10);
   if (!Number.isFinite(pageNumber)) return null;
 
   const isZeroBased = citation.pdfPageIndex !== undefined && citation.pdfPageIndex !== null;

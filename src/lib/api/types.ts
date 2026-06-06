@@ -133,6 +133,23 @@ export interface AskAiChatSessionResponse extends AskAiChatSessionSummary {
   messages: AskAiChatMessageResponse[];
 }
 
+export interface AskAiModelCandidate {
+  id: string;
+  companyName: string;
+  projectLabel: string | null;
+  fiscalYear: string | null;
+  sector: string | null;
+  status: string;
+  score: number;
+  matchReason: string;
+  accessSource: "owned" | "assigned_inbox" | string;
+}
+
+export interface AskAiModelSearchResponse {
+  query: string;
+  candidates: AskAiModelCandidate[];
+}
+
 export interface AnalysisRequestResponse {
   id: string;
   requesterUserId: string;

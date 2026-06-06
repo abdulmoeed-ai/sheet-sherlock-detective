@@ -23,8 +23,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { useCycle } from "@/lib/cycle-store";
-import { useSelectedProjectId } from "@/lib/project-store";
+import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
 import { SIDEBAR_WIDTH, useSidebarCollapsed } from "@/lib/sidebar-store";
 import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useAskAiSessions } from "@/hooks/use-ask-ai-sessions";
@@ -41,7 +40,21 @@ import {
   getAskAiPromptKeyAction,
   getAskAiPromptTextareaLayout,
 } from "@/lib/ask-ai-input";
+import {
+  askAiSuggestionsForRoute,
+  buildAskAiContextChips,
+  buildAskAiSubtitleParts,
+  shouldUseProjectContextForRoute,
+} from "@/lib/ask-ai-context";
 import { buildNoProjectAskAiResponse } from "@/lib/ask-ai-empty-context";
+import { searchAskAiModels } from "@/lib/api/projects";
+import {
+  buildModelSelectionPrompt,
+  isConfidentSingleModelMatch,
+  matchModelSelection,
+  shouldSearchModelsBeforeAskAi,
+} from "@/lib/ask-ai-model-selection";
+import { buildAskAiRequestPayload } from "@/lib/ask-ai-request";
 import {
   getAskAiCitationPillLabel,
   getAskAiCitationPreview,
@@ -51,11 +64,13 @@ import {
 import { buildAskAiReasoningSummary } from "@/lib/ask-ai-reasoning";
 import { normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
+import { clearLegacyAskAiChatHistoryStorage } from "@/lib/ask-ai-storage";
 import { askAiTokenUsageLabel } from "@/lib/ask-ai-usage";
 import { userFacingAskAiWarnings } from "@/lib/ask-ai-warnings";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import type { AskAiMsg as Msg } from "@/lib/ask-ai-message-types";
 import type { AskAiChatSessionSummary } from "@/lib/api/types";
+import type { AskAiModelCandidate } from "@/lib/api/types";
 import type {
   AskAiClaimSourceGroup,
   AskAiFinalResponse,
@@ -76,17 +91,10 @@ type HistoryDialogState =
   | { type: "delete"; chat: AskAiChatSessionSummary }
   | null;
 
-const SUGGESTIONS = [
-  "Analyse Millat Tractors' financial strength for the next 5 years",
-  "Why doesn't my balance sheet balance?",
-  "What are the key assumptions driving the FY2025 forecast?",
-];
-
-const DIAGNOSIS_SUGGESTIONS = [
-  "Why doesn't my balance sheet balance?",
-  "Explain the key drivers of revenue in this model",
-  "What are the biggest risks in this financial model?",
-];
+type PendingModelSelection = {
+  question: string;
+  candidates: AskAiModelCandidate[];
+};
 
 export function AskAiTrigger() {
   const [open, setOpen] = useState(false);
@@ -105,17 +113,21 @@ export function AskAiTrigger() {
   const [historyDialogError, setHistoryDialogError] = useState<string | null>(null);
   const [buttonY, setButtonY] = useState<number | null>(null);
   const [activeSession, setActiveSession] = useState<AskAiChatSessionSummary | null>(null);
+  const [modelProjectContext, setModelProjectContext] = useState<AskAiModelCandidate | null>(null);
+  const [pendingModelSelection, setPendingModelSelection] = useState<PendingModelSelection | null>(
+    null,
+  );
 
-  const cycle = useCycle();
   const routePath = useRouterState({ select: (s) => s.location.pathname });
-  const projectId = useSelectedProjectId();
-  const activeProjectId = activeSession?.projectId ?? projectId;
+  const selectedProjectId = useSelectedProjectId();
+  const routeProjectId = shouldUseProjectContextForRoute(routePath) ? selectedProjectId : null;
+  const activeProjectId = activeSession?.projectId ?? modelProjectContext?.id ?? routeProjectId;
   const activeRoutePath = activeSession?.routePath ?? routePath;
   const activeScreenName = activeSession?.screenName ?? screenNameForPath(routePath);
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
   const sessionsApi = useAskAiSessions();
-  const workspace = useWorkspace(projectId);
+  const workspace = useWorkspace(activeProjectId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -124,7 +136,7 @@ export function AskAiTrigger() {
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
 
   const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
-  const suggestions = isDiagnosisRoute ? DIAGNOSIS_SUGGESTIONS : SUGGESTIONS;
+  const suggestions = askAiSuggestionsForRoute(routePath);
 
   const abortStream = () => {
     activeStreamIdRef.current = null;
@@ -147,15 +159,25 @@ export function AskAiTrigger() {
   useEffect(() => () => abortStream(), []);
 
   useEffect(() => {
+    clearLegacyAskAiChatHistoryStorage();
+  }, []);
+
+  useEffect(() => {
     if (open) void sessionsApi.refreshSessions();
   }, [open]);
 
-  const context = projectContextLabel({
-    company: activeSession?.companyName ?? workspace.data?.project.companyName ?? cycle.company,
-    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear ?? cycle.period,
-    sector: workspace.data?.project.sector ?? cycle.sector,
+  const contextChips = buildAskAiContextChips({
+    company: activeSession?.companyName ?? workspace.data?.project.companyName,
+    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear,
+    sector: workspace.data?.project.sector,
     documentCount: workspace.data?.documents.length,
     isDiagnosis: isDiagnosisRoute,
+    screenName: activeScreenName,
+  });
+  const subtitleParts = buildAskAiSubtitleParts({
+    company: activeSession?.companyName ?? workspace.data?.project.companyName,
+    screenName: activeScreenName,
+    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear,
   });
   const expandedLeft = sidebarCollapsed ? 0 : SIDEBAR_WIDTH;
 
@@ -164,6 +186,8 @@ export function AskAiTrigger() {
     setInput("");
     setShowHistory(false);
     setActiveSession(null);
+    setModelProjectContext(null);
+    setPendingModelSelection(null);
     chatSessionIdRef.current = `chat-${Date.now()}`;
   };
 
@@ -172,6 +196,8 @@ export function AskAiTrigger() {
     setMessages(askAiSessionToMessages(session));
     chatSessionIdRef.current = session.id;
     setActiveSession(session);
+    setModelProjectContext(null);
+    setPendingModelSelection(null);
     setShowHistory(false);
   };
 
@@ -294,7 +320,68 @@ export function AskAiTrigger() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
 
-    if (!activeProjectId) {
+    let modelOverride: AskAiModelCandidate | null = null;
+    if (pendingModelSelection && !activeProjectId) {
+      const selected = matchModelSelection(text, pendingModelSelection.candidates);
+      if (!selected) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text: "I could not match that to one of the listed models. Please type the number or model name.",
+          },
+        ]);
+        return;
+      }
+      modelOverride = selected;
+      setPendingModelSelection(null);
+      setModelProjectContext(selected);
+      setActiveSession(null);
+      setSelectedProjectId(selected.id);
+      text = pendingModelSelection.question;
+    } else if (!activeProjectId && shouldSearchModelsBeforeAskAi(text)) {
+      try {
+        const result = await searchAskAiModels({ query: text });
+        if (result.candidates.length > 0) {
+          if (!isConfidentSingleModelMatch(result.candidates)) {
+            setPendingModelSelection({ question: text, candidates: result.candidates });
+            setMessages((m) => [
+              ...m,
+              {
+                id: `a-${Date.now()}`,
+                role: "ai",
+                kind: "text",
+                text: buildModelSelectionPrompt(result.candidates),
+              },
+            ]);
+            return;
+          }
+          modelOverride = result.candidates[0];
+          setModelProjectContext(modelOverride);
+          setActiveSession(null);
+          setSelectedProjectId(modelOverride.id);
+        }
+      } catch (error) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text:
+              error instanceof Error
+                ? `I could not search available finance models: ${error.message}`
+                : "I could not search available finance models.",
+          },
+        ]);
+        return;
+      }
+    }
+
+    const effectiveProjectId = modelOverride?.id ?? activeProjectId;
+    if (!effectiveProjectId) {
       setMessages((m) => [
         ...m,
         {
@@ -317,16 +404,30 @@ export function AskAiTrigger() {
 
     try {
       let streamError = false;
+      const requestProject =
+        modelOverride ??
+        (workspace.data?.project
+          ? {
+              companyName: activeSession?.companyName ?? workspace.data.project.companyName,
+              projectLabel: activeSession?.projectLabel ?? workspace.data.project.projectLabel,
+              fiscalYear: workspace.data.project.fiscalYear,
+            }
+          : activeSession
+            ? {
+                companyName: activeSession.companyName,
+                projectLabel: activeSession.projectLabel,
+                fiscalYear: null,
+              }
+            : null);
       const final = await askAi.sendQuestion(
-        {
+        buildAskAiRequestPayload({
           question: text,
           sessionId: chatSessionIdRef.current,
           routePath: activeRoutePath,
           screenName: activeScreenName,
-          documentIds: cycle.documentIds,
-          filters: { cycleStatus: cycle.status, period: cycle.period, company: cycle.company },
-          includeExternalSources: shouldUseExternalSources(text),
-        },
+          documents: modelOverride ? [] : workspace.data?.documents,
+          project: requestProject,
+        }),
         {
           onStatus: (event) => updateStreamMessage(aiId, { type: "status", event }),
           onSource: (event) => updateStreamMessage(aiId, { type: "source", event }),
@@ -342,6 +443,7 @@ export function AskAiTrigger() {
             updateStreamMessage(aiId, { type: "error", message: event.message });
           },
         },
+        { projectIdOverride: modelOverride?.id },
       );
       if (!final && !streamError && activeStreamIdRef.current === aiId) {
         updateStreamMessage(aiId, {
@@ -535,17 +637,7 @@ export function AskAiTrigger() {
                     <ProductWordmark />
                   </div>
                   <div className="truncate text-[11px] text-[var(--color-text-muted)]">
-                    {[
-                      activeSession?.companyName ??
-                        workspace.data?.project.companyName ??
-                        cycle.company,
-                      activeScreenName,
-                      activeSession?.projectLabel ??
-                        workspace.data?.project.fiscalYear ??
-                        cycle.period,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    {subtitleParts.join(" · ")}
                   </div>
                 </div>
               </div>
@@ -598,22 +690,19 @@ export function AskAiTrigger() {
                   background: "var(--color-table-header)",
                 }}
               >
-                {context
-                  .split(" · ")
-                  .filter(Boolean)
-                  .map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                      style={{
-                        background: "var(--color-tag-bg)",
-                        color: "var(--color-brand)",
-                        border: "1px solid rgba(123,104,238,0.25)",
-                      }}
-                    >
-                      {chip}
-                    </span>
-                  ))}
+                {contextChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                    style={{
+                      background: "var(--color-tag-bg)",
+                      color: "var(--color-brand)",
+                      border: "1px solid rgba(123,104,238,0.25)",
+                    }}
+                  >
+                    {chip}
+                  </span>
+                ))}
               </div>
             )}
 
@@ -1239,7 +1328,9 @@ function StreamingAiBubble({
 }) {
   const citations = message.final?.sourcesUsed ?? [];
   const answer = message.final?.answer || message.text;
-  const warnings = userFacingAskAiWarnings(message.final?.warnings);
+  const warnings = userFacingAskAiWarnings(message.final?.warnings, {
+    requestMode: message.final?.requestMode,
+  });
   const forecastVisuals = normalizeForecastVisuals(message.final?.forecastVisuals);
   const claimSourceGroups = message.final?.claimSourceGroups ?? [];
   const reasoning = buildAskAiReasoningSummary({
@@ -2218,33 +2309,6 @@ function screenNameForPath(path: string): string {
     .split("-")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
-}
-
-function shouldUseExternalSources(question: string): boolean {
-  return /\b(forecast|forcast|predict|prediction|projection|outlook|sector|next\s+\d+\s+years?|market|macro)\b/i.test(
-    question,
-  );
-}
-
-function projectContextLabel(input: {
-  company: string | null | undefined;
-  period: string | null | undefined;
-  sector: string | null | undefined;
-  documentCount: number | undefined;
-  isDiagnosis: boolean;
-}): string {
-  const parts = [
-    input.period || "Current period",
-    input.company || "Selected project",
-    input.sector ? `${input.sector} sector` : "Sector not specified",
-  ];
-  if (typeof input.documentCount === "number") {
-    parts.push(`${input.documentCount} PDF${input.documentCount === 1 ? "" : "s"}`);
-  }
-  if (input.isDiagnosis) {
-    parts.push("Diagnosis workbook open");
-  }
-  return parts.join(" · ");
 }
 
 function HistoryChatList({

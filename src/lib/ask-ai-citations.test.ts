@@ -37,6 +37,16 @@ describe("getAskAiCitationTitle", () => {
     expect(getAskAiCitationTitle({ kind: "web", sourceName: "PSX" })).toBe("PSX");
     expect(getAskAiCitationTitle({ kind: "source_registry" })).toBe("source_registry");
   });
+
+  it("prefers web result titles when present", () => {
+    expect(
+      getAskAiCitationTitle({
+        kind: "source",
+        sourceName: "Pakistan Stock Exchange",
+        title: "PSX market notice",
+      }),
+    ).toBe("PSX market notice");
+  });
 });
 
 describe("Ask AI citation pills", () => {

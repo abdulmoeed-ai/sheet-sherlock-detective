@@ -3,6 +3,7 @@ import type {
   AssumptionsGenerateResponse,
   AskAiChatSessionResponse,
   AskAiChatSessionSummary,
+  AskAiModelSearchResponse,
   ExcelExportResponse,
   ExecutiveBriefResponse,
   ExtractionJobResponse,
@@ -33,7 +34,10 @@ export function createProject(input: {
   sector?: string | null;
   fiscalYear?: string | null;
   currencyUnit?: string | null;
-  template: "Millat - Template.xlsx" | "Cement Sector Template Presentation.xlsx" | "E&P Sector Template Presentation.xlsx";
+  template:
+    | "Millat - Template.xlsx"
+    | "Cement Sector Template Presentation.xlsx"
+    | "E&P Sector Template Presentation.xlsx";
   teamMembers: Array<{
     name: string;
     email: string;
@@ -206,6 +210,13 @@ export function askAi(
     method: "POST",
     body: input,
     signal: options.signal,
+  });
+}
+
+export function searchAskAiModels(input: { query: string }) {
+  return apiFetch<AskAiModelSearchResponse>("/api/projects/ask-ai/model-search", {
+    method: "POST",
+    body: input,
   });
 }
 
