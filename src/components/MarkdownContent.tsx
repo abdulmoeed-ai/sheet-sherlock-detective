@@ -1,16 +1,35 @@
 import type { ReactNode } from "react";
-import { parseChatMarkdown, type ChatMarkdownInline } from "@/lib/chat-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { visit } from "unist-util-visit";
+import type { Root, RootContent, Text } from "mdast";
+import type { Plugin } from "unified";
+
+const CITATION_NODE_TYPE = "askAiCitation";
+
+type AskAiCitationNode = {
+  type: typeof CITATION_NODE_TYPE;
+  index: number;
+  data: {
+    hName: "span";
+    hProperties: {
+      dataAskAiCitation: string;
+    };
+  };
+  children: Text[];
+};
+
+type MarkdownContentProps = {
+  markdown: string;
+  renderCitation?: (index: number) => ReactNode;
+  size?: "default" | "expanded";
+};
 
 export function MarkdownContent({
   markdown,
   renderCitation,
   size = "default",
-}: {
-  markdown: string;
-  renderCitation?: (index: number) => ReactNode;
-  size?: "default" | "expanded";
-}) {
-  const blocks = parseChatMarkdown(markdown);
+}: MarkdownContentProps) {
   return (
     <div
       className={`min-w-0 space-y-2 break-words leading-relaxed ${
@@ -18,103 +37,158 @@ export function MarkdownContent({
       }`}
       style={{ color: "var(--color-text-primary)" }}
     >
-      {blocks.map((block, index) => {
-        if (block.type === "heading") {
-          const HeadingTag = block.level === 1 ? "h3" : block.level === 2 ? "h4" : "h5";
-          return (
-            <HeadingTag
-              key={index}
-              className="break-words font-semibold"
-              style={{ color: "var(--color-text-primary)" }}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkAskAiCitations]}
+        urlTransform={defaultUrlTransform}
+        components={{
+          p: ({ children }) => <p className="whitespace-pre-wrap break-words">{children}</p>,
+          h1: ({ children }) => (
+            <h3 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h3>
+          ),
+          h2: ({ children }) => (
+            <h4 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h4>
+          ),
+          h3: ({ children }) => (
+            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h5>
+          ),
+          h4: ({ children }) => (
+            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h5>
+          ),
+          h5: ({ children }) => (
+            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h5>
+          ),
+          h6: ({ children }) => (
+            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {children}
+            </h5>
+          ),
+          ul: ({ children }) => (
+            <ul className="min-w-0 list-disc space-y-1 break-words pl-4">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="min-w-0 list-decimal space-y-1 break-words pl-4">{children}</ol>
+          ),
+          li: ({ children }) => <li className="break-words">{children}</li>,
+          table: ({ children }) => (
+            <div
+              className="min-w-0 overflow-x-auto rounded-lg border"
+              style={{ borderColor: "var(--color-border-default)" }}
             >
-              {renderInline(block.children, renderCitation)}
-            </HeadingTag>
-          );
-        }
-        if (block.type === "list") {
-          const ListTag = block.ordered ? "ol" : "ul";
-          return (
-            <ListTag
-              key={index}
-              className={`min-w-0 space-y-1 break-words pl-4 ${block.ordered ? "list-decimal" : "list-disc"}`}
-            >
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex} className="break-words">
-                  {renderInline(item, renderCitation)}
-                </li>
-              ))}
-            </ListTag>
-          );
-        }
-        if (block.type === "table") {
-          return (
-            <div key={index} className="min-w-0 overflow-x-auto rounded-lg border" style={{ borderColor: "var(--color-border-default)" }}>
               <table className="w-full min-w-[520px] border-collapse text-left text-[12px]">
-                <thead>
-                  <tr className="bg-[var(--color-table-header)]">
-                    {block.headers.map((header) => (
-                      <th key={header} className="border-b px-3 py-2 font-semibold text-[var(--color-text-primary)]" style={{ borderColor: "var(--color-border-default)" }}>
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {block.rows.map((row, rowIndex) => (
-                    <tr key={rowIndex} className="odd:bg-white even:bg-[#FAFBFF]">
-                      {row.map((cell, cellIndex) => (
-                        <td key={`${rowIndex}-${cellIndex}`} className="border-b px-3 py-2 align-top text-[var(--color-text-secondary)] last:border-r-0" style={{ borderColor: "var(--color-border-default)" }}>
-                          {cell}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
+                {children}
               </table>
             </div>
-          );
-        }
-        return (
-          <p key={index} className="whitespace-pre-wrap break-words">
-            {renderInline(block.children, renderCitation)}
-          </p>
-        );
-      })}
+          ),
+          thead: ({ children }) => <thead>{children}</thead>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => <tr className="odd:bg-white even:bg-[#FAFBFF]">{children}</tr>,
+          th: ({ children }) => (
+            <th
+              className="border-b px-3 py-2 font-semibold text-[var(--color-text-primary)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td
+              className="border-b px-3 py-2 align-top text-[var(--color-text-secondary)] last:border-r-0"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              {children}
+            </td>
+          ),
+          code: ({ children, className }) => {
+            const isBlock = typeof className === "string" && className.startsWith("language-");
+            if (isBlock) {
+              return (
+                <code className={`${className} block overflow-x-auto whitespace-pre rounded-md bg-[var(--color-tag-bg)] p-3 text-[12px]`}>
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <code className="rounded bg-[var(--color-tag-bg)] px-1 py-0.5 text-[12px]">
+                {children}
+              </code>
+            );
+          },
+          pre: ({ children }) => <pre className="min-w-0 overflow-x-auto">{children}</pre>,
+          a: ({ children, href }) => (
+            <a href={href} target="_blank" rel="noreferrer" className="font-medium underline">
+              {children}
+            </a>
+          ),
+          span: ({ children, node }) => {
+            const citationIndex = Number.parseInt(
+              String(node?.properties?.dataAskAiCitation ?? ""),
+              10,
+            );
+            if (Number.isFinite(citationIndex)) {
+              return renderCitation ? <>{renderCitation(citationIndex)}</> : <>{children}</>;
+            }
+            return <span>{children}</span>;
+          },
+          hr: () => (
+            <hr className="my-2 border-0 border-t" style={{ borderColor: "var(--color-border-default)" }} />
+          ),
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
     </div>
   );
 }
 
-function renderInline(nodes: ChatMarkdownInline[], renderCitation?: (index: number) => React.ReactNode) {
-  return nodes.map((node, index) => {
-    if (node.type === "strong") return <strong key={index}>{node.text}</strong>;
-    if (node.type === "em") return <em key={index}>{node.text}</em>;
-    if (node.type === "code") {
-      return (
-        <code key={index} className="rounded bg-[var(--color-tag-bg)] px-1 py-0.5 text-[12px]">
-          {node.text}
-        </code>
-      );
-    }
-    if (node.type === "link") {
-      return (
-        <a
-          key={index}
-          href={node.href}
-          target="_blank"
-          rel="noreferrer"
-          className="font-medium underline"
-        >
-          {node.text}
-        </a>
-      );
-    }
-    if (node.type === "citation") {
-      return renderCitation ? (
-        <span key={index}>{renderCitation(node.index)}</span>
-      ) : (
-        <span key={index}>[{node.index}]</span>
-      );
-    }
-    return <span key={index}>{node.text}</span>;
+const remarkAskAiCitations: Plugin<[], Root> = () => (tree) => {
+  visit(tree, "text", (node, index, parent) => {
+    if (!parent || typeof index !== "number") return;
+
+    const textNode = node as Text;
+    const parts = splitCitationText(textNode.value);
+    if (!parts) return;
+
+    parent.children.splice(index, 1, ...(parts as RootContent[]));
   });
+};
+
+function splitCitationText(value: string): Array<Text | AskAiCitationNode> | null {
+  const pattern = /\[(\d+)\]/g;
+  const parts: Array<Text | AskAiCitationNode> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", value: value.slice(lastIndex, match.index) });
+    }
+    const citationText = match[0];
+    const citationIndex = Number.parseInt(match[1], 10);
+    parts.push({
+      type: CITATION_NODE_TYPE,
+      index: citationIndex,
+      data: {
+        hName: "span",
+        hProperties: { dataAskAiCitation: String(citationIndex) },
+      },
+      children: [{ type: "text", value: citationText }],
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (parts.length === 0) return null;
+  if (lastIndex < value.length) {
+    parts.push({ type: "text", value: value.slice(lastIndex) });
+  }
+  return parts;
 }
