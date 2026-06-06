@@ -33,84 +33,85 @@
   --color-ring: var(--ring);
 
   /* ───── Sidebar — ClickUp dark navy purple ───── */
-  --color-sidebar-bg: #191F2E;
-  --color-sidebar-active: #2A3153;
-  --color-sidebar-border: #232A3D;
-  --color-sidebar-icon: #9E95F5;
-  --color-sidebar-text: #8892A4;
-  --color-sidebar-text-active: #FFFFFF;
+  --color-sidebar-bg: #191f2e;
+  --color-sidebar-active: #2a3153;
+  --color-sidebar-border: #232a3d;
+  --color-sidebar-icon: #9e95f5;
+  --color-sidebar-text: #8892a4;
+  --color-sidebar-text-active: #ffffff;
 
   /* ───── Brand / accents ───── */
-  --color-brand: #7B68EE;
-  --color-brand-hover: #6455D6;
-  --color-brand-light: #EDE9FE;
-  --color-accent-mid: #9E95F5;
-  --color-accent-sparkle: #5E4BF1;
-  --color-accent-green: #7B68EE; /* legacy alias mapped to brand */
+  --color-brand: #7b68ee;
+  --color-brand-hover: #6455d6;
+  --color-brand-light: #ede9fe;
+  --color-accent-mid: #9e95f5;
+  --color-accent-sparkle: #5e4bf1;
+  --color-accent-green: #7b68ee; /* legacy alias mapped to brand */
 
   /* ───── Surfaces ───── */
-  --color-page: #F7F8FA;
-  --color-card: #FFFFFF;
-  --color-table-header: #F7F8FA;
-  --color-table-row-alt: #FAFBFC;
-  --color-tag-bg: #F3F0FF;
+  --color-page: #f7f8fa;
+  --color-card: #ffffff;
+  --color-table-header: #f7f8fa;
+  --color-table-row-alt: #fafbfc;
+  --color-tag-bg: #f3f0ff;
 
   /* ───── Borders ───── */
-  --color-border-default: #E3E6EA;
-  --color-border-strong: #D0D5DD;
+  --color-border-default: #e3e6ea;
+  --color-border-strong: #d0d5dd;
 
   /* ───── Status — keep green for finance ───── */
-  --color-success: #22C55E;
-  --color-success-bg: #E8F5E9;
-  --color-success-fg: #2E7D32;
-  --color-success-border: #A7D7A9;
+  --color-success: #22c55e;
+  --color-success-bg: #e8f5e9;
+  --color-success-fg: #2e7d32;
+  --color-success-border: #a7d7a9;
 
-  --color-danger: #F44336;
-  --color-danger-bg: #FFEBEE;
-  --color-danger-fg: #C62828;
+  --color-danger: #f44336;
+  --color-danger-bg: #ffebee;
+  --color-danger-fg: #c62828;
 
-  --color-warning: #F59E0B;
-  --color-warning-bg: #FFF8E1;
-  --color-warning-fg: #B45309;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fff8e1;
+  --color-warning-fg: #b45309;
 
-  --color-info: #4EA7FF;
-  --color-info-bg: #E8F4FF;
+  --color-info: #4ea7ff;
+  --color-info-bg: #e8f4ff;
 
   /* ───── Text ───── */
-  --color-text-primary: #292D34;
-  --color-text-secondary: #4F546B;
-  --color-text-muted: #818EA0;
-  --color-text-placeholder: #A0A8B8;
+  --color-text-primary: #292d34;
+  --color-text-secondary: #4f546b;
+  --color-text-muted: #818ea0;
+  --color-text-placeholder: #a0a8b8;
 }
 
 :root {
   --radius: 0.5rem;
-  --background: #F7F8FA;
-  --foreground: #292D34;
-  --card: #FFFFFF;
-  --card-foreground: #292D34;
-  --popover: #FFFFFF;
-  --popover-foreground: #292D34;
-  --primary: #7B68EE;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F3F0FF;
-  --secondary-foreground: #4A3AB8;
-  --muted: #F7F8FA;
-  --muted-foreground: #4F546B;
-  --accent: #F3F0FF;
-  --accent-foreground: #4A3AB8;
-  --destructive: #F44336;
-  --destructive-foreground: #FFFFFF;
-  --border: #E3E6EA;
-  --input: #D0D5DD;
-  --ring: #7B68EE;
+  --background: #f7f8fa;
+  --foreground: #292d34;
+  --card: #ffffff;
+  --card-foreground: #292d34;
+  --popover: #ffffff;
+  --popover-foreground: #292d34;
+  --primary: #7b68ee;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f0ff;
+  --secondary-foreground: #4a3ab8;
+  --muted: #f7f8fa;
+  --muted-foreground: #4f546b;
+  --accent: #f3f0ff;
+  --accent-foreground: #4a3ab8;
+  --destructive: #f44336;
+  --destructive-foreground: #ffffff;
+  --border: #e3e6ea;
+  --input: #d0d5dd;
+  --ring: #7b68ee;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
-  html, body {
+  html,
+  body {
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
@@ -148,8 +149,13 @@
 }
 
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 .skeleton-bar {
   background: var(--color-brand-light);
@@ -159,33 +165,107 @@
 }
 
 @keyframes flash-success {
-  0%   { background-color: #D1FAE5; }
-  100% { background-color: #FFFFFF; }
+  0% {
+    background-color: #d1fae5;
+  }
+  100% {
+    background-color: #ffffff;
+  }
 }
 .flash-success {
   animation: flash-success 1s ease-out;
 }
 
 @keyframes slide-in-right {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 .slide-in-right {
   animation: slide-in-right 0.25s ease;
 }
 
 @keyframes ss-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 .animate-ss-pulse {
   animation: ss-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes ss-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .animate-ss-fade-in {
   animation: ss-fade-in 0.35s ease-out;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .portfolio-print-root {
+    color: #111827;
+  }
+
+  .portfolio-print-hide,
+  aside,
+  nav,
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+
+  .portfolio-print-root,
+  .portfolio-print-root * {
+    box-shadow: none !important;
+  }
+
+  .portfolio-print-root > *,
+  .portfolio-print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .portfolio-print-section {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .portfolio-print-section:nth-of-type(n + 4) {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .portfolio-print-footer {
+    display: block !important;
+    position: fixed;
+    bottom: 8mm;
+    left: 10mm;
+    right: 10mm;
+  }
+
+  table {
+    break-inside: auto;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

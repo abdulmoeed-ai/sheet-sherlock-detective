@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPortfolioApprovedModelCoverage,
+  buildPortfolioSectorAllocation,
   filterPortfolioDashboards,
   normalizePortfolioCompanies,
   portfolioCompanySummary,
+  portfolioSourceSyncRange,
   portfolioVisibilityDescription,
   portfolioVisibilityLabel,
   sortPortfolioDashboardsByUpdated,
 } from "./portfolio-dashboard";
-import type { PortfolioDashboardResponse } from "@/lib/api/types";
+import type { PortfolioDashboardResponse, ProjectResponse } from "@/lib/api/types";
 
 const dashboard = (overrides: Partial<PortfolioDashboardResponse>): PortfolioDashboardResponse => ({
   id: "portfolio-1",
@@ -23,6 +26,23 @@ const dashboard = (overrides: Partial<PortfolioDashboardResponse>): PortfolioDas
   createdAt: "2026-06-06T10:00:00Z",
   updatedAt: "2026-06-06T10:00:00Z",
   lastExportedAt: null,
+  ...overrides,
+});
+
+const project = (overrides: Partial<ProjectResponse> = {}): ProjectResponse => ({
+  id: "project-1",
+  companyName: "Millat Tractors Limited",
+  projectLabel: "MTL_FY2025_v1",
+  sector: "Automobile Assembler",
+  fiscalYear: "FY2025",
+  currencyUnit: "Rs in Thousands",
+  template: "Millat - Template.xlsx",
+  status: "approved",
+  createdAt: "2026-06-01T10:00:00Z",
+  updatedAt: "2026-06-01T10:00:00Z",
+  teamMembers: [],
+  pdfs: [],
+  reviewProgress: { total: 1, reviewed: 1 },
   ...overrides,
 });
 
@@ -83,5 +103,45 @@ describe("portfolio dashboard helpers", () => {
         dashboard({ id: "new", updatedAt: "2026-06-06T10:00:00Z" }),
       ]).map((item) => item.id),
     ).toEqual(["new", "old"]);
+  });
+
+  it("builds sector allocation by company count", () => {
+    expect(
+      buildPortfolioSectorAllocation([
+        { symbol: "MTL", name: "Millat Tractors Limited", sector: "Automobile Assembler" },
+        {
+          symbol: "HCAR",
+          name: "Honda Atlas Cars Pakistan Limited",
+          sector: "Automobile Assembler",
+        },
+        { symbol: "LUCK", name: "Lucky Cement Limited", sector: "Cement" },
+      ]),
+    ).toEqual([
+      { sector: "Automobile Assembler", count: 2, share: 2 / 3 },
+      { sector: "Cement", count: 1, share: 1 / 3 },
+    ]);
+  });
+
+  it("matches approved model coverage without blocking missing models", () => {
+    const coverage = buildPortfolioApprovedModelCoverage(
+      [
+        { symbol: "MTL", name: "Millat Tractors Limited", sector: "Automobile Assembler" },
+        { symbol: "LUCK", name: "Lucky Cement Limited", sector: "Cement" },
+      ],
+      [project()],
+    );
+
+    expect(coverage.label).toBe("1 of 2 companies have approved models");
+    expect(coverage.rows.map((row) => row.statusLabel)).toEqual([
+      "Approved model available",
+      "Approved model not available",
+    ]);
+  });
+
+  it("summarizes source sync freshness range", () => {
+    expect(portfolioSourceSyncRange(["2026-06-04 15:30 PKT", "2026-06-05 15:30 PKT"]).label).toBe(
+      "Last synced range 2026-06-04 15:30 PKT to 2026-06-05 15:30 PKT",
+    );
+    expect(portfolioSourceSyncRange([]).label).toBe("No live source sync timestamp available yet");
   });
 });

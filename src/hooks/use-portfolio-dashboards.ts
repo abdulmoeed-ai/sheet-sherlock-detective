@@ -3,6 +3,7 @@ import {
   createPortfolioDashboard,
   deletePortfolioDashboard,
   listPortfolioDashboards,
+  markPortfolioDashboardExported,
   readPortfolioDashboard,
   updatePortfolioDashboard,
 } from "@/lib/api/portfolio-dashboards";
@@ -61,6 +62,17 @@ export function useDeletePortfolioDashboard() {
     onSuccess: async (_result, dashboardId) => {
       await queryClient.invalidateQueries({ queryKey: ["portfolio-dashboards"] });
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolioDashboard(dashboardId) });
+    },
+  });
+}
+
+export function useMarkPortfolioDashboardExported() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: markPortfolioDashboardExported,
+    onSuccess: async (dashboard) => {
+      await queryClient.invalidateQueries({ queryKey: ["portfolio-dashboards"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolioDashboard(dashboard.id) });
     },
   });
 }

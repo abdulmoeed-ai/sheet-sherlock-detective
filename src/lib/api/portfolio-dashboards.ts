@@ -43,3 +43,10 @@ export function deletePortfolioDashboard(dashboardId: string) {
     method: "DELETE",
   });
 }
+
+export function markPortfolioDashboardExported(dashboardId: string) {
+  return apiFetch<PortfolioDashboardResponse>(
+    `/api/portfolio-dashboards/${encodeURIComponent(dashboardId)}/exports`,
+    { method: "POST" },
+  );
+}
