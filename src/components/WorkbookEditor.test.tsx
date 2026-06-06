@@ -2,16 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CalculationMode } from "@univerjs/sheets-formula";
+import { WorkbookEditor } from "./WorkbookEditor";
 import {
   buildWorkbookCellIndex,
   cellKey,
   prepareWorkbookForUniver,
   resolveWorkbookSheetId,
-  workbookEditEventFromUniverEnd,
   workbookCellFromUniverPosition,
-  WorkbookEditor,
+  workbookEditEventFromUniverEnd,
   type WorkbookPayload,
-} from "./WorkbookEditor";
+} from "@/lib/workbook-editor-utils";
 
 const workbook: WorkbookPayload = {
   sheetOrder: ["sheet-1"],
