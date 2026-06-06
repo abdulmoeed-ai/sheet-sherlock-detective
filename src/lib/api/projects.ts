@@ -12,6 +12,7 @@ import type {
   ModelArchiveResponse,
   ProjectVersionCreateInput,
   ProjectResponse,
+  RagIndexStatusResponse,
   ReviewCommentInput,
   ReviewCommentResponse,
   ReviewHandoffResponse,
@@ -190,6 +191,10 @@ export function searchSources(
     method: "POST",
     body: input,
   });
+}
+
+export function readRagIndexStatus(projectId: string) {
+  return apiFetch<RagIndexStatusResponse>(`/api/projects/${projectId}/rag/status`);
 }
 
 export function askAi(

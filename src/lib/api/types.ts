@@ -152,6 +152,23 @@ export interface ExtractionProgressEventResponse {
   createdAt: string;
 }
 
+export interface RagIndexStatusResponse {
+  projectId: string;
+  status: "not_indexed" | "queued" | "running" | "ready" | "stale" | "failed" | string;
+  readyForAskAi: boolean;
+  stale: boolean;
+  stage?: string | null;
+  percent: number;
+  message?: string | null;
+  latestJobId?: string | null;
+  embeddingModel?: string | null;
+  embeddingDim?: number | null;
+  indexVersion?: string | null;
+  errorCode?: string | null;
+  errorDetail?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface MappingRulesSummaryResponse {
   rulesHash: string;
   rulesCount: number;
