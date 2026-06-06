@@ -53,6 +53,44 @@ export interface ProjectResponse {
   reviewProgress: ReviewProgress;
 }
 
+export type PortfolioDashboardVisibility = "private" | "public";
+export type PortfolioDashboardScope = "my" | "public" | "all";
+
+export interface PortfolioCompanySelection {
+  symbol: string;
+  name: string;
+  sector: string;
+  weight?: number | null;
+}
+
+export interface PortfolioDashboardResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: PortfolioDashboardVisibility;
+  createdByUserId: string;
+  createdByName: string;
+  createdByRole: BackendRole | string;
+  companySelections: PortfolioCompanySelection[];
+  createdAt: string;
+  updatedAt: string;
+  lastExportedAt: string | null;
+}
+
+export interface PortfolioDashboardInput {
+  name: string;
+  description?: string | null;
+  visibility?: PortfolioDashboardVisibility;
+  companySelections: PortfolioCompanySelection[];
+}
+
+export interface PortfolioDashboardUpdateInput {
+  name?: string;
+  description?: string | null;
+  visibility?: PortfolioDashboardVisibility;
+  companySelections?: PortfolioCompanySelection[];
+}
+
 export interface WorkspaceResponse {
   project: ProjectResponse;
   documents: DocumentResponse[];

@@ -6,9 +6,13 @@ import {
   BarChart3,
   ClipboardList,
   CloudUpload,
+  Eye,
   FolderOpen,
+  Globe2,
   Loader2,
+  Lock,
   Plus,
+  Search,
   ShieldCheck,
 } from "lucide-react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
@@ -17,7 +21,7 @@ import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
 import { searchSources } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { BackendRole, ProjectResponse } from "@/lib/api/types";
+import type { BackendRole, PortfolioDashboardResponse, ProjectResponse } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
@@ -26,6 +30,7 @@ import {
   useAcknowledgeAnalysisRequest,
 } from "@/hooks/use-analysis-requests";
 import { useProjects, useCreateProject, useWorkspace } from "@/hooks/use-projects";
+import { usePortfolioDashboards } from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
@@ -57,6 +62,12 @@ import {
   type SourceSyncStatus,
   type SourceTaggedMetric,
 } from "@/lib/financial-dashboard";
+import {
+  filterPortfolioDashboards,
+  portfolioCompanySummary,
+  portfolioVisibilityDescription,
+  portfolioVisibilityLabel,
+} from "@/lib/portfolio-dashboard";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -130,7 +141,7 @@ function Dashboard() {
 
   return (
     <PageShell title="Dashboards" hideProgress>
-      {role === "finance_manager" ? <ManagerDashboard /> : <ProjectDashboard role={role} />}
+      <ProjectDashboard role={role} />
     </PageShell>
   );
 }
@@ -290,7 +301,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
   const [startError, setStartError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "financial">("financial");
+  const [activeTab, setActiveTab] = useState<"overview" | "financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
 
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
@@ -348,16 +359,17 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   };
 
   const tabs =
-    role === "finance_analyst"
+    role === "finance_analyst" || role === "finance_manager"
       ? [
           { id: "financial" as const, label: "Financial Dashboard" },
+          { id: "portfolio" as const, label: "Portfolio Dashboards" },
           { id: "overview" as const, label: "My Tasks Overview" },
         ]
       : null;
 
   return (
     <div className="space-y-4">
-      {/* Sub-tabs — analyst only */}
+      {/* Sub-tabs */}
       {tabs && (
         <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
           {tabs.map((tab) => (
@@ -379,7 +391,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
 
       {/* Financial Dashboard tab */}
       {activeTab === "financial" &&
-        role === "finance_analyst" &&
+        (role === "finance_analyst" || role === "finance_manager") &&
         (!allDataReady ? (
           <AnalystDashboardLoading />
         ) : (
@@ -392,143 +404,383 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
           />
         ))}
 
-      {/* Overview tab (original dashboard) */}
-      {(activeTab === "overview" || role !== "finance_analyst") && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Projects" value={projectList.length} />
-            {role === "finance_analyst" && (
-              <StatCard label="Pending requests" value={pendingRequests.length} />
-            )}
-            <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
-          </div>
+      {activeTab === "portfolio" && <PortfolioDashboardsTab role={role} />}
 
-          {role === "finance_analyst" && (
-            <Card>
-              <div className="mb-3 flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
-                <h2 className="text-[16px] font-semibold">Assigned requests</h2>
-                <Badge tone="info">Analyst</Badge>
-              </div>
-              {requests.isLoading ? (
-                <div className="text-[13px] text-[var(--color-text-muted)]">
-                  Loading requests...
+      {/* Overview tab (original dashboard) */}
+      {activeTab === "overview" && role === "finance_manager" && <ManagerDashboard />}
+
+      {(activeTab === "overview" || role === "cfo" || role === "admin") &&
+        role !== "finance_manager" && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard label="Projects" value={projectList.length} />
+              {role === "finance_analyst" && (
+                <StatCard label="Pending requests" value={pendingRequests.length} />
+              )}
+              <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
+            </div>
+
+            {role === "finance_analyst" && (
+              <Card>
+                <div className="mb-3 flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+                  <h2 className="text-[16px] font-semibold">Assigned requests</h2>
+                  <Badge tone="info">Analyst</Badge>
                 </div>
-              ) : pendingRequests.length === 0 ? (
+                {requests.isLoading ? (
+                  <div className="text-[13px] text-[var(--color-text-muted)]">
+                    Loading requests...
+                  </div>
+                ) : pendingRequests.length === 0 ? (
+                  <div
+                    className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    No pending requests assigned to you.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center justify-between rounded-md border px-4 py-3"
+                        style={{ borderColor: "var(--color-border-default)" }}
+                      >
+                        <div>
+                          <div className="text-[13px] font-semibold">
+                            {request.companyName}
+                            {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
+                            {request.fiscalYear ?? "Current"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                            Priority: {request.priority ?? "normal"} · Received{" "}
+                            {new Date(request.createdAt).toLocaleDateString()}
+                            {request.note ? ` · ${request.note}` : ""}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => acknowledge.mutate(request.id)}
+                          disabled={acknowledge.isPending}
+                        >
+                          {acknowledge.isPending && acknowledge.variables === request.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          Acknowledge
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            <Card>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
+                  <h2 className="text-[16px] font-semibold">Projects</h2>
+                </div>
+                <input
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Search projects"
+                  className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                />
+              </div>
+              {projects.isLoading ? (
+                <div className="text-[13px] text-[var(--color-text-muted)]">
+                  Loading projects...
+                </div>
+              ) : projectList.length === 0 ? (
                 <div
                   className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
                   style={{ borderColor: "var(--color-border-default)" }}
                 >
-                  No pending requests assigned to you.
+                  No projects are available for this account.
+                </div>
+              ) : filteredProjects.length === 0 ? (
+                <div
+                  className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
+                  No projects match that search.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {pendingRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="flex items-center justify-between rounded-md border px-4 py-3"
+                  {filteredProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => {
+                        setSelectedProjectId(project.id);
+                        navigate({ to: role === "cfo" ? "/sign-off" : "/registry" });
+                      }}
+                      className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
                       style={{ borderColor: "var(--color-border-default)" }}
                     >
                       <div>
-                        <div className="text-[13px] font-semibold">
-                          {request.companyName}
-                          {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
-                          {request.fiscalYear ?? "Current"}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold">{project.companyName}</span>
+                          <Badge tone={dashboardProjectStatusTone(project.status)}>
+                            {dashboardProjectStatusLabel(project.status)}
+                          </Badge>
                         </div>
-                        <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
-                          Priority: {request.priority ?? "normal"} · Received{" "}
-                          {new Date(request.createdAt).toLocaleDateString()}
-                          {request.note ? ` · ${request.note}` : ""}
+                        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                          {project.fiscalYear ?? "Current period"}
+                          {project.sector ? ` · ${project.sector}` : ""}
+                          {project.projectLabel ? ` · ${project.projectLabel}` : ""}
+                          {" · "}Last edited {formatProjectDate(project.updatedAt)}
                         </div>
                       </div>
-                      <Button
-                        onClick={() => acknowledge.mutate(request.id)}
-                        disabled={acknowledge.isPending}
-                      >
-                        {acknowledge.isPending && acknowledge.variables === request.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        Acknowledge
-                      </Button>
-                    </div>
+                      <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
+                    </button>
                   ))}
                 </div>
               )}
             </Card>
-          )}
-
-          <Card>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
-                <h2 className="text-[16px] font-semibold">Projects</h2>
-              </div>
-              <input
-                value={projectSearch}
-                onChange={(event) => setProjectSearch(event.target.value)}
-                placeholder="Search projects"
-                className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              />
-            </div>
-            {projects.isLoading ? (
-              <div className="text-[13px] text-[var(--color-text-muted)]">Loading projects...</div>
-            ) : projectList.length === 0 ? (
-              <div
-                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                No projects are available for this account.
-              </div>
-            ) : filteredProjects.length === 0 ? (
-              <div
-                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                No projects match that search.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredProjects.map((project) => (
-                  <button
-                    key={project.id}
-                    onClick={() => {
-                      setSelectedProjectId(project.id);
-                      navigate({ to: role === "cfo" ? "/sign-off" : "/registry" });
-                    }}
-                    className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-semibold">{project.companyName}</span>
-                        <Badge tone={dashboardProjectStatusTone(project.status)}>
-                          {dashboardProjectStatusLabel(project.status)}
-                        </Badge>
-                      </div>
-                      <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                        {project.fiscalYear ?? "Current period"}
-                        {project.sector ? ` · ${project.sector}` : ""}
-                        {project.projectLabel ? ` · ${project.projectLabel}` : ""}
-                        {" · "}Last edited {formatProjectDate(project.updatedAt)}
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
-                  </button>
-                ))}
-              </div>
+            {role === "admin" && (
+              <Card>
+                <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+                  <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
+                  Admin source controls are available from Sources Admin.
+                </div>
+              </Card>
             )}
-          </Card>
-          {role === "admin" && (
-            <Card>
-              <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
-                <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
-                Admin source controls are available from Sources Admin.
+          </div>
+        )}
+    </div>
+  );
+}
+
+function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
+  const isManagerView = role === "finance_manager";
+  const myDashboards = usePortfolioDashboards("my");
+  const publicDashboards = usePortfolioDashboards("public");
+  const [managerCreatorFilter, setManagerCreatorFilter] = useState("");
+
+  const myItems = useMemo(() => myDashboards.data ?? [], [myDashboards.data]);
+  const publicItems = useMemo(() => publicDashboards.data ?? [], [publicDashboards.data]);
+  const creatorOptions = useMemo(
+    () => [...new Set(publicItems.map((dashboard) => dashboard.createdByName))].sort(),
+    [publicItems],
+  );
+  const filteredPublicItems = useMemo(
+    () => filterPortfolioDashboards(publicItems, "", managerCreatorFilter || null),
+    [managerCreatorFilter, publicItems],
+  );
+
+  if (isManagerView) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Globe2 className="h-4 w-4 text-[var(--color-brand)]" />
+                <h2 className="text-[16px] font-semibold">Public Portfolio Dashboards</h2>
               </div>
-            </Card>
-          )}
+              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+                Open shared portfolio dashboards in read-only mode with creator attribution.
+              </p>
+            </div>
+            <label className="min-w-[220px]">
+              <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-muted)]">
+                Creator
+              </span>
+              <select
+                value={managerCreatorFilter}
+                onChange={(event) => setManagerCreatorFilter(event.target.value)}
+                className="h-9 w-full rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <option value="">All creators</option>
+                {creatorOptions.map((creator) => (
+                  <option key={creator} value={creator}>
+                    {creator}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </Card>
+        <PortfolioDashboardList
+          dashboards={filteredPublicItems}
+          loading={publicDashboards.isLoading}
+          emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+          readOnly
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
+              <h2 className="text-[16px] font-semibold">Portfolio Dashboards</h2>
+            </div>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              Build saved views for same-sector or cross-sector company comparisons.
+            </p>
+          </div>
+          <Button disabled title="Portfolio builder comes in the next slice">
+            <Plus className="h-4 w-4" />
+            New Portfolio Dashboard
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <Lock className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-[15px] font-semibold">My Portfolio Dashboards</h3>
+          </div>
+          <PortfolioDashboardList
+            dashboards={myItems}
+            loading={myDashboards.isLoading}
+            emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+          />
+        </Card>
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <Globe2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-[15px] font-semibold">Public Portfolio Dashboards</h3>
+          </div>
+          <PortfolioDashboardList
+            dashboards={publicItems}
+            loading={publicDashboards.isLoading}
+            emptyLabel="Create a portfolio dashboard to compare companies across sectors or within a single sector."
+            readOnly
+          />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function PortfolioDashboardList({
+  dashboards,
+  loading,
+  emptyLabel,
+  readOnly = false,
+}: {
+  dashboards: PortfolioDashboardResponse[];
+  loading: boolean;
+  emptyLabel: string;
+  readOnly?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const filteredDashboards = useMemo(
+    () => filterPortfolioDashboards(dashboards, search),
+    [dashboards, search],
+  );
+
+  if (loading) {
+    return <div className="text-[13px] text-[var(--color-text-muted)]">Loading portfolios...</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {dashboards.length > 0 ? (
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by portfolio, company, ticker, sector, or creator"
+            className="h-9 w-full rounded-md border bg-white pl-9 pr-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)" }}
+          />
+        </label>
+      ) : null}
+
+      {dashboards.length === 0 ? (
+        <PortfolioDashboardEmptyState label={emptyLabel} />
+      ) : filteredDashboards.length === 0 ? (
+        <div
+          className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          No portfolio dashboards match that search.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredDashboards.map((dashboard) => (
+            <PortfolioDashboardRow key={dashboard.id} dashboard={dashboard} readOnly={readOnly} />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PortfolioDashboardEmptyState({ label }: { label: string }) {
+  return (
+    <div
+      className="flex min-h-[180px] flex-col items-center justify-center rounded-md border px-4 py-6 text-center"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <BarChart3 className="h-9 w-9 text-[var(--color-brand)]" />
+      <div className="mt-3 max-w-[520px] text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioDashboardRow({
+  dashboard,
+  readOnly,
+}: {
+  dashboard: PortfolioDashboardResponse;
+  readOnly: boolean;
+}) {
+  const summary = portfolioCompanySummary(dashboard.companySelections);
+  return (
+    <div
+      className="rounded-md border px-4 py-3"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-[13px] font-semibold">{dashboard.name}</h4>
+            <Badge tone={dashboard.visibility === "public" ? "success" : "info"}>
+              {portfolioVisibilityLabel(dashboard.visibility)}
+            </Badge>
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+            {summary.companyCount} {summary.companyCount === 1 ? "company" : "companies"} ·{" "}
+            {summary.sectorLabel} · Created by {dashboard.createdByName}
+          </div>
+          <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+            {portfolioVisibilityDescription(dashboard.visibility)}
+          </div>
+        </div>
+        <Button variant="secondary" disabled title="Portfolio detail view comes in the next slice">
+          <Eye className="h-4 w-4" />
+          {readOnly ? "Open read-only" : "Open"}
+        </Button>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {dashboard.companySelections.slice(0, 5).map((company) => (
+          <span
+            key={company.symbol}
+            className="rounded-md bg-[var(--color-tag-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)]"
+          >
+            {company.symbol} · {company.sector}
+          </span>
+        ))}
+        {dashboard.companySelections.length > 5 ? (
+          <span className="rounded-md bg-[var(--color-tag-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            +{dashboard.companySelections.length - 5} more
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
