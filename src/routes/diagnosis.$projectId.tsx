@@ -14,6 +14,7 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
+  Presentation,
   Reply,
   RotateCcw,
   Save,
@@ -134,7 +135,9 @@ import {
   useUploadDocuments,
   useCreateComment,
   useCreateExcelExport,
+  useCreateValuationPresentation,
   useDownloadExcelExport,
+  useDownloadValuationPresentation,
   useReopenComment,
   useRevertReviewCell,
   useRevertWorkbookCell,
@@ -185,6 +188,8 @@ function Diagnosis() {
   const reopenComment = useReopenComment(projectId);
   const createExport = useCreateExcelExport(projectId);
   const downloadExport = useDownloadExcelExport(projectId);
+  const createValuationExport = useCreateValuationPresentation(projectId);
+  const downloadValuationExport = useDownloadValuationPresentation(projectId);
   const uploadDocuments = useUploadDocuments(projectId);
   const startExtraction = useStartExtraction(projectId);
   const comments = useQuery({
@@ -536,6 +541,33 @@ function Diagnosis() {
     }
   };
 
+  const exportValuationPPT = async () => {
+    if (!projectId) return;
+    try {
+      const created = await createValuationExport.mutateAsync();
+      if (created.warnings?.length) {
+        const isDetministic = created.generatedBy === "deterministic";
+        toast.info(
+          isDetministic
+            ? "Presentation generated using deterministic fallback (LLM unavailable)."
+            : "Presentation generated with warnings.",
+        );
+      }
+      const blob = await downloadValuationExport.mutateAsync(created.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(cycle?.company ?? "Company").replace(/\s+/g, "_")}_Valuation.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Valuation presentation downloaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "PPT generation failed.");
+    }
+  };
+
   const markReady = () => {
     cycleStore.setStatus("review");
     toast.success("Diagnosis marked ready for review");
@@ -845,6 +877,27 @@ function Diagnosis() {
                 <Download className="h-3.5 w-3.5" />
               )}
               Export to Excel
+            </button>
+            <button
+              onClick={exportValuationPPT}
+              disabled={
+                !projectId ||
+                createValuationExport.isPending ||
+                downloadValuationExport.isPending
+              }
+              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+            >
+              {createValuationExport.isPending || downloadValuationExport.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Presentation className="h-3.5 w-3.5" />
+              )}
+              {createValuationExport.isPending
+                ? "Generating…"
+                : downloadValuationExport.isPending
+                  ? "Downloading…"
+                  : "Valuation PPT"}
             </button>
             <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
               {draftSaveLabel}

@@ -18,6 +18,7 @@ import type {
   ReviewCommentResponse,
   ReviewHandoffResponse,
   SourceSearchResponse,
+  ValuationPresentationResponse,
   WorkbookRevisionResponse,
   WorkbookSaveInput,
   WorkbookSaveResponse,
@@ -330,6 +331,19 @@ export function createExcelExport(projectId: string) {
 
 export function downloadExcelExport(projectId: string, exportId: string) {
   return apiBlob(`/api/projects/${projectId}/exports/${exportId}/download`);
+}
+
+export function createValuationPresentation(projectId: string) {
+  return apiFetch<ValuationPresentationResponse>(
+    `/api/projects/${projectId}/exports/valuation-presentation`,
+    { method: "POST" },
+  );
+}
+
+export function downloadValuationPresentation(projectId: string, exportId: string) {
+  return apiBlob(
+    `/api/projects/${projectId}/exports/valuation-presentation/${exportId}/download`,
+  );
 }
 
 export function submitForManagerReview(projectId: string, note: string | null) {

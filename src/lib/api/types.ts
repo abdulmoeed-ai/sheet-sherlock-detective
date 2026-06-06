@@ -243,6 +243,15 @@ export interface ReviewHandoffResponse {
   message: string;
 }
 
+export interface ValuationPresentationResponse {
+  id: string;
+  projectId: string;
+  status: string;
+  downloadUrl: string;
+  generatedBy: string;
+  warnings: string[];
+}
+
 export interface ReviewCommentInput {
   body: string;
   fieldId?: string | null;
