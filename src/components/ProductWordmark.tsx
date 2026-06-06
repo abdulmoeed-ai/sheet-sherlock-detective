@@ -1,18 +1,19 @@
 interface ProductWordmarkProps {
   className?: string;
   aiClassName?: string;
-  prefix?: "F" | "f";
+  textClassName?: string;
 }
 
 export function ProductWordmark({
   className = "",
   aiClassName = "text-[var(--color-brand)]",
-  prefix = "F",
+  textClassName = "text-[var(--color-text-primary)]",
 }: ProductWordmarkProps) {
   return (
-    <span className={className}>
-      {prefix}
-      <span className={aiClassName}>(AI)</span>nance
+    <span className={className} aria-label="finance">
+      <span className={textClassName}>fin</span>
+      <span className={aiClassName}>ai</span>
+      <span className={textClassName}>nce</span>
     </span>
   );
 }

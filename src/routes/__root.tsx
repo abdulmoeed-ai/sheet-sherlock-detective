@@ -82,20 +82,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "F(AI)nance — Intelligent Financial Predictions" },
+      { title: "finance — Intelligent Financial Predictions" },
       {
         name: "description",
         content:
           "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
       },
-      { property: "og:title", content: "F(AI)nance — Intelligent Financial Predictions" },
+      { property: "og:title", content: "finance — Intelligent Financial Predictions" },
       {
         property: "og:description",
         content:
           "AI-powered FP&A platform for cell-level ingestion, balance sheet diagnosis and predictive forecasting.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:title", content: "F(AI)nance — Intelligent Financial Predictions" },
+      { name: "twitter:title", content: "finance — Intelligent Financial Predictions" },
       {
         name: "twitter:description",
         content:

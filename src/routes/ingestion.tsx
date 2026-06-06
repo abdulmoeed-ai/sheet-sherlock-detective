@@ -45,7 +45,7 @@ import {
 export const Route = createFileRoute("/ingestion")({
   head: () => ({
     meta: [
-      { title: "Ingestion — F(AI)nance" },
+      { title: "Ingestion — finance" },
       {
         name: "description",
         content: "Upload PSX filings and trigger project extraction.",

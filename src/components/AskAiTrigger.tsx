@@ -35,6 +35,7 @@ import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useAskAiSessions } from "@/hooks/use-ask-ai-sessions";
 import { useWorkspace } from "@/hooks/use-projects";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { ProductWordmark } from "@/components/ProductWordmark";
 import {
   CitationPreviewSidebar,
   type DiagnosisSourcePreview,
@@ -527,7 +528,7 @@ export function AskAiTrigger() {
               </span>
               <div className="min-w-0">
                 <div className="text-[16px] font-bold text-[var(--color-text-primary)]">
-                  F(AI)nance
+                  <ProductWordmark />
                 </div>
                 <div className="truncate text-[11px] text-[var(--color-text-muted)]">
                   {[
@@ -1559,7 +1560,9 @@ function citationSubline(citation: Record<string, unknown>): string {
   if (typeof citation.url === "string" && citation.url) {
     try {
       return new URL(citation.url).hostname.replace(/^www\./, "");
-    } catch {}
+    } catch {
+      return String(citation.sourceName ?? "");
+    }
   }
   return String(citation.sourceName ?? "");
 }
@@ -1891,7 +1894,9 @@ function uniqueWebLinks(
     let domain = url;
     try {
       domain = new URL(url).hostname.replace(/^www\./, "");
-    } catch {}
+    } catch {
+      domain = url;
+    }
     links.push({ title, url, domain });
   }
   return links.slice(0, 6);

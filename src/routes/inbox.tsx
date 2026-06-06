@@ -22,7 +22,7 @@ import type { AnalysisRequestResponse } from "@/lib/api/types";
 export const Route = createFileRoute("/inbox")({
   head: () => ({
     meta: [
-      { title: "Inbox · Teams Requests — F(AI)nance" },
+      { title: "Inbox · Teams Requests — finance" },
       {
         name: "description",
         content: "Requests sent by Finance Manager via Microsoft Teams integration.",

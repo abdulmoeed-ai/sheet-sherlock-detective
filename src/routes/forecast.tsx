@@ -135,7 +135,7 @@ function Forecast() {
               className="h-8 rounded-md px-3 text-[12px] font-semibold text-white"
               style={{ background: "#7B68EE" }}
             >
-              Visit Workbooks
+              Visit Excel Workbooks
             </button>
           )}
         </div>
