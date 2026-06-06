@@ -98,4 +98,14 @@ describe("parseSseEvents", () => {
     expect(finalEvents).toEqual([finalPayload]);
     expect(result).toEqual(finalPayload);
   });
+
+  it("rejects non-streaming JSON Ask AI responses", async () => {
+    await expect(
+      readAskAiSseStream(
+        new Response(JSON.stringify({ answer: "Full response" }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    ).rejects.toThrow("Ask AI requires a streaming response.");
+  });
 });
