@@ -17,4 +17,29 @@ describe("workspace mappers", () => {
     expect(auditRows(emptyWorkspace)).toEqual([]);
     expect(dashboardMetrics(emptyWorkspace)).toEqual([]);
   });
+
+  it("prefers friendly audit messages while preserving payloads", () => {
+    expect(
+      auditRows({
+        auditEvents: [
+          {
+            id: "audit-1",
+            action: "diagnosis_baseline_replaced",
+            message: "Diagnosis baseline replaced across 3 PDF(s)",
+            actor: "system",
+            createdAt: "2026-06-06T12:30:00+00:00",
+            payload: { document_count: 3 },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: "audit-1",
+        timestamp: "2026-06-06T12:30:00+00:00",
+        actor: "system",
+        action: "Diagnosis baseline replaced across 3 PDF(s)",
+        payload: { document_count: 3 },
+      },
+    ]);
+  });
 });

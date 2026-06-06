@@ -1,9 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DragEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  AlertTriangle,
+  CloudUpload,
   Download,
+  FileText,
   GripVertical,
   History,
   Loader2,
@@ -15,6 +19,8 @@ import {
   Save,
   Send,
   Stethoscope,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
@@ -35,10 +41,19 @@ import { queryKeys } from "@/lib/api/query-keys";
 import {
   createProjectVersion,
   listComments,
+  readExtractionEvents,
+  readExtractionJob,
   readMappingRules,
   readWorkbookCellHistory,
+  readWorkspace,
 } from "@/lib/api/projects";
-import type { ReviewCommentResponse, WorkbookRevisionResponse } from "@/lib/api/types";
+import type {
+  DocumentResponse,
+  ExtractionJobResponse,
+  ExtractionProgressEventResponse,
+  ReviewCommentResponse,
+  WorkbookRevisionResponse,
+} from "@/lib/api/types";
 import {
   activeMentionQuery,
   buildCellCommentIndicators,
@@ -98,6 +113,16 @@ import {
   workbookDraftSaveSnapshot,
 } from "@/lib/diagnosis-draft";
 import {
+  ADD_DOCUMENTS_RERUN_DISCLOSURE,
+  buildBaselineRefreshSummary,
+  buildDiagnosisDocumentSelection,
+  canConfirmDiagnosisDocumentRerun,
+  canStartDiagnosisBaselineRefresh,
+  filesPendingDiagnosisUpload,
+  isDiagnosisBaselineRefreshLocked,
+  type BaselineRefreshSummary,
+} from "@/lib/diagnosis-add-documents";
+import {
   clampDiagnosisRightPanelWidth,
   persistDiagnosisRightPanelWidth,
   readDiagnosisRightPanelWidth,
@@ -105,6 +130,8 @@ import {
 import { useWorkspace } from "@/hooks/use-projects";
 import { useRagIndexStatus } from "@/hooks/use-rag-index-status";
 import {
+  useStartExtraction,
+  useUploadDocuments,
   useCreateComment,
   useCreateExcelExport,
   useDownloadExcelExport,
@@ -114,6 +141,14 @@ import {
   useResolveComment,
   useReviewCell,
 } from "@/hooks/use-project-actions";
+import {
+  effectiveExtractionPercent,
+  extractionFailureMessage,
+  latestExtractionEvent,
+  mergeExtractionEvents,
+  waitForExtractionCompletion,
+} from "@/lib/extraction-job";
+import type { UploadFileStatus } from "@/lib/upload-documents";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { sidebarStore } from "@/lib/sidebar-store";
@@ -136,6 +171,7 @@ type PanelTab = "diagnosis" | "info" | "comments";
 
 function Diagnosis() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const cycle = useCycle();
   const { projectId } = Route.useParams();
   const currentUser = useCurrentUser();
@@ -149,6 +185,8 @@ function Diagnosis() {
   const reopenComment = useReopenComment(projectId);
   const createExport = useCreateExcelExport(projectId);
   const downloadExport = useDownloadExcelExport(projectId);
+  const uploadDocuments = useUploadDocuments(projectId);
+  const startExtraction = useStartExtraction(projectId);
   const comments = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
@@ -174,6 +212,19 @@ function Diagnosis() {
     id: string;
     label: string | null;
   } | null>(null);
+  const [addDocumentsOpen, setAddDocumentsOpen] = useState(false);
+  const [additionalDocuments, setAdditionalDocuments] = useState<File[]>([]);
+  const [rejectedAdditionalDocumentNames, setRejectedAdditionalDocumentNames] = useState<string[]>(
+    [],
+  );
+  const [additionalUploadStatuses, setAdditionalUploadStatuses] = useState<
+    Record<string, UploadFileStatus<DocumentResponse>["status"]>
+  >({});
+  const [rerunPending, setRerunPending] = useState(false);
+  const [rerunProgress, setRerunProgress] = useState<ExtractionJobResponse | null>(null);
+  const [rerunEvents, setRerunEvents] = useState<ExtractionProgressEventResponse[]>([]);
+  const [rerunError, setRerunError] = useState<string | null>(null);
+  const [baselineSummary, setBaselineSummary] = useState<BaselineRefreshSummary | null>(null);
   const workbook = serverWorkbook;
   const sheetIds = workbook?.sheetOrder?.filter((id) => workbook.sheets?.[id]) ?? [];
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -250,6 +301,7 @@ function Diagnosis() {
     [currentUser.data, workspace.data?.project.teamMembers],
   );
   const dirty = hasDiagnosisDraftChanges({ draftValue, pendingWorkbookEditCount });
+  const baselineRefreshLocked = isDiagnosisBaselineRefreshLocked(workspace.data?.project.status);
   const draftSaveLabel = diagnosisDraftSaveLabel({
     dirty,
     saving: savingProjectVersion,
@@ -440,7 +492,7 @@ function Diagnosis() {
             fieldId,
             draftValue: event.newValue,
             oldValue: event.oldValue,
-            existingHistory: event.oldCell?.diagnosis?.history,
+            existingHistory: diagnosisHistory(event.oldCell?.diagnosis?.history),
             currentUser: currentUser.data,
           })
         : null;
@@ -488,6 +540,130 @@ function Diagnosis() {
     cycleStore.setStatus("review");
     toast.success("Diagnosis marked ready for review");
     navigate({ to: "/review" });
+  };
+  const openAddDocuments = () => {
+    if (!canStartDiagnosisBaselineRefresh({ locked: baselineRefreshLocked, dirty, projectId })) {
+      if (baselineRefreshLocked) {
+        toast.error("This workbook version is locked for Manager/CFO review.");
+        return;
+      }
+      if (dirty) {
+        toast.error("Save or discard diagnosis draft changes before adding more PDFs.");
+        return;
+      }
+      toast.error("Open a workbook version before adding more PDFs.");
+      return;
+    }
+    setAddDocumentsOpen(true);
+  };
+  const addAdditionalDocumentFiles = (files: FileList | File[] | null) => {
+    const { accepted, rejectedNames } = buildDiagnosisDocumentSelection(Array.from(files ?? []));
+    setRejectedAdditionalDocumentNames(rejectedNames);
+    if (rejectedNames.length) {
+      toast.error("Only PDF files can be added to the diagnosis baseline.");
+    }
+    if (!accepted.length) return;
+    setAdditionalDocuments((current) => {
+      const existingKeys = new Set(current.map(fileKey));
+      return [...current, ...accepted.filter((file) => !existingKeys.has(fileKey(file)))];
+    });
+  };
+  const removeAdditionalDocument = (file: File) => {
+    setAdditionalDocuments((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
+  };
+  const closeAddDocuments = () => {
+    if (rerunPending) return;
+    setAddDocumentsOpen(false);
+    setAdditionalDocuments([]);
+    setRejectedAdditionalDocumentNames([]);
+    setAdditionalUploadStatuses({});
+    setRerunProgress(null);
+    setRerunEvents([]);
+    setRerunError(null);
+  };
+  const updateAdditionalUploadStatus = (status: UploadFileStatus<DocumentResponse>) => {
+    setAdditionalUploadStatuses((current) => ({
+      ...current,
+      [fileKey(status.file)]: status.status,
+    }));
+  };
+  const syncRerunExtractionEvents = (jobId: string) => {
+    void readExtractionEvents(projectId, jobId)
+      .then((events) => setRerunEvents((current) => mergeExtractionEvents(current, events)))
+      .catch(() => undefined);
+  };
+  const refreshWorkspaceAfterRerun = async (addedFileCount: number) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(projectId) });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.ragStatus(projectId) });
+    const refreshed = await queryClient.fetchQuery({
+      queryKey: queryKeys.workspace(projectId),
+      queryFn: () => readWorkspace(projectId),
+      staleTime: 0,
+    });
+    const baselineAudit = refreshed.auditEvents.find(
+      (event) => event.action === "diagnosis_baseline_replaced",
+    );
+    setBaselineSummary(
+      buildBaselineRefreshSummary({
+        addedFileCount,
+        documentCount: refreshed.documents.length,
+        reviewProgress: refreshed.project.reviewProgress,
+        changedValueCount:
+          auditPayloadNumber(baselineAudit, "changed_value_count") ??
+          auditPayloadNumber(baselineAudit, "replaced_field_count"),
+        citationChangeCount: auditPayloadNumber(baselineAudit, "citation_change_count"),
+        addedFieldCount: auditPayloadNumber(baselineAudit, "added_field_count"),
+        removedFieldCount: auditPayloadNumber(baselineAudit, "removed_field_count"),
+      }),
+    );
+    await workspace.refetch();
+    await ragStatus.refetch();
+  };
+  const confirmAddDocuments = async () => {
+    if (!canConfirmDiagnosisDocumentRerun(additionalDocuments) || rerunPending) return;
+    const addedFileCount = additionalDocuments.length;
+    try {
+      setRerunPending(true);
+      setRerunProgress(null);
+      setRerunEvents([]);
+      setRerunError(null);
+      setBaselineSummary(null);
+      const filesToUpload = filesPendingDiagnosisUpload(additionalDocuments, additionalUploadStatuses);
+      if (filesToUpload.length) {
+        const uploadResult = await uploadDocuments.mutateAsync({
+          files: filesToUpload,
+          onStatus: updateAdditionalUploadStatus,
+        });
+        if (uploadResult.failed) {
+          throw new Error(`Upload failed for ${uploadResult.failed.file.name}: ${uploadResult.failed.message}`);
+        }
+      }
+      const job = await startExtraction.mutateAsync(true);
+      setRerunProgress(job);
+      syncRerunExtractionEvents(job.id);
+      await waitForExtractionCompletion({
+        projectId,
+        initialJob: job,
+        readJob: readExtractionJob,
+        onProgress: (progress) => {
+          setRerunProgress(progress);
+          syncRerunExtractionEvents(progress.id);
+        },
+      });
+      await refreshWorkspaceAfterRerun(addedFileCount);
+      setAddDocumentsOpen(false);
+      setAdditionalDocuments([]);
+      setRejectedAdditionalDocumentNames([]);
+      setAdditionalUploadStatuses({});
+      toast.success("Diagnosis baseline refreshed from all uploaded PDFs");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to refresh diagnosis baseline.";
+      setRerunError(message);
+      toast.error(message);
+    } finally {
+      setRerunPending(false);
+    }
   };
   const resolvedRightPanelWidth = clampDiagnosisRightPanelWidth(
     rightPanelWidth,
@@ -649,6 +825,15 @@ function Diagnosis() {
               {panelOpen ? "Hide panel" : "Show panel"}
             </button>
             <button
+              onClick={openAddDocuments}
+              disabled={!projectId || baselineRefreshLocked || dirty}
+              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Add PDFs
+            </button>
+            <button
               onClick={exportWorkbook}
               disabled={!projectId || createExport.isPending || downloadExport.isPending}
               className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
@@ -731,6 +916,295 @@ function Diagnosis() {
             workbookPane
           )}
         </div>
+      </div>
+      {addDocumentsOpen ? (
+        <AdditionalDocumentsModal
+          files={additionalDocuments}
+          rejectedNames={rejectedAdditionalDocumentNames}
+          uploadStatuses={additionalUploadStatuses}
+          pending={rerunPending}
+          progress={rerunProgress}
+          events={rerunEvents}
+          error={rerunError}
+          onAddFiles={addAdditionalDocumentFiles}
+          onRemove={removeAdditionalDocument}
+          onClose={closeAddDocuments}
+          onConfirm={confirmAddDocuments}
+        />
+      ) : null}
+      {baselineSummary ? (
+        <BaselineRefreshBanner summary={baselineSummary} onClose={() => setBaselineSummary(null)} />
+      ) : null}
+    </div>
+  );
+}
+
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function auditPayloadNumber(event: Record<string, unknown> | undefined, key: string): number | null {
+  const payload = event?.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function diagnosisHistory(value: unknown): Array<Record<string, unknown>> | undefined {
+  return Array.isArray(value) ? value.filter(isRecord) : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function AdditionalDocumentsModal({
+  files,
+  rejectedNames,
+  uploadStatuses,
+  pending,
+  progress,
+  events,
+  error,
+  onAddFiles,
+  onRemove,
+  onClose,
+  onConfirm,
+}: {
+  files: File[];
+  rejectedNames: string[];
+  uploadStatuses: Record<string, UploadFileStatus<DocumentResponse>["status"]>;
+  pending: boolean;
+  progress: ExtractionJobResponse | null;
+  events: ExtractionProgressEventResponse[];
+  error: string | null;
+  onAddFiles: (files: FileList | File[] | null) => void;
+  onRemove: (file: File) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragging(false);
+    onAddFiles(event.dataTransfer.files);
+  };
+  const handleDrag = (event: DragEvent<HTMLLabelElement>, active: boolean) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragging(active);
+  };
+  const canConfirm = canConfirmDiagnosisDocumentRerun(files);
+  const latestEvent = latestExtractionEvent(events);
+  const progressPercent = effectiveExtractionPercent(progress, events, pending ? 5 : 0);
+  const failureMessage = error ?? extractionFailureMessage(progress);
+  const progressMessage =
+    failureMessage ??
+    latestEvent?.message ??
+    progress?.message ??
+    (pending ? "Uploading PDFs and refreshing the diagnosis baseline." : ADD_DOCUMENTS_RERUN_DISCLOSURE);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+      <div className="w-full max-w-[720px] rounded-lg border bg-white shadow-xl" style={{ borderColor: "#E3E6EA" }}>
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "#E3E6EA" }}>
+          <div>
+            <h2 className="text-[16px] font-semibold" style={{ color: "#292D34" }}>
+              Add Source PDFs
+            </h2>
+            <p className="mt-1 text-[12px]" style={{ color: "#818EA0" }}>
+              Refresh diagnosis baseline from the complete source document set.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1.5 hover:bg-[#F7F8FA]"
+            aria-label="Close add PDFs modal"
+          >
+            <X className="h-4 w-4 text-[#818EA0]" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div
+            className="flex gap-3 rounded-md border px-3 py-3 text-[13px]"
+            style={{ borderColor: "#FDE68A", background: "#FFFBEB", color: "#92400E" }}
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{ADD_DOCUMENTS_RERUN_DISCLOSURE}</span>
+          </div>
+
+          <label
+            className="block min-h-[220px] cursor-pointer rounded-lg px-6 py-12 text-center transition-colors"
+            style={{
+              border: "2px dashed var(--color-brand)",
+              background: dragging ? "var(--color-tag-bg)" : "transparent",
+            }}
+            onDragEnter={(event) => handleDrag(event, true)}
+            onDragOver={(event) => handleDrag(event, true)}
+            onDragLeave={(event) => handleDrag(event, false)}
+            onDrop={handleDrop}
+          >
+            <CloudUpload className="mx-auto h-9 w-9 text-[#818EA0]" />
+            <div className="mt-4 text-[15px]">
+              <span className="font-bold" style={{ color: "var(--color-brand)" }}>
+                Click to upload
+              </span>{" "}
+              <span style={{ color: "#4F546B" }}>or drag and drop</span>
+            </div>
+            <div className="mt-1 text-[12px]" style={{ color: "#818EA0" }}>
+              Select one or more PDF annual reports or filings
+            </div>
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              accept="application/pdf,.pdf"
+              disabled={pending}
+              onChange={(event) => {
+                onAddFiles(event.target.files);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+
+          {files.length ? (
+            <div className="space-y-2">
+              {files.map((file) => (
+                <div
+                  key={fileKey(file)}
+                  className="flex items-center gap-3 rounded-md border px-3 py-2"
+                  style={{ borderColor: "#E3E6EA" }}
+                >
+                  <FileText className="h-7 w-7 rounded-md bg-red-50 p-1.5 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold" style={{ color: "#292D34" }}>
+                      {file.name}
+                    </div>
+                    <div className="text-[11px]" style={{ color: "#818EA0" }}>
+                      {(file.size / (1024 * 1024)).toFixed(1)} MB
+                      {uploadStatuses[fileKey(file)] ? ` · ${uploadStatuses[fileKey(file)]}` : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(file)}
+                    disabled={pending}
+                    className="rounded-md p-1.5 hover:bg-[#F7F8FA]"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-[#818EA0]" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {(pending || progress || failureMessage) ? (
+            <div className="rounded-md border px-3 py-3" style={{ borderColor: "#E3E6EA" }}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[13px] font-semibold" style={{ color: "#292D34" }}>
+                  {failureMessage ? "Baseline refresh needs attention" : "Refreshing diagnosis baseline"}
+                </div>
+                <div className="tnum text-[13px] font-semibold" style={{ color: "var(--color-brand)" }}>
+                  {progressPercent}%
+                </div>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "#E8EDF5" }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${progressPercent}%`,
+                    background: failureMessage ? "var(--color-danger)" : "var(--color-brand)",
+                  }}
+                />
+              </div>
+              <div className="mt-2 text-[12px]" style={{ color: failureMessage ? "var(--color-danger)" : "#818EA0" }}>
+                {progressMessage}
+              </div>
+            </div>
+          ) : null}
+
+          {rejectedNames.length ? (
+            <div
+              className="rounded-md border px-3 py-2 text-[12px]"
+              style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}
+            >
+              Rejected non-PDF file{rejectedNames.length === 1 ? "" : "s"}:{" "}
+              {rejectedNames.join(", ")}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "#E3E6EA" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="h-9 rounded-md border px-4 text-[13px] font-semibold"
+            style={{ borderColor: "#E3E6EA", color: "#4F546B" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canConfirm || pending}
+            onClick={onConfirm}
+            className="h-9 rounded-md px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            style={{ background: "var(--color-brand)" }}
+          >
+            {pending ? "Refreshing..." : "Confirm Baseline Refresh"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BaselineRefreshBanner({
+  summary,
+  onClose,
+}: {
+  summary: BaselineRefreshSummary;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed bottom-5 right-5 z-40 w-[420px] max-w-[calc(100vw-40px)] rounded-lg border bg-white p-4 shadow-xl" style={{ borderColor: "#D1FAE5" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-semibold" style={{ color: "#14532D" }}>
+            Diagnosis baseline refreshed
+          </h3>
+          <p className="mt-1 text-[12px] leading-5" style={{ color: "#4F546B" }}>
+            {summary.addedFileCount} PDF{summary.addedFileCount === 1 ? "" : "s"} added. Extraction reran across {summary.documentCount} total PDF{summary.documentCount === 1 ? "" : "s"}.
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-[#F7F8FA]" aria-label="Dismiss baseline refresh summary">
+          <X className="h-4 w-4 text-[#818EA0]" />
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <SummaryMetric label="Changed values" value={summary.changedValueCount ?? "-"} />
+        <SummaryMetric label="Source changes" value={summary.citationChangeCount ?? "-"} />
+        <SummaryMetric label="Pending review" value={summary.pendingReviewCount} />
+        <SummaryMetric label="Added fields" value={summary.addedFieldCount ?? "-"} />
+        <SummaryMetric label="Removed fields" value={summary.removedFieldCount ?? "-"} />
+        <SummaryMetric label="Reviewed" value={summary.reviewedCount} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border px-2.5 py-2" style={{ borderColor: "#E3E6EA" }}>
+      <div className="text-[10px] font-semibold uppercase" style={{ color: "#818EA0" }}>
+        {label}
+      </div>
+      <div className="mt-1 text-[16px] font-semibold tnum" style={{ color: "#292D34" }}>
+        {value}
       </div>
     </div>
   );

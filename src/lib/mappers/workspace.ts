@@ -91,7 +91,7 @@ export function auditRows(workspace?: Partial<WorkspaceResponse> | null): AuditR
     id: stringValue(event.id, `event-${index}`),
     timestamp: stringValue(event.createdAt ?? event.timestamp ?? event.t, ""),
     actor: stringValue(event.actor ?? event.user ?? event.actorName, "system"),
-    action: stringValue(event.action ?? event.message ?? event.description, "Event recorded"),
+    action: stringValue(event.message ?? event.description ?? event.action, "Event recorded"),
     payload: isRecord(event.payload) ? event.payload : undefined,
   }));
 }
