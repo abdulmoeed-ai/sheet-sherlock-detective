@@ -4,14 +4,18 @@ import { parseChatMarkdown, type ChatMarkdownInline } from "@/lib/chat-markdown"
 export function MarkdownContent({
   markdown,
   renderCitation,
+  size = "default",
 }: {
   markdown: string;
   renderCitation?: (index: number) => ReactNode;
+  size?: "default" | "expanded";
 }) {
   const blocks = parseChatMarkdown(markdown);
   return (
     <div
-      className="min-w-0 space-y-2 break-words text-[13px] leading-relaxed"
+      className={`min-w-0 space-y-2 break-words leading-relaxed ${
+        size === "expanded" ? "text-[14px]" : "text-[13px]"
+      }`}
       style={{ color: "var(--color-text-primary)" }}
     >
       {blocks.map((block, index) => {

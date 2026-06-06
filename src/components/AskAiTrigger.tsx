@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
@@ -58,6 +58,7 @@ import {
 } from "@/lib/ask-ai-reasoning";
 import { normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
+import { askAiTokenUsageLabel } from "@/lib/ask-ai-usage";
 import { userFacingAskAiWarnings } from "@/lib/ask-ai-warnings";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import type { AskAiMsg as Msg } from "@/lib/ask-ai-message-types";
@@ -69,6 +70,13 @@ import type {
   AskAiSourceEvent,
   AskAiStatusEvent,
 } from "@/lib/api/ask-ai-stream";
+
+type ExternalSourcePreview = {
+  title: string;
+  url: string;
+  excerpt: string;
+  meta: string;
+};
 
 const SUGGESTIONS = [
   "Analyse Millat Tractors' financial strength for the next 5 years",
@@ -90,6 +98,7 @@ export function AskAiTrigger() {
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const [previewSource, setPreviewSource] = useState<DiagnosisSourcePreview | null>(null);
+  const [externalPreviewSource, setExternalPreviewSource] = useState<ExternalSourcePreview | null>(null);
   const [buttonY, setButtonY] = useState<number | null>(null);
   const [activeSession, setActiveSession] = useState<AskAiChatSessionSummary | null>(null);
 
@@ -460,7 +469,7 @@ export function AskAiTrigger() {
               </span>
               <div className="min-w-0">
                 <div className="text-[16px] font-bold text-[var(--color-text-primary)]">
-                  Ask Sherlock
+                  F(AI)nance
                 </div>
                 <div className="truncate text-[11px] text-[var(--color-text-muted)]">
                   {[
@@ -682,7 +691,7 @@ export function AskAiTrigger() {
                   if (m.kind === "text") {
                     return (
                       <AiBubble key={m.id} copyText={m.text} expanded={expanded}>
-                        <MarkdownContent markdown={m.text} />
+                        <MarkdownContent markdown={m.text} size={expanded ? "expanded" : "default"} />
                       </AiBubble>
                     );
                   }
@@ -694,6 +703,7 @@ export function AskAiTrigger() {
                         expanded={expanded}
                         projectId={activeProjectId}
                         onPreviewSource={setPreviewSource}
+                        onPreviewExternalSource={setExternalPreviewSource}
                       />
                     );
                   }
@@ -799,6 +809,12 @@ export function AskAiTrigger() {
         expandedLeft={expandedLeft}
         onClose={() => setPreviewSource(null)}
       />
+      <ExternalSourcePreviewSidebar
+        source={externalPreviewSource}
+        askAiExpanded={expanded}
+        expandedLeft={expandedLeft}
+        onClose={() => setExternalPreviewSource(null)}
+      />
     </>
   );
 }
@@ -816,9 +832,7 @@ function AiBubble({
 }) {
   return (
     <div className={`mx-auto flex w-full min-w-0 ${expanded ? "max-w-[1180px]" : ""}`}>
-      <div
-        className={`${wide ? "w-full sm:w-[92%]" : "max-w-[92%]"} group flex min-w-0 flex-col items-end gap-1`}
-      >
+      <div className="group flex w-full min-w-0 flex-col items-end gap-1">
         <div
           className="w-full min-w-0 overflow-hidden rounded-xl border bg-white px-3.5 py-3 text-[13px]"
           style={{
@@ -958,11 +972,13 @@ function StreamingAiBubble({
   expanded,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   message: Extract<Msg, { kind: "stream" }>;
   expanded: boolean;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   const citations = message.final?.sourcesUsed ?? [];
   const answer = message.final?.answer || message.text;
@@ -979,6 +995,11 @@ function StreamingAiBubble({
   // Estimate from live streaming text so it increments token-by-token
   const liveText = message.final?.answer ?? message.text;
   const estTokens = Math.round(liveText.length / 3.8);
+  const tokenUsageLabel = askAiTokenUsageLabel({
+    usage: message.final?.usage,
+    estimatedTokens: estTokens,
+    done: message.done,
+  });
 
   return (
     <AiBubble copyText={answer} wide expanded={expanded}>
@@ -993,12 +1014,14 @@ function StreamingAiBubble({
           </span>
           <span className="h-3 w-px" style={{ background: "var(--color-border-default)" }} />
           <span className="tnum">
-            ~{estTokens.toLocaleString()} tokens
+            {tokenUsageLabel}
           </span>
         </div>
 
         <CurrentEventPanel summary={reasoning} message={message} />
-        {message.activity.length > 0 && <EvidenceStrip activity={message.activity} />}
+        {message.activity.length > 0 && (
+          <EvidenceStrip activity={message.activity} onPreviewExternalSource={onPreviewExternalSource} />
+        )}
         {forecastVisuals && <ForecastSnapshot visuals={forecastVisuals} />}
         {message.error ? (
           <div
@@ -1011,7 +1034,11 @@ function StreamingAiBubble({
 
         {answer ? (
           <div className="min-w-0 overflow-visible break-words">
-            <MarkdownContent markdown={answer} renderCitation={() => null} />
+            <MarkdownContent
+              markdown={answer}
+              renderCitation={() => null}
+              size={expanded ? "expanded" : "default"}
+            />
           </div>
         ) : (
           <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
@@ -1034,6 +1061,7 @@ function StreamingAiBubble({
             claimSourceGroups={claimSourceGroups}
             projectId={projectId}
             onPreviewSource={onPreviewSource}
+            onPreviewExternalSource={onPreviewExternalSource}
           />
         )}
       </div>
@@ -1048,11 +1076,13 @@ function CitationFooter({
   claimSourceGroups,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   citations: Array<Record<string, unknown>>;
   claimSourceGroups: AskAiClaimSourceGroup[];
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   return (
     <section
@@ -1060,30 +1090,21 @@ function CitationFooter({
       style={{ borderColor: "var(--color-border-default)" }}
       aria-label="Answer sources"
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-            Sources
-          </div>
-          <div className="truncate text-[12px] font-medium text-[var(--color-text-secondary)]">
-            Evidence used for this answer
-          </div>
-        </div>
-        {citations.length > 0 && (
-          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
-            {citations.length}
-          </span>
-        )}
-      </div>
+      <SourcesList
+        citations={citations}
+        projectId={projectId}
+        onPreviewSource={onPreviewSource}
+        onPreviewExternalSource={onPreviewExternalSource}
+      />
       {claimSourceGroups.length > 0 && (
         <GroupedSourcePills
           groups={claimSourceGroups}
           citations={citations}
           projectId={projectId}
           onPreviewSource={onPreviewSource}
+          onPreviewExternalSource={onPreviewExternalSource}
         />
       )}
-      <SourcesList citations={citations} projectId={projectId} onPreviewSource={onPreviewSource} />
     </section>
   );
 }
@@ -1092,78 +1113,95 @@ function SourcesList({
   citations,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   citations: Array<Record<string, unknown>>;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
   if (citations.length === 0) return null;
+  const visible = showAll ? citations : citations.slice(0, 5);
+  const overflow = Math.max(0, citations.length - visible.length);
 
   return (
-    <div className="grid min-w-0 gap-2">
-      {citations.map((citation, i) => (
-        <SourceCard
-          key={String(citation.index ?? i)}
-          citation={citation}
-          projectId={projectId}
-          onPreviewSource={onPreviewSource}
-        />
-      ))}
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center">
+        {visible.map((citation, i) => (
+          <SourceBubble
+            key={String(citation.index ?? i)}
+            citation={citation}
+            stackIndex={i}
+            totalVisible={visible.length}
+            projectId={projectId}
+            onPreviewSource={onPreviewSource}
+            onPreviewExternalSource={onPreviewExternalSource}
+          />
+        ))}
+        {overflow > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="relative -ml-1.5 flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-full border bg-white px-2 text-[10px] font-bold text-[var(--color-text-secondary)] shadow-sm transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+            style={{ borderColor: "var(--color-border-default)", zIndex: 0 }}
+            aria-label={`Show ${overflow} additional sources`}
+          >
+            +{overflow}
+          </button>
+        )}
+      </div>
+      <span className="shrink-0 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+        {citations.length} source{citations.length === 1 ? "" : "s"}
+      </span>
     </div>
   );
 }
 
-function SourceCard({
+function SourceBubble({
   citation,
+  stackIndex,
+  totalVisible,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   citation: Record<string, unknown>;
+  stackIndex: number;
+  totalVisible: number;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   const preview = getAskAiCitationPreview(citation);
   const title = getAskAiCitationTitle(citation);
   const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
-  const meta = citationMeta(citation);
-  const badge = (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[10px] font-bold text-white">
-      {String(citation.index ?? "") || "S"}
+  const bubble = (
+    <span
+      className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold text-white shadow-sm transition hover:scale-105"
+      style={{
+        background: sourceBubbleColor(citation),
+        marginLeft: stackIndex > 0 ? "-8px" : "0",
+        position: "relative",
+        zIndex: totalVisible - stackIndex,
+      }}
+      aria-hidden="true"
+    >
+      {sourceBubbleLabel(citation)}
     </span>
   );
-  const body = (
-    <>
-      {badge}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12px] font-semibold text-[var(--color-text-primary)]">
-          {title}
-        </span>
-        {meta && <span className="block truncate text-[10px] text-[var(--color-text-muted)]">{meta}</span>}
-        {excerpt && (
-          <span className="mt-1 block line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-            {excerpt}
-          </span>
-        )}
-      </span>
-    </>
-  );
-  const className =
-    "flex min-w-0 items-start gap-2 rounded-lg border bg-white px-2.5 py-2 text-left transition hover:border-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]";
 
   if (preview?.type === "external_url") {
     return (
       <IconTooltip label={title}>
-        <a
-          href={preview.url}
-          target="_blank"
-          rel="noreferrer"
-          className={className}
-          style={{ borderColor: "var(--color-border-default)" }}
+        <button
+          type="button"
+          onClick={() => onPreviewExternalSource(buildExternalPreviewSource({ citation, preview, excerpt }))}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
           aria-label={title}
         >
-          {body}
-          <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
-        </a>
+          {bubble}
+        </button>
       </IconTooltip>
     );
   }
@@ -1173,15 +1211,11 @@ function SourceCard({
       <IconTooltip label={title}>
         <button
           type="button"
-          onClick={() =>
-            onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))
-          }
-          className={className}
-          style={{ borderColor: "var(--color-border-default)" }}
+          onClick={() => onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
           aria-label={title}
         >
-          {body}
-          <FileSearch className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
+          {bubble}
         </button>
       </IconTooltip>
     );
@@ -1189,13 +1223,96 @@ function SourceCard({
 
   return (
     <IconTooltip label={title}>
-      <div className={className} style={{ borderColor: "var(--color-border-default)" }}>
-        {body}
-      </div>
+      <span>{bubble}</span>
     </IconTooltip>
   );
 }
 
+function sourceBubbleLabel(citation: Record<string, unknown>): string {
+  const kind = String(citation.kind ?? "");
+  if (kind === "model" || kind === "diagnosis_workbook_cell") return "M";
+  if (kind === "uploaded_pdf") return "P";
+  if (kind === "uploaded_sheet") return "S";
+  const sourceName = String(citation.sourceName ?? citation.title ?? "W").trim();
+  return (sourceName.charAt(0) || "W").toUpperCase();
+}
+
+function sourceBubbleColor(citation: Record<string, unknown>): string {
+  const kind = String(citation.kind ?? "");
+  if (kind === "uploaded_pdf") return "#DC2626";
+  if (kind === "uploaded_sheet") return "#2563EB";
+  if (kind === "source_registry" || kind === "web") return "#059669";
+  return "var(--color-brand)";
+}
+
+function SourcePill({
+  citation,
+  projectId,
+  onPreviewSource,
+  onPreviewExternalSource,
+}: {
+  citation: Record<string, unknown>;
+  projectId: string | null;
+  onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
+}) {
+  const preview = getAskAiCitationPreview(citation);
+  const title = getAskAiCitationTitle(citation);
+  const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
+  const content = (
+    <>
+      <span
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+        style={{ background: sourceBubbleColor(citation) }}
+      >
+        {sourceBubbleLabel(citation)}
+      </span>
+      <span className="max-w-[150px] truncate">{getAskAiCitationPillLabel(citation)}</span>
+    </>
+  );
+  const className =
+    "inline-flex max-w-full items-center gap-1.5 rounded-full border bg-white px-1.5 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]";
+
+  if (preview?.type === "external_url") {
+    return (
+      <IconTooltip label={title}>
+        <button
+          type="button"
+          onClick={() => onPreviewExternalSource(buildExternalPreviewSource({ citation, preview, excerpt }))}
+          className={className}
+          style={{ borderColor: "var(--color-border-default)" }}
+          aria-label={title}
+        >
+          {content}
+        </button>
+      </IconTooltip>
+    );
+  }
+
+  if (preview?.type === "document_page" && projectId) {
+    return (
+      <IconTooltip label={title}>
+        <button
+          type="button"
+          onClick={() => onPreviewSource(buildCitationPreviewSource({ citation, preview, projectId, excerpt }))}
+          className={className}
+          style={{ borderColor: "var(--color-border-default)" }}
+          aria-label={title}
+        >
+          {content}
+        </button>
+      </IconTooltip>
+    );
+  }
+
+  return (
+    <IconTooltip label={title}>
+      <span className={className} style={{ borderColor: "var(--color-border-default)" }}>
+        {content}
+      </span>
+    </IconTooltip>
+  );
+}
 
 function citationSubline(citation: Record<string, unknown>): string {
   if (citation.kind === "diagnosis_workbook_cell") {
@@ -1316,11 +1433,13 @@ function GroupedSourcePills({
   citations,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   groups: AskAiClaimSourceGroup[];
   citations: Array<Record<string, unknown>>;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   const visibleGroups = groups.filter((group) => group.citationIndexes.length > 1);
   if (visibleGroups.length === 0) return null;
@@ -1341,6 +1460,7 @@ function GroupedSourcePills({
               citations={citations}
               projectId={projectId}
               onPreviewSource={onPreviewSource}
+              onPreviewExternalSource={onPreviewExternalSource}
             />
           ))}
         </div>
@@ -1374,92 +1494,39 @@ function InlineCitationBadge({
   citations,
   projectId,
   onPreviewSource,
+  onPreviewExternalSource,
 }: {
   index: number;
   citations: Array<Record<string, unknown>>;
   projectId: string | null;
   onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   const citation = citations.find((item) => Number(item.index ?? 0) === index);
-  const [open, setOpen] = useState(false);
   if (!citation) {
     return <span className="font-semibold text-[var(--color-brand)]">{index}</span>;
   }
-  const title = getAskAiCitationTitle(citation);
-  const preview = getAskAiCitationPreview(citation);
-  const excerpt = String(citation.excerpt ?? citation.currentValue ?? citation.value ?? "");
-  const meta = citationMeta(citation);
-
   return (
-    <span className="relative inline-flex align-baseline">
-      <IconTooltip label={title}>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="mx-0.5 inline-flex h-5 max-w-[220px] items-center rounded-full border px-1.5 text-[10px] font-semibold text-[var(--color-brand)] align-baseline transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-          style={{
-            borderColor: "rgba(123,104,238,0.36)",
-            background: open ? "var(--color-tag-bg)" : "#fff",
-          }}
-          aria-label={title}
-          aria-expanded={open}
-        >
-          {index}
-        </button>
-      </IconTooltip>
-      {open && (
-        <span
-          className="absolute left-0 top-6 z-40 block w-[min(340px,calc(100vw-80px))] whitespace-normal rounded-lg border bg-white p-3 text-left text-[11px] leading-relaxed shadow-[0_18px_42px_-24px_rgba(17,24,39,0.55)]"
-          style={{ borderColor: "var(--color-border-default)" }}
-        >
-          <span className="block text-[12px] font-semibold text-[var(--color-text-primary)]">
-            {getAskAiCitationPillLabel(citation)}
-          </span>
-          {meta && <span className="mt-0.5 block text-[10px] text-[var(--color-text-muted)]">{meta}</span>}
-          {excerpt && (
-            <span className="mt-2 block line-clamp-5 text-[11px] text-[var(--color-text-secondary)]">
-              {excerpt}
-            </span>
-          )}
-          <span className="mt-2 flex flex-wrap gap-1.5">
-            {preview?.type === "external_url" && (
-              <a
-                href={preview.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold text-[var(--color-brand)]"
-                style={{ borderColor: "rgba(123,104,238,0.28)" }}
-              >
-                Open in new tab
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            {preview?.type === "document_page" && projectId && (
-              <button
-                type="button"
-                onClick={() => onPreviewSource(buildCitationPreviewSource({
-                  citation,
-                  preview,
-                  projectId,
-                  excerpt,
-                }))}
-                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold text-[var(--color-brand)]"
-                style={{ borderColor: "rgba(123,104,238,0.28)" }}
-              >
-                Preview page
-                <FileSearch className="h-3 w-3" />
-              </button>
-            )}
-          </span>
-        </span>
-      )}
+    <span className="inline-flex max-w-full align-baseline">
+      <SourcePill
+        citation={citation}
+        projectId={projectId}
+        onPreviewSource={onPreviewSource}
+        onPreviewExternalSource={onPreviewExternalSource}
+      />
     </span>
   );
 }
 
 // ─── Evidence strip ──────────────────────────────────────────────────────────
 
-function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
+function EvidenceStrip({
+  activity,
+  onPreviewExternalSource,
+}: {
+  activity: StreamActivityEvent[];
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
+}) {
   const sourceEvents = activity.filter(
     (event): event is Extract<StreamActivityEvent, { type: "source" }> => event.type === "source",
   );
@@ -1489,7 +1556,7 @@ function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
         {webCount > 0 && <EvidenceChip label={`${webCount} web sources`} />}
         {latestStatus && (
           <span className="ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
-            {statusTitle(latestStatus.stage)} · {latestStatus.percent}%
+            {statusTitle(latestStatus.stage)}
           </span>
         )}
       </div>
@@ -1498,7 +1565,9 @@ function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
           {latestStatus.message}
         </div>
       )}
-      {webEvents.length > 0 && <ExternalSourceCards events={webEvents} />}
+      {webEvents.length > 0 && (
+        <ExternalSourceCards events={webEvents} onPreviewExternalSource={onPreviewExternalSource} />
+      )}
     </div>
   );
 }
@@ -1507,8 +1576,10 @@ function EvidenceStrip({ activity }: { activity: StreamActivityEvent[] }) {
 
 function ExternalSourceCards({
   events,
+  onPreviewExternalSource,
 }: {
   events: Array<Extract<StreamActivityEvent, { type: "source" }>>;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
 }) {
   const links = uniqueWebLinks(events.flatMap((event) => event.items ?? []));
   const queries = uniqueStrings(events.flatMap((event) => event.queries ?? []));
@@ -1537,11 +1608,17 @@ function ExternalSourceCards({
       {links.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {links.map((link) => (
-            <a
+            <button
+              type="button"
               key={link.url}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() =>
+                onPreviewExternalSource({
+                  title: link.title,
+                  url: link.url,
+                  excerpt: "",
+                  meta: link.domain,
+                })
+              }
               className="group flex items-start gap-2 rounded-xl border bg-white p-2.5 text-left transition hover:border-[var(--color-brand)] hover:shadow-sm"
               style={{ borderColor: "var(--color-border-default)" }}
               title={link.url}
@@ -1558,7 +1635,7 @@ function ExternalSourceCards({
                 </div>
               </div>
               <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
-            </a>
+            </button>
           ))}
         </div>
       )}
@@ -1663,6 +1740,125 @@ function buildCitationPreviewSource({
   };
 }
 
+function buildExternalPreviewSource({
+  citation,
+  preview,
+  excerpt,
+}: {
+  citation: Record<string, unknown>;
+  preview: Extract<AskAiCitationPreview, { type: "external_url" }>;
+  excerpt: string;
+}): ExternalSourcePreview {
+  return {
+    title: preview.title,
+    url: preview.url,
+    excerpt,
+    meta: citationMeta(citation),
+  };
+}
+
+function ExternalSourcePreviewSidebar({
+  source,
+  onClose,
+  askAiExpanded = false,
+  expandedLeft = 0,
+}: {
+  source: ExternalSourcePreview | null;
+  onClose: () => void;
+  askAiExpanded?: boolean;
+  expandedLeft?: number;
+}) {
+  if (!source) return null;
+  const hostname = safeHostname(source.url);
+  const sidebarStyle: CSSProperties = askAiExpanded
+    ? {
+        right: 0,
+        width: "400px",
+        zIndex: 55,
+        borderColor: "#E3E6EA",
+        boxShadow: "-8px 0 24px -12px rgba(17,24,39,0.25)",
+      }
+    : {
+        right: "430px",
+        width: "360px",
+        zIndex: 40,
+        borderColor: "#E3E6EA",
+        boxShadow: "-8px 0 24px -12px rgba(17,24,39,0.18)",
+      };
+  if (askAiExpanded && expandedLeft > 0) {
+    sidebarStyle.maxWidth = `calc(100vw - ${expandedLeft}px)`;
+  }
+
+  return (
+    <aside
+      className="fixed top-0 flex h-screen flex-col overflow-hidden border-l bg-white"
+      style={sidebarStyle}
+      aria-label="External source preview"
+    >
+      <div
+        className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3"
+        style={{ borderColor: "#E3E6EA", background: "#F8FAFC" }}
+      >
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]">
+            External source
+          </div>
+          <div className="mt-0.5 truncate text-[11px] text-[var(--color-text-muted)]">
+            {hostname || source.url}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border bg-white text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] hover:text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+          style={{ borderColor: "#E3E6EA" }}
+          aria-label="Close source preview"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className="space-y-3">
+          <div className="rounded-xl border bg-[#FAFBFF] p-3" style={{ borderColor: "#E3E6EA" }}>
+            <div className="text-[12px] font-semibold text-[var(--color-text-primary)]">
+              {source.title}
+            </div>
+            {source.meta && (
+              <div className="mt-1 break-words text-[11px] text-[var(--color-text-muted)]">
+                {source.meta}
+              </div>
+            )}
+            {source.excerpt && (
+              <div className="mt-3 rounded-lg bg-white p-2.5 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                {source.excerpt}
+              </div>
+            )}
+          </div>
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-tag-bg)]"
+            style={{ borderColor: "rgba(123,104,238,0.28)" }}
+          >
+            Open source
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 // ─── Current event panel ─────────────────────────────────────────────────────
 
 function CurrentEventPanel({
@@ -1717,11 +1913,8 @@ function CurrentEventPanel({
             )}
           </div>
         </div>
-        <span
-          className="shrink-0 text-[11px] font-medium"
-          style={{ color: "var(--color-text-muted)" }}
-        >
-          {message.done ? "done" : current.percent !== null ? `${current.percent}%` : "live"}
+        <span className="shrink-0 text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>
+          {message.done ? "done" : "live"}
         </span>
       </div>
       {!isAnswering && (
@@ -1750,13 +1943,11 @@ function CurrentEventPanel({
 function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
   title: string;
   message: string;
-  percent: number | null;
 } {
   if (message.done) {
     return {
       title: message.error ? "Ask AI stopped" : "Answer ready",
       message: message.error ?? "AI finished generating the cited answer.",
-      percent: 100,
     };
   }
 
@@ -1765,7 +1956,6 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
     return {
       title: "Planning answer",
       message: latestApproach,
-      percent: latestStatusPercent(message.activity),
     };
   }
 
@@ -1774,7 +1964,6 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
     return {
       title: "Opening Ask AI stream",
       message: "Connecting to the backend and preparing project context.",
-      percent: null,
     };
   }
 
@@ -1782,14 +1971,12 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
     return {
       title: statusTitle(latest.stage),
       message: sanitizeAiActivityMessage(latest.message),
-      percent: latest.percent,
     };
   }
 
   return {
     title: `${sourceTitle(latest.kind)} (${latest.count})`,
     message: sanitizeAiActivityMessage(latest.message),
-    percent: latestStatusPercent(message.activity),
   };
 }
 
@@ -1799,11 +1986,6 @@ function sanitizeAiActivityMessage(message: string): string {
     .replace(/\bLLM\b/g, "AI")
     .replace(/^Calling AI$/i, "Drafting cited answer")
     .trim();
-}
-
-function latestStatusPercent(activity: StreamActivityEvent[]): number | null {
-  const latest = [...activity].reverse().find((event) => event.type === "status");
-  return latest?.type === "status" ? latest.percent : null;
 }
 
 function statusTitle(stage: string): string {
