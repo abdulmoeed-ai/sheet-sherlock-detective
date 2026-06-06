@@ -22,7 +22,6 @@ export function PageShell({ title, subtitle, actions, children, hideProgress }: 
         >
           <div className="flex items-center leading-tight">
             <ProductWordmark
-              prefix="f"
               className="text-[22px] font-bold tracking-normal text-[var(--color-text-primary)]"
               aiClassName="text-[var(--color-brand)]"
             />

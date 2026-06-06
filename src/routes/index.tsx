@@ -61,8 +61,8 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — F(AI)nance" },
-      { name: "description", content: "Role-aware F(AI)nance dashboard backed by the API." },
+      { title: "Dashboard — finance" },
+      { name: "description", content: "Role-aware finance dashboard backed by the API." },
     ],
   }),
   component: Dashboard,

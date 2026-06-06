@@ -18,7 +18,7 @@ const WORKBOOK_TABLE_COLUMNS =
 export const Route = createFileRoute("/registry")({
   head: () => ({
     meta: [
-      { title: "Excel Workbooks — F(AI)nance" },
+      { title: "Excel Workbooks — finance" },
       {
         name: "description",
         content: "Silent pre-initiation lookup, version timeline, and CFO-grade decision cards.",
