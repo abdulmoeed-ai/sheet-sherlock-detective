@@ -150,6 +150,24 @@ export interface AskAiModelSearchResponse {
   candidates: AskAiModelCandidate[];
 }
 
+export interface AskAiWorkbookInventoryItem {
+  projectId: string;
+  companyName: string;
+  projectLabel: string | null;
+  fiscalYear: string | null;
+  sector: string | null;
+  template: string;
+  status: string;
+  documentCount: number;
+  workbookAvailable: boolean;
+  updatedAt: string;
+  accessSource: "owned" | "assigned_inbox" | string;
+}
+
+export interface AskAiWorkbookInventoryResponse {
+  items: AskAiWorkbookInventoryItem[];
+}
+
 export interface AnalysisRequestResponse {
   id: string;
   requesterUserId: string;

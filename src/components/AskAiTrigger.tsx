@@ -46,13 +46,18 @@ import {
   buildAskAiSubtitleParts,
   shouldUseProjectContextForRoute,
 } from "@/lib/ask-ai-context";
-import { buildNoProjectAskAiResponse } from "@/lib/ask-ai-empty-context";
-import { searchAskAiModels } from "@/lib/api/projects";
+import {
+  buildNoProjectAskAiResponse,
+  isWorkbookInventoryQuestion,
+} from "@/lib/ask-ai-empty-context";
+import { listAskAiWorkbooks, searchAskAiModels } from "@/lib/api/projects";
 import {
   buildModelSelectionPrompt,
+  buildWorkbookInventoryPrompt,
   isConfidentSingleModelMatch,
   matchModelSelection,
   shouldSearchModelsBeforeAskAi,
+  workbookInventoryToModelCandidates,
 } from "@/lib/ask-ai-model-selection";
 import { buildAskAiRequestPayload } from "@/lib/ask-ai-request";
 import {
@@ -92,7 +97,7 @@ type HistoryDialogState =
   | null;
 
 type PendingModelSelection = {
-  question: string;
+  question: string | null;
   candidates: AskAiModelCandidate[];
 };
 
@@ -340,7 +345,50 @@ export function AskAiTrigger() {
       setModelProjectContext(selected);
       setActiveSession(null);
       setSelectedProjectId(selected.id);
+      if (!pendingModelSelection.question) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text: `Opened ${selected.companyName}. Ask a question and I will use that workbook with citations.`,
+          },
+        ]);
+        return;
+      }
       text = pendingModelSelection.question;
+    } else if (!activeProjectId && isWorkbookInventoryQuestion(text)) {
+      try {
+        const result = await listAskAiWorkbooks();
+        const candidates = workbookInventoryToModelCandidates(result.items);
+        if (candidates.length > 0) {
+          setPendingModelSelection({ question: null, candidates });
+        }
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text: buildWorkbookInventoryPrompt(result.items),
+          },
+        ]);
+      } catch (error) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "ai",
+            kind: "text",
+            text:
+              error instanceof Error
+                ? `I could not check your workbooks: ${error.message}`
+                : "I could not check your workbooks.",
+          },
+        ]);
+      }
+      return;
     } else if (!activeProjectId && shouldSearchModelsBeforeAskAi(text)) {
       try {
         const result = await searchAskAiModels({ query: text });

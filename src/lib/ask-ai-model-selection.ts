@@ -1,4 +1,4 @@
-import type { AskAiModelCandidate } from "./api/types";
+import type { AskAiModelCandidate, AskAiWorkbookInventoryItem } from "./api/types";
 
 const MODEL_QUERY_PATTERN =
   /\b(model|financial model|workbook|forecast|valuation|projection|statement|balance sheet|income statement|cash flow|company|limited|ltd|fy20\d{2}|20\d{2})\b/i;
@@ -23,6 +23,42 @@ export function buildModelSelectionPrompt(candidates: AskAiModelCandidate[]): st
     ...lines,
     "Please type the number or name of the model you want me to use.",
   ].join("\n");
+}
+
+export function buildWorkbookInventoryPrompt(items: AskAiWorkbookInventoryItem[]): string {
+  if (items.length === 0) return "I do not see any accessible workbooks yet.";
+  const lines = items.slice(0, 10).map((item, index) => {
+    const meta = [
+      item.projectLabel || item.fiscalYear,
+      item.sector,
+      item.status,
+      `${item.documentCount} PDF${item.documentCount === 1 ? "" : "s"}`,
+      item.workbookAvailable ? "workbook ready" : "workbook not opened yet",
+      item.accessSource === "assigned_inbox" ? "Inbox assignment" : null,
+    ].filter(Boolean);
+    return `${index + 1}. ${item.companyName}${meta.length ? ` - ${meta.join(", ")}` : ""}`;
+  });
+  return [
+    `I found ${items.length} workbook${items.length === 1 ? "" : "s"} you can access.`,
+    ...lines,
+    "Please type the number or name of the workbook you want me to use.",
+  ].join("\n");
+}
+
+export function workbookInventoryToModelCandidates(
+  items: AskAiWorkbookInventoryItem[],
+): AskAiModelCandidate[] {
+  return items.map((item, index) => ({
+    id: item.projectId,
+    companyName: item.companyName,
+    projectLabel: item.projectLabel,
+    fiscalYear: item.fiscalYear,
+    sector: item.sector,
+    status: item.status,
+    score: Math.max(1, 100 - index),
+    matchReason: item.workbookAvailable ? "Workbook available" : "Project available",
+    accessSource: item.accessSource,
+  }));
 }
 
 export function matchModelSelection(
