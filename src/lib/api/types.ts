@@ -261,6 +261,25 @@ export interface ForecastRunResponse {
   warnings: string[];
 }
 
+export interface SourceSearchResultResponse {
+  title: string;
+  url: string;
+  excerpt: string;
+  score?: number | null;
+  sourceId: string;
+  sourceName: string;
+  publicationDate?: string | null;
+}
+
+export interface SourceSearchResponse {
+  status: string;
+  query: string;
+  results: SourceSearchResultResponse[];
+  rejectedResults: number;
+  allowedDomains: string[];
+  reason?: string | null;
+}
+
 export interface AssumptionsGenerateResponse {
   status: string;
   projectId: string;

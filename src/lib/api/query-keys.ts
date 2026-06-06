@@ -22,4 +22,6 @@ export const queryKeys = {
   psxCompanies: ["psx", "companies"] as const,
   askAnalystOverview: (symbol: string | null | undefined, name: string) =>
     ["ask-analyst", "overview", symbol ?? "", name] as const,
+  brokerResearch: (projectId: string | null | undefined, symbol: string | null | undefined) =>
+    ["projects", projectId ?? "", "broker-research", symbol ?? ""] as const,
 };
