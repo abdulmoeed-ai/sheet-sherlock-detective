@@ -89,11 +89,8 @@ export async function readAskAiSseStream(
   callbacks: AskAiStreamCallbacks = {},
 ): Promise<AskAiFinalResponse | null> {
   const contentType = response.headers.get("Content-Type") ?? "";
-  if (contentType.includes("application/json")) {
-    const final = (await response.json()) as AskAiFinalResponse;
-    callbacks.onFinal?.(final);
-    callbacks.onChunk?.(final.answer ?? "");
-    return final;
+  if (!contentType.includes("text/event-stream")) {
+    throw new Error("Ask AI requires a streaming response.");
   }
 
   const reader = response.body?.getReader();
