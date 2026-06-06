@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { paginateItems } from "@/lib/pagination";
 import { Lock, Unlock, ShieldCheck, AlertTriangle, KeyRound } from "lucide-react";
 
 export const Route = createFileRoute("/protection")({
@@ -56,6 +58,8 @@ function statusBadge(s: Status) {
 
 function Protection() {
   const [rules, setRules] = useState<Rule[]>(INITIAL);
+  const [page, setPage] = useState(1);
+  const paginatedRules = useMemo(() => paginateItems(rules, page), [rules, page]);
 
   const toggle = (id: string) => {
     setRules((rs) =>
@@ -115,7 +119,7 @@ function Protection() {
             </tr>
           </thead>
           <tbody>
-            {rules.map((r) => {
+            {paginatedRules.map((r) => {
               const meta = TIER_META[r.tier];
               return (
                 <tr key={r.id} className="border-b last:border-0">
@@ -142,6 +146,13 @@ function Protection() {
             })}
           </tbody>
         </table>
+        <PaginationControls
+          className="mt-4"
+          totalItems={rules.length}
+          page={page}
+          onPageChange={setPage}
+          label="rules"
+        />
       </Card>
     </PageShell>
   );

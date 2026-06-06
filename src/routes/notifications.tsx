@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
+import { paginateItems } from "@/lib/pagination";
 import { Bell, Send, CheckCircle2, MessageSquare, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/notifications")({
@@ -138,6 +140,10 @@ function statusBadge(s: LogEntry["status"]) {
 function Notifications() {
   const [rules, setRules] = useState<Rule[]>(INITIAL_RULES);
   const [log, setLog] = useState<LogEntry[]>(INITIAL_LOG);
+  const [rulesPage, setRulesPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const paginatedRules = useMemo(() => paginateItems(rules, rulesPage), [rules, rulesPage]);
+  const paginatedLog = useMemo(() => paginateItems(log, logPage), [log, logPage]);
 
   const toggle = (id: string) =>
     setRules((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
@@ -200,7 +206,7 @@ function Notifications() {
               </tr>
             </thead>
             <tbody>
-              {rules.map((r) => (
+              {paginatedRules.map((r) => (
                 <tr key={r.id} className="border-b last:border-0">
                   <td className="py-2 font-medium">{r.trigger}</td>
                   <td className="font-mono text-[12px]">{r.channel}</td>
@@ -224,12 +230,19 @@ function Notifications() {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            className="mt-4"
+            totalItems={rules.length}
+            page={rulesPage}
+            onPageChange={setRulesPage}
+            label="rules"
+          />
         </Card>
 
         <Card>
           <h3 className="mb-3 text-[15px] font-semibold">Delivery log</h3>
           <div className="space-y-2">
-            {log.map((e) => (
+            {paginatedLog.map((e) => (
               <div
                 key={e.id}
                 className="rounded-lg border p-3"
@@ -248,6 +261,13 @@ function Notifications() {
               </div>
             ))}
           </div>
+          <PaginationControls
+            className="mt-4"
+            totalItems={log.length}
+            page={logPage}
+            onPageChange={setLogPage}
+            label="notifications"
+          />
         </Card>
       </div>
     </PageShell>

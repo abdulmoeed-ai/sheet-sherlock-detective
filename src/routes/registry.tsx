@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Eye, FileClock, GitBranch, Loader2, Plus, Search } from "lucide-react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
@@ -9,6 +10,7 @@ import { useProjects, useCreateProject } from "@/hooks/use-projects";
 import { usePsxCompanies } from "@/hooks/use-users";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore } from "@/lib/cycle-store";
+import { paginateItems } from "@/lib/pagination";
 import { templateForSector } from "@/lib/sector-template";
 import type { ProjectResponse } from "@/lib/api/types";
 
@@ -114,6 +116,7 @@ function Registry() {
   const [selectedSymbol, setSelectedSymbol] = useState("");
   const [selectedFY, setSelectedFY] = useState("FY2025");
   const [workbookSearch, setWorkbookSearch] = useState("");
+  const [workbookPage, setWorkbookPage] = useState(1);
 
   // ── Sector options from PSX data ──────────────────────────────────────────
   const sectorOptions = useMemo(() => {
@@ -219,6 +222,14 @@ function Registry() {
       return project.companyName.toLowerCase().includes(query) || vid.toLowerCase().includes(query);
     });
   }, [versionedProjects, workbookSearch]);
+  const paginatedProjects = useMemo(
+    () => paginateItems(filteredProjects, workbookPage),
+    [filteredProjects, workbookPage],
+  );
+
+  useEffect(() => {
+    setWorkbookPage(1);
+  }, [workbookSearch]);
 
   const handleOpenFromTable = (project: ProjectResponse) => {
     setSelectedProjectId(project.id);
@@ -243,6 +254,10 @@ function Registry() {
       <div className="space-y-5">
         {/* ── Selector ──────────────────────────────────────────────────────── */}
         <Card>
+          <div className="mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4 text-[var(--color-brand)]" />
+            <h3 className="text-[15px] font-semibold">Create New Workbook</h3>
+          </div>
           <div className="grid grid-cols-[1fr_1fr_180px] gap-3 items-end">
             <Combobox
               label="Sector"
@@ -495,7 +510,7 @@ function Registry() {
 
               {/* Rows */}
               <div className="space-y-1">
-                {filteredProjects.map((project) => {
+                {paginatedProjects.map((project) => {
                   const vid = versionId(
                     project.symbol,
                     project.fiscalYear ?? "FY",
@@ -580,6 +595,13 @@ function Registry() {
                   );
                 })}
               </div>
+              <PaginationControls
+                className="mt-4"
+                totalItems={filteredProjects.length}
+                page={workbookPage}
+                onPageChange={setWorkbookPage}
+                label="workbooks"
+              />
             </>
           )}
         </Card>

@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Download, ShieldCheck, User } from "lucide-react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { downloadArchiveAuditJson, readLatestArchive } from "@/lib/api/projects";
@@ -8,6 +10,7 @@ import { queryKeys } from "@/lib/api/query-keys";
 import { useSelectedProjectId } from "@/lib/project-store";
 import { useWorkspace } from "@/hooks/use-projects";
 import { auditRows } from "@/lib/mappers/workspace";
+import { paginateItems } from "@/lib/pagination";
 
 export const Route = createFileRoute("/audit")({
   head: () => ({
@@ -24,6 +27,7 @@ export const Route = createFileRoute("/audit")({
 
 function Audit() {
   const projectId = useSelectedProjectId();
+  const [eventPage, setEventPage] = useState(1);
   const workspace = useWorkspace(projectId);
   const archive = useQuery({
     queryKey: projectId ? queryKeys.latestArchive(projectId) : ["archive", "none"],
@@ -32,6 +36,7 @@ function Audit() {
     retry: false,
   });
   const events = auditRows(workspace.data);
+  const paginatedEvents = useMemo(() => paginateItems(events, eventPage), [events, eventPage]);
 
   const exportJson = async () => {
     if (!projectId || !archive.data?.id) return;
@@ -89,7 +94,7 @@ function Audit() {
                 className="relative mt-4 ml-3 border-l-2"
                 style={{ borderColor: "var(--color-border-default)" }}
               >
-                {events.map((event) => (
+                {paginatedEvents.map((event) => (
                   <li key={event.id} className="relative pb-5 pl-6 last:pb-0">
                     <span
                       className="absolute -left-[13px] top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white"
@@ -117,6 +122,13 @@ function Audit() {
                 ))}
               </ol>
             )}
+            <PaginationControls
+              className="mt-4"
+              totalItems={events.length}
+              page={eventPage}
+              onPageChange={setEventPage}
+              label="events"
+            />
           </Card>
         </>
       )}
