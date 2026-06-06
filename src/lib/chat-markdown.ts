@@ -8,7 +8,7 @@ export type ChatMarkdownInline =
 
 export type ChatMarkdownBlock =
   | { type: "paragraph"; children: ChatMarkdownInline[] }
-  | { type: "heading"; level: 1 | 2 | 3; children: ChatMarkdownInline[] }
+  | { type: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; children: ChatMarkdownInline[] }
   | { type: "list"; ordered: boolean; items: ChatMarkdownInline[][] }
   | { type: "table"; headers: string[]; rows: string[][] };
 
@@ -62,13 +62,13 @@ export function parseChatMarkdown(markdown: string): ChatMarkdownBlock[] {
 
     flushTable();
 
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading) {
       flushParagraph();
       flushList();
       blocks.push({
         type: "heading",
-        level: heading[1].length as 1 | 2 | 3,
+        level: heading[1].length as 1 | 2 | 3 | 4 | 5 | 6,
         children: parseInline(heading[2]),
       });
       continue;

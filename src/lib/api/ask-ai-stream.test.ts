@@ -73,7 +73,7 @@ describe("parseSseEvents", () => {
         controller.enqueue(
           encoder.encode(
             [
-              'event: status\ndata: {"stage":"llm","message":"Calling Gemini","percent":70}\n\n',
+              'event: status\ndata: {"stage":"llm","message":"Drafting cited answer","percent":70}\n\n',
               'event: token\ndata: {"delta":"Draft answer"}\n\n',
               'event: status\ndata: {"stage":"finalizing","message":"Finalizing citations","percent":95}\n\n',
               `event: final\ndata: ${JSON.stringify(finalPayload)}\n\n`,

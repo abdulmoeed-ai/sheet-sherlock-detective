@@ -42,6 +42,16 @@ describe("chat markdown parser", () => {
     ]);
   });
 
+  it("parses compact markdown headings emitted by Ask AI streams", () => {
+    expect(parseChatMarkdown("##### Sheet: BS5 - Current Liabilities")).toEqual([
+      {
+        type: "heading",
+        level: 5,
+        children: [{ type: "text", text: "Sheet: BS5 - Current Liabilities" }],
+      },
+    ]);
+  });
+
   it("parses numeric citation markers as inline citation nodes", () => {
     expect(parseChatMarkdown("Baseline uses PAT [1] and ADB [3].")).toEqual([
       {
