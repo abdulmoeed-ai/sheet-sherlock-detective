@@ -14,6 +14,7 @@ export const queryKeys = {
     ["projects", projectId, "mapping-rules", "admin"] as const,
   ingestionPreview: (projectId: string, runId?: string | null) =>
     ["projects", projectId, "ingestion-preview", runId ?? "latest"] as const,
+  ragStatus: (projectId: string) => ["projects", projectId, "rag", "status"] as const,
   askAiSessions: ["ask-ai", "sessions"] as const,
   askAiSession: (sessionId: string) => ["ask-ai", "sessions", sessionId] as const,
   latestBrief: (projectId: string) => ["projects", projectId, "briefs", "latest"] as const,

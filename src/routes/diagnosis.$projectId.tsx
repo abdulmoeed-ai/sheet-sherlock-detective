@@ -23,6 +23,7 @@ import {
   DiagnosisSourcePreviewModal,
 } from "@/components/DiagnosisSourcePreviewModal";
 import { IconTooltip } from "@/components/IconTooltip";
+import { RagIndexStatusIndicator } from "@/components/RagIndexStatusIndicator";
 import {
   WorkbookEditor,
   type WorkbookEditEvent,
@@ -102,6 +103,7 @@ import {
   readDiagnosisRightPanelWidth,
 } from "@/lib/diagnosis-right-panel";
 import { useWorkspace } from "@/hooks/use-projects";
+import { useRagIndexStatus } from "@/hooks/use-rag-index-status";
 import {
   useCreateComment,
   useCreateExcelExport,
@@ -138,6 +140,7 @@ function Diagnosis() {
   const { projectId } = Route.useParams();
   const currentUser = useCurrentUser();
   const workspace = useWorkspace(projectId);
+  const ragStatus = useRagIndexStatus(projectId);
   const reviewCell = useReviewCell(projectId, { invalidateOnSuccess: false });
   const revertCell = useRevertReviewCell(projectId);
   const revertWorkbookCell = useRevertWorkbookCell(projectId);
@@ -631,6 +634,7 @@ function Diagnosis() {
             {workspace.data?.project.companyName ?? cycle.company} /{" "}
             {workspace.data?.project.fiscalYear ?? cycle.period} / Diagnosis
           </div>
+          <RagIndexStatusIndicator status={ragStatus.status} loading={ragStatus.isLoading} />
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setPanelOpen((open) => !open)}
