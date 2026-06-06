@@ -17,10 +17,8 @@ import {
   Maximize2,
   Minimize2,
   Database,
-  Wrench,
   ArrowUpRight,
   History,
-  Globe,
   Plus,
   ExternalLink,
   Clock,
@@ -1243,9 +1241,6 @@ function StreamingAiBubble({
         </div>
 
         <CurrentEventPanel summary={reasoning} message={message} />
-        {message.activity.length > 0 && (
-          <EvidenceStrip activity={message.activity} onPreviewExternalSource={onPreviewExternalSource} />
-        )}
         {forecastVisuals && <ForecastSnapshot visuals={forecastVisuals} />}
         {message.error ? (
           <div
@@ -1742,174 +1737,6 @@ function InlineCitationBadge({
       />
     </span>
   );
-}
-
-// ─── Evidence strip ──────────────────────────────────────────────────────────
-
-function EvidenceStrip({
-  activity,
-  onPreviewExternalSource,
-}: {
-  activity: StreamActivityEvent[];
-  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
-}) {
-  const sourceEvents = activity.filter(
-    (event): event is Extract<StreamActivityEvent, { type: "source" }> => event.type === "source",
-  );
-  const statusEvents = activity.filter(
-    (event): event is Extract<StreamActivityEvent, { type: "status" }> => event.type === "status",
-  );
-  const latestStatus = statusEvents.at(-1);
-  const pdfCount = latestSourceCount(activity, "uploaded_pdf");
-  const evidenceCount = latestSourceMessageCount(activity, "Matched project evidence");
-  const webCount = latestSourceCount(activity, "web");
-  const webEvents = sourceEvents.filter((event) => event.kind === "web");
-
-  if (sourceEvents.length === 0 && !latestStatus) return null;
-
-  return (
-    <div
-      className="rounded-xl border px-3 py-2.5"
-      style={{ borderColor: "var(--color-border-default)", background: "#FAFBFF" }}
-    >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-primary)]">
-          <Wrench className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-          Evidence checked
-        </span>
-        {pdfCount > 0 && <EvidenceChip label={`${pdfCount} PDF${pdfCount === 1 ? "" : "s"}`} />}
-        {evidenceCount > 0 && <EvidenceChip label={`${evidenceCount} evidence matches`} />}
-        {webCount > 0 && <EvidenceChip label={`${webCount} web sources`} />}
-        {latestStatus && (
-          <span className="ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
-            {statusTitle(latestStatus.stage)}
-          </span>
-        )}
-      </div>
-      {latestStatus && (
-        <div className="mt-1.5 text-[11px] text-[var(--color-text-secondary)]">
-          {latestStatus.message}
-        </div>
-      )}
-      {webEvents.length > 0 && (
-        <ExternalSourceCards events={webEvents} onPreviewExternalSource={onPreviewExternalSource} />
-      )}
-    </div>
-  );
-}
-
-// ─── External source cards — ChatGPT style ───────────────────────────────────
-
-function ExternalSourceCards({
-  events,
-  onPreviewExternalSource,
-}: {
-  events: Array<Extract<StreamActivityEvent, { type: "source" }>>;
-  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
-}) {
-  const links = uniqueWebLinks(events.flatMap((event) => event.items ?? []));
-  const queries = uniqueStrings(events.flatMap((event) => event.queries ?? []));
-
-  if (links.length === 0 && queries.length === 0) return null;
-
-  return (
-    <div className="mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--color-border-default)" }}>
-      {queries.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)] self-center mr-1">
-            Searched
-          </span>
-          {queries.map((query) => (
-            <span
-              key={query}
-              className="max-w-[180px] truncate rounded-full border bg-white px-2.5 py-1 text-[10px] font-medium text-[var(--color-text-secondary)]"
-              style={{ borderColor: "var(--color-border-default)" }}
-              title={query}
-            >
-              {query}
-            </span>
-          ))}
-        </div>
-      )}
-      {links.length > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          {links.map((link) => (
-            <button
-              type="button"
-              key={link.url}
-              onClick={() =>
-                onPreviewExternalSource({
-                  title: link.title,
-                  url: link.url,
-                  excerpt: "",
-                  meta: link.domain,
-                })
-              }
-              className="group flex items-start gap-2 rounded-xl border bg-white p-2.5 text-left transition hover:border-[var(--color-brand)] hover:shadow-sm"
-              style={{ borderColor: "var(--color-border-default)" }}
-              title={link.url}
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--color-tag-bg)] group-hover:bg-[rgba(123,104,238,0.1)]">
-                <Globe className="h-3.5 w-3.5 text-[var(--color-brand)]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
-                  {link.title}
-                </div>
-                <div className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
-                  {link.domain}
-                </div>
-              </div>
-              <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-[var(--color-text-muted)] transition group-hover:text-[var(--color-brand)]" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function EvidenceChip({ label }: { label: string }) {
-  return (
-    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">
-      {label}
-    </span>
-  );
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function uniqueWebLinks(
-  items: Array<Record<string, unknown>>,
-): Array<{ title: string; url: string; domain: string }> {
-  const links: Array<{ title: string; url: string; domain: string }> = [];
-  const seen = new Set<string>();
-  for (const item of items) {
-    const url = typeof item.url === "string" ? item.url.trim() : "";
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : url;
-    let domain = url;
-    try {
-      domain = new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      domain = url;
-    }
-    links.push({ title, url, domain });
-  }
-  return links.slice(0, 6);
-}
-
-function latestSourceCount(activity: StreamActivityEvent[], kind: string): number {
-  const event = [...activity].reverse().find((item) => item.type === "source" && item.kind === kind);
-  return event?.type === "source" ? event.count : 0;
-}
-
-function latestSourceMessageCount(activity: StreamActivityEvent[], message: string): number {
-  const event = [...activity].reverse().find((item) => item.type === "source" && item.message === message);
-  return event?.type === "source" ? event.count : 0;
 }
 
 function citationMeta(citation: Record<string, unknown>): string {
