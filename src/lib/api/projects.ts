@@ -107,6 +107,17 @@ export function startExtraction(projectId: string, force = false) {
   );
 }
 
+export function readActiveExtractionJob(projectId: string) {
+  return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/active`);
+}
+
+export function cancelExtractionJob(projectId: string, jobId: string) {
+  return apiFetch<ExtractionJobResponse>(
+    `/api/projects/${projectId}/extractions/${jobId}/cancel`,
+    { method: "POST" },
+  );
+}
+
 export function readExtractionJob(projectId: string, jobId: string) {
   return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/${jobId}`);
 }

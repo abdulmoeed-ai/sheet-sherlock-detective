@@ -3,26 +3,49 @@ import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./a
 const COMPLETE_STATUSES = new Set(["completed", "succeeded", "success"]);
 const FAILED_STATUSES = new Set(["failed", "error", "cancelled", "canceled"]);
 
+const STALL_THRESHOLD_MS = 3 * 60 * 1000;  // 3 min without percent change
+const MAX_WAIT_MS = 20 * 60 * 1000;         // 20 min hard timeout
+
 export async function waitForExtractionCompletion({
   projectId,
   initialJob,
   readJob,
   delayMs = 1500,
   onProgress,
+  onStall,
 }: {
   projectId: string;
   initialJob: ExtractionJobResponse;
   readJob: (projectId: string, jobId: string) => Promise<ExtractionJobResponse>;
   delayMs?: number;
   onProgress?: (job: ExtractionJobResponse) => void;
+  onStall?: (job: ExtractionJobResponse) => void;
 }): Promise<ExtractionJobResponse> {
   let current = initialJob;
+  let lastPercent = current.percent;
+  let lastProgressAt = Date.now();
+  const startedAt = Date.now();
 
   while (true) {
     onProgress?.(current);
     if (isCompletedExtractionJob(current)) return current;
     if (isFailedExtractionJob(current)) {
       throw new Error(current.error || current.message || "Extraction failed.");
+    }
+
+    const now = Date.now();
+
+    // Hard timeout
+    if (now - startedAt > MAX_WAIT_MS) {
+      throw new Error("Extraction timed out after 20 minutes. The worker may be unavailable.");
+    }
+
+    // Stall detection — percent hasn't advanced
+    if (current.percent !== lastPercent) {
+      lastPercent = current.percent;
+      lastProgressAt = now;
+    } else if (now - lastProgressAt > STALL_THRESHOLD_MS) {
+      onStall?.(current);
     }
 
     await delay(delayMs);
