@@ -11,15 +11,28 @@ import {
   Eye,
   FolderOpen,
   Globe2,
+  Info,
   Loader2,
   Lock,
   Pencil,
+  Presentation,
   Plus,
   Search,
   ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  useCreateValuationPresentation,
+  useDownloadValuationPresentation,
+} from "@/hooks/use-project-actions";
+import { toast } from "sonner";
 import { PaginationControls } from "@/components/PaginationControls";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
@@ -2306,6 +2319,44 @@ function FinancialDashboardTab({
       }
     : null;
 
+  // ── Valuation PPT conditions ──────────────────────────────────────────────
+  const modelApproved = sourcePlan?.modelGraphAvailability.available === true && !!approvedProjectId;
+  const hasResearch =
+    (brokerReports.length > 0) ||
+    ((intelligence?.sourceCoverage.coveragePercent ?? 0) > 0);
+  const valuationPptEnabled = modelApproved && hasResearch;
+
+  const disabledReasons: string[] = [];
+  if (!modelApproved)
+    disabledReasons.push("Financial model must be approved (open the company project and request CFO sign-off).");
+  if (!hasResearch)
+    disabledReasons.push("No market research available (broker reports or AskAnalyst data required).");
+
+  const createValuationExport = useCreateValuationPresentation(approvedProjectId ?? "");
+  const downloadValuationExport = useDownloadValuationPresentation(approvedProjectId ?? "");
+
+  const handleValuationPPT = async () => {
+    if (!valuationPptEnabled || !approvedProjectId) return;
+    try {
+      const created = await createValuationExport.mutateAsync();
+      if (created.generatedBy === "deterministic") {
+        toast.info("Presentation generated using deterministic fallback (LLM unavailable).");
+      }
+      const blob = await downloadValuationExport.mutateAsync(created.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(selectedCompany?.name ?? "Company").replace(/\s+/g, "_")}_Valuation.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Valuation presentation downloaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "PPT generation failed.");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -2349,6 +2400,64 @@ function FinancialDashboardTab({
         </Card>
       ) : (
         <>
+          {/* Valuation PPT header bar */}
+          <div className="flex items-center justify-between rounded-lg border px-4 py-2.5"
+            style={{ borderColor: "var(--color-border-default)", background: "var(--color-bg-subtle)" }}>
+            <div>
+              <p className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                {selectedCompany?.name}
+              </p>
+              <p className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                {selectedCompany?.sector} · {selectedCompany?.symbol}
+              </p>
+            </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      onClick={handleValuationPPT}
+                      disabled={!valuationPptEnabled || createValuationExport.isPending || downloadValuationExport.isPending}
+                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{
+                        borderColor: valuationPptEnabled ? "var(--color-brand)" : "var(--color-border-default)",
+                        color: valuationPptEnabled ? "var(--color-brand)" : "var(--color-text-muted)",
+                        background: "var(--color-bg-card)",
+                      }}
+                    >
+                      {createValuationExport.isPending || downloadValuationExport.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Presentation className="h-3.5 w-3.5" />
+                      )}
+                      {createValuationExport.isPending
+                        ? "Generating…"
+                        : downloadValuationExport.isPending
+                          ? "Downloading…"
+                          : "Valuation PPT"}
+                      {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                {!valuationPptEnabled && (
+                  <TooltipContent side="bottom" className="max-w-[300px] text-[12px]">
+                    <p className="font-semibold mb-1">Cannot generate presentation:</p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {disabledReasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                )}
+                {valuationPptEnabled && (
+                  <TooltipContent side="bottom" className="text-[12px]">
+                    Generate an investment-banking quality valuation deck using the approved financial model and available market research.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
             <StartModelCard
               company={selectedDashboardCompany}

@@ -3,10 +3,12 @@ import {
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
   createExcelExport,
+  createValuationPresentation,
   createComment,
   deleteComment,
   decideBalanceSheetDiagnosis,
   downloadExcelExport,
+  downloadValuationPresentation,
   generateAssumptions,
   generateExecutiveBrief,
   recordCfoSignoff,
@@ -80,6 +82,18 @@ export function useSaveWorkbook(projectId: string) {
 export function useDownloadExcelExport(projectId: string) {
   return useMutation({
     mutationFn: (exportId: string) => downloadExcelExport(projectId, exportId),
+  });
+}
+
+export function useCreateValuationPresentation(projectId: string) {
+  return useMutation({
+    mutationFn: () => createValuationPresentation(projectId),
+  });
+}
+
+export function useDownloadValuationPresentation(projectId: string) {
+  return useMutation({
+    mutationFn: (exportId: string) => downloadValuationPresentation(projectId, exportId),
   });
 }
 
