@@ -278,6 +278,7 @@ export interface ValuationPresentationInput {
   fiscalYear?: string | null;
   currencyUnit?: string | null;
   dashboardMetrics?: Array<Record<string, unknown>>;
+  chartSeries?: Array<Record<string, unknown>>;
   researchNotes?: Array<Record<string, unknown>>;
   citations?: Array<Record<string, unknown>>;
 }

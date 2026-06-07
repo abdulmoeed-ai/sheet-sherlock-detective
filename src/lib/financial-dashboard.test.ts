@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildApprovedModelGraphPack,
   buildBrokerResearchSummary,
+  buildValuationDashboardChartSeries,
   buildLiveMarketMetrics,
   buildFinancialDashboardSourcePlan,
   buildSourceSyncSummary,
@@ -323,6 +324,57 @@ describe("financial dashboard helpers", () => {
         source: "Approved Model",
       }),
     ]);
+  });
+
+  it("builds chart-ready valuation PPT series from dashboard data", () => {
+    const metrics = buildLiveMarketMetrics({
+      lastPrice: 180,
+      changePct: 2.1,
+      volume: 1250000,
+      valueTraded: 245000000,
+      marketCap: 91200000000,
+      pe: 8.5,
+      pbv: 1.25,
+      dividendYield: 4.4,
+      fiftyTwoWeekHigh: 220,
+      fiftyTwoWeekLow: 120,
+      freeFloatPercent: 35,
+      lastSyncedAt: "2026-06-05",
+      changeBasisLabel: "LDCP",
+      changeBasisValue: 176,
+    });
+    const modelGraphPack = buildApprovedModelGraphPack({
+      availability: { available: true, source: "Approved Model", project: project() },
+      workspace: {
+        ...emptyWorkspace,
+        dashboard: {
+          metrics: [
+            { label: "Revenue", value: "PKR 54.1bn", delta: "+5.2%" },
+            { label: "Gross Margin", value: "24.6%", delta: "-1.1%" },
+          ],
+        },
+      },
+    });
+
+    const series = buildValuationDashboardChartSeries({
+      metrics,
+      sourceSyncSummary: [
+        { source: "AskAnalyst", status: "synced", lastSyncedLabel: "Last synced 2026-06-05" },
+        { source: "Broker Research", status: "pending", lastSyncedLabel: "Not synced yet" },
+      ],
+      modelGraphPack,
+    });
+
+    expect(series.map((item) => item.title)).toEqual([
+      "Share Price Range",
+      "Valuation Multiples",
+      "Trading Scale",
+      "Source Readiness",
+      "Approved Model Snapshot",
+    ]);
+    expect(series[0].points.map((point) => point.label)).toEqual(["52W Low", "Current", "52W High"]);
+    expect(series[3].points.map((point) => point.value)).toEqual([100, 50]);
+    expect(series[4].points.map((point) => point.label)).toEqual(["Revenue", "Gross Margin"]);
   });
 });
 

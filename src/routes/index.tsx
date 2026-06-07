@@ -95,6 +95,7 @@ import {
   buildFinancialDashboardSourcePlan,
   buildLiveMarketMetrics,
   buildSourceSyncSummary,
+  buildValuationDashboardChartSeries,
   brokerReportsFromSourceSearch,
   companyOptionsForSector,
   sectorOptions,
@@ -2256,6 +2257,11 @@ function dashboardValuationPayload({
     fiscalYear: intelligence.identifiers.fiscalYear,
     currencyUnit: intelligence.identifiers.currency,
     dashboardMetrics,
+    chartSeries: buildValuationDashboardChartSeries({
+      metrics,
+      sourceSyncSummary,
+      modelGraphPack,
+    }),
     researchNotes,
     citations,
   };
