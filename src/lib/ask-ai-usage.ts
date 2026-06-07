@@ -9,7 +9,7 @@ export function askAiTokenUsageLabel({
 }): string {
   const totalTokens = numberValue(usage?.totalTokens ?? usage?.total_tokens);
   if (totalTokens !== null) {
-    return `${totalTokens.toLocaleString()} tokens`;
+    return `${usage?.estimated === true ? "~" : ""}${totalTokens.toLocaleString()} tokens`;
   }
   if (done) {
     return "token usage unavailable";

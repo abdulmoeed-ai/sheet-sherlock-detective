@@ -28,8 +28,15 @@ export function askAiSessionToMessages(session: AskAiChatSessionResponse): AskAi
             warnings: message.warnings,
             usage: message.usage,
             activityLog: arrayValue(snapshot.activityLog),
-            forecastVisuals: (recordOrNull(snapshot.forecastVisuals) as AskAiFinalResponse["forecastVisuals"]) ?? null,
-            claimSourceGroups: arrayValue(snapshot.claimSourceGroups) as AskAiFinalResponse["claimSourceGroups"],
+            forecastVisuals:
+              (recordOrNull(snapshot.forecastVisuals) as AskAiFinalResponse["forecastVisuals"]) ??
+              null,
+            forecastAnalysis:
+              (recordOrNull(snapshot.forecastAnalysis) as AskAiFinalResponse["forecastAnalysis"]) ??
+              null,
+            claimSourceGroups: arrayValue(
+              snapshot.claimSourceGroups,
+            ) as AskAiFinalResponse["claimSourceGroups"],
             tavilyQuestions: stringArrayValue(snapshot.tavilyQuestions),
           },
         };
@@ -76,7 +83,9 @@ function arrayValue(value: unknown): Array<Record<string, unknown>> {
 }
 
 function stringArrayValue(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function recordOrNull(value: unknown): Record<string, unknown> | null {
