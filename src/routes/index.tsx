@@ -208,6 +208,7 @@ function ManagerDashboard() {
       sector: draft.sector || null,
       dueDate: draft.dueDate || null,
       note: draft.note || null,
+      template: templateForSector(draft.sector || null),
     });
     setDraft(blankRequest);
   };
