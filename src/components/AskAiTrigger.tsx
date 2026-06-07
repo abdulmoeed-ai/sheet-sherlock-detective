@@ -142,7 +142,7 @@ export function AskAiTrigger() {
     : activeSession?.screenName ?? screenNameForPath(routePath);
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
-  const sessionsApi = useAskAiSessions();
+  const sessionsApi = useAskAiSessions(routeMode.isForecastRoute ? "forecast" : "project");
   const workspace = useWorkspace(activeProjectId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -151,6 +151,7 @@ export function AskAiTrigger() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
+  const wasForecastRouteRef = useRef(routeMode.isForecastRoute);
 
   const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
   const panelOpen = routeMode.forceOpen || open;
@@ -243,6 +244,25 @@ export function AskAiTrigger() {
     setPendingModelSelection(null);
     chatSessionIdRef.current = `chat-${Date.now()}`;
   };
+
+  useEffect(() => {
+    const wasForecastRoute = wasForecastRouteRef.current;
+    wasForecastRouteRef.current = routeMode.isForecastRoute;
+    if (!wasForecastRoute || routeMode.isForecastRoute) return;
+
+    if (activeStreamIdRef.current) {
+      stopActiveStream();
+    } else {
+      clearActiveStream();
+    }
+    setPreviewSource(null);
+    setExternalPreviewSource(null);
+    setHistoryDialog(null);
+    setHistoryDialogError(null);
+    setOpen(false);
+    setExpanded(false);
+    startNewChat();
+  }, [routeMode.isForecastRoute]);
 
   const loadChat = async (chat: AskAiChatSessionSummary) => {
     const session = await sessionsApi.loadSession(chat.id);

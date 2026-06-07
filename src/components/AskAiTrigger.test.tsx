@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AskAiTrigger } from "./AskAiTrigger";
 
+let pathname = "/forecast";
+
 vi.mock("@tanstack/react-router", () => ({
-  useRouterState: vi.fn(() => "/forecast"),
+  useRouterState: vi.fn(() => pathname),
 }));
 
 vi.mock("@/lib/project-store", () => ({
@@ -61,6 +63,7 @@ vi.mock("@/components/ui/chart", () => ({
 describe("AskAiTrigger", () => {
   afterEach(() => {
     cleanup();
+    pathname = "/forecast";
   });
 
   it("lets forecast users open the expanded history sidebar", async () => {
@@ -72,5 +75,17 @@ describe("AskAiTrigger", () => {
 
     expect(screen.getByText("History")).not.toBeNull();
     expect(screen.getByText("No Ask AI threads yet.")).not.toBeNull();
+  });
+
+  it("closes the forecast Ask AI panel when navigating away from forecast", async () => {
+    const { rerender } = render(<AskAiTrigger />);
+
+    await waitFor(() => expect(screen.getByLabelText("Toggle history")).not.toBeNull());
+
+    pathname = "/diagnosis/project-1";
+    rerender(<AskAiTrigger />);
+
+    await waitFor(() => expect(screen.queryByLabelText("Toggle history")).toBeNull());
+    expect(screen.getByLabelText("Open Ask AI")).not.toBeNull();
   });
 });

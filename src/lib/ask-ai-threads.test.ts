@@ -5,6 +5,7 @@ import type { AskAiChatSessionResponse } from "@/lib/api/types";
 describe("askAiSessionToMessages", () => {
   it("maps persisted user and assistant messages with citations and metadata", () => {
     const session: AskAiChatSessionResponse = {
+      kind: "project",
       id: "chat-1",
       projectId: "project-1",
       projectLabel: "Millat FY2025",
@@ -96,6 +97,7 @@ describe("askAiSessionToMessages", () => {
 
   it("ignores unsupported persisted roles", () => {
     const session: AskAiChatSessionResponse = {
+      kind: "project",
       id: "chat-1",
       projectId: "project-1",
       projectLabel: null,

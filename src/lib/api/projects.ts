@@ -259,10 +259,13 @@ export function listAskAiWorkbooks() {
   return apiFetch<AskAiWorkbookInventoryResponse>("/api/ask-ai/workbooks");
 }
 
-export function listAskAiSessions(input: { limit?: number; cursor?: string | null } = {}) {
+export function listAskAiSessions(
+  input: { limit?: number; cursor?: string | null; scope?: "project" | "forecast" } = {},
+) {
   const params = new URLSearchParams();
   if (input.limit) params.set("limit", String(input.limit));
   if (input.cursor) params.set("cursor", input.cursor);
+  if (input.scope) params.set("scope", input.scope);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return apiFetch<AskAiChatSessionSummary[]>(`/api/ask-ai/sessions${suffix}`);
 }

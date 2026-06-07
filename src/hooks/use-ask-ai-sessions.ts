@@ -7,11 +7,11 @@ import {
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 
-export function useAskAiSessions() {
+export function useAskAiSessions(scope: "project" | "forecast" = "project") {
   const queryClient = useQueryClient();
   const sessionsQuery = useQuery({
-    queryKey: queryKeys.askAiSessions,
-    queryFn: () => listAskAiSessions({ limit: 20 }),
+    queryKey: [...queryKeys.askAiSessions, scope] as const,
+    queryFn: () => listAskAiSessions({ limit: 20, scope }),
     staleTime: 0,
     refetchOnMount: false,
     enabled: false,
