@@ -42,6 +42,7 @@ describe("LoginPage", () => {
     expect(screen.getByText("Cited. Checked. Approved. Auditable.")).toBeTruthy();
 
     expect(screen.queryByRole("button", { name: "Continue with SSO" })).toBeNull();
+    expect(screen.queryByText("Model review")).toBeNull();
     expect(screen.queryByText("Board-ready forecast governance")).toBeNull();
     expect(screen.queryByText("Leadership outcomes")).toBeNull();
     expect(screen.queryByText("Source citations")).toBeNull();
