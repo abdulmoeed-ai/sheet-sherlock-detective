@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { askAi } from "@/lib/api/projects";
+import { askAi, askAiForecast } from "@/lib/api/projects";
 import {
   readAskAiSseStream,
   type AskAiFinalResponse,
@@ -18,15 +18,21 @@ export function useAskAiStream(projectId: string | null) {
       requestOptions: { signal?: AbortSignal; projectIdOverride?: string | null } = {},
     ): Promise<AskAiFinalResponse | null> => {
       const effectiveProjectId = requestOptions.projectIdOverride ?? projectId;
+      const routePath = typeof input.routePath === "string" ? input.routePath : null;
+      const useForecastRoute = !effectiveProjectId && routePath === "/forecast";
       if (!effectiveProjectId) {
-        setError("Select a project before using Ask AI.");
-        return null;
+        if (!useForecastRoute) {
+          setError("Select a project before using Ask AI.");
+          return null;
+        }
       }
       setLoading(true);
       setError(null);
       setAnswer("");
       try {
-        const response = await askAi(effectiveProjectId, input, requestOptions);
+        const response = useForecastRoute
+          ? await askAiForecast(input, requestOptions)
+          : await askAi(effectiveProjectId as string, input, requestOptions);
         return await readAskAiSseStream(response, {
           ...options,
           onChunk: (nextAnswer) => {

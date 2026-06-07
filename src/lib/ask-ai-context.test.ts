@@ -40,6 +40,14 @@ describe("Ask AI route context", () => {
     expect(suggestions.join(" ")).not.toMatch(/Millat|FY2025|sector/i);
   });
 
+  it("uses analyst-style forecast suggestions on the forecast route", () => {
+    expect(askAiSuggestionsForRoute("/forecast")).toEqual([
+      "Give me a 5-year qualitative and quantitative forecast for this company",
+      "Calculate historical revenue CAGR and normalized CAGR",
+      "Identify outliers and summarize assumptions I can use",
+    ]);
+  });
+
   it("uses provided project metadata when real context is present", () => {
     expect(
       buildAskAiContextChips({
@@ -65,10 +73,10 @@ describe("Ask AI route context", () => {
     expect(shouldUseProjectContextForRoute("/inbox")).toBe(false);
   });
 
-  it("allows project context on project and workflow routes", () => {
+  it("allows project context on project and workflow routes without borrowing context on forecast chat", () => {
     expect(shouldUseProjectContextForRoute("/diagnosis/project-1")).toBe(true);
     expect(shouldUseProjectContextForRoute("/ingestion/project-1")).toBe(true);
     expect(shouldUseProjectContextForRoute("/review")).toBe(true);
-    expect(shouldUseProjectContextForRoute("/forecast")).toBe(true);
+    expect(shouldUseProjectContextForRoute("/forecast")).toBe(false);
   });
 });
