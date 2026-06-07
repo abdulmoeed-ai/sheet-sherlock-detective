@@ -349,7 +349,7 @@ function Registry() {
                       project.versionNum,
                     );
                     const pct = completeness(project);
-                    const active = isActive(project.status);
+                    const active = isActiveProjectStatus(project.status);
                     return (
                       <div key={project.id} className="flex items-center gap-3">
                         <div
