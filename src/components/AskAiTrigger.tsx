@@ -5,6 +5,7 @@ import {
   Sparkles,
   X,
   Send,
+  Square,
   Check,
   Loader2,
   ChevronDown,
@@ -69,6 +70,7 @@ import {
 import { buildAskAiReasoningSummary } from "@/lib/ask-ai-reasoning";
 import { normalizeForecastAnalysis, normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
+import { markAskAiStreamStopped } from "@/lib/ask-ai-stop";
 import { clearLegacyAskAiChatHistoryStorage } from "@/lib/ask-ai-storage";
 import { askAiTokenUsageLabel } from "@/lib/ask-ai-usage";
 import { userFacingAskAiWarnings } from "@/lib/ask-ai-warnings";
@@ -138,14 +140,26 @@ export function AskAiTrigger() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
 
   const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
   const suggestions = askAiSuggestionsForRoute(routePath);
 
-  const abortStream = () => {
+  const clearActiveStream = () => {
+    abortControllerRef.current = null;
     activeStreamIdRef.current = null;
+    setAsking(false);
+  };
+
+  const stopActiveStream = () => {
+    const streamId = activeStreamIdRef.current;
+    if (!streamId) return;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    activeStreamIdRef.current = null;
+    setMessages((messages) => markAskAiStreamStopped(messages, streamId));
     setAsking(false);
   };
 
@@ -162,7 +176,7 @@ export function AskAiTrigger() {
     textarea.style.overflowY = layout.overflowY;
   }, [input, open]);
 
-  useEffect(() => () => abortStream(), []);
+  useEffect(() => () => clearActiveStream(), []);
 
   useEffect(() => {
     clearLegacyAskAiChatHistoryStorage();
@@ -321,7 +335,8 @@ export function AskAiTrigger() {
 
   const send = async (text: string) => {
     if (!text.trim()) return;
-    abortStream();
+    if (asking) return;
+    clearActiveStream();
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -445,6 +460,8 @@ export function AskAiTrigger() {
 
     setAsking(true);
     const aiId = `a-${Date.now()}`;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     activeStreamIdRef.current = aiId;
     setMessages((m) => [
       ...m,
@@ -492,7 +509,7 @@ export function AskAiTrigger() {
             updateStreamMessage(aiId, { type: "error", message: event.message });
           },
         },
-        { projectIdOverride: modelOverride?.id },
+        { projectIdOverride: modelOverride?.id, signal: abortController.signal },
       );
       if (!final && !streamError && activeStreamIdRef.current === aiId) {
         updateStreamMessage(aiId, {
@@ -501,6 +518,9 @@ export function AskAiTrigger() {
         });
       }
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       if (activeStreamIdRef.current === aiId) {
         activeStreamIdRef.current = null;
         setAsking(false);
@@ -1006,17 +1026,17 @@ export function AskAiTrigger() {
                             Enter to send · Shift+Enter for new line
                           </span>
                         </div>
-                        <IconTooltip label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}>
+                        <IconTooltip label={asking ? "Stop Ask AI response" : "Send Ask AI prompt"}>
                           <button
                             type="button"
-                            onClick={() => void send(input)}
-                            disabled={!input.trim() || asking}
+                            onClick={asking ? stopActiveStream : () => void send(input)}
+                            disabled={!asking && !input.trim()}
                             className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
                             style={{ background: "var(--color-brand)" }}
-                            aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
+                            aria-label={asking ? "Stop Ask AI response" : "Send Ask AI prompt"}
                           >
                             {asking ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Square className="h-3.5 w-3.5 fill-current" />
                             ) : (
                               <Send className="h-4 w-4" />
                             )}
