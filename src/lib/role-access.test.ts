@@ -25,7 +25,7 @@ describe("role access", () => {
     expect(canSeeRoute("finance_manager", "/review")).toBe(true);
     expect(canSeeRoute("finance_analyst", "/diagnosis")).toBe(false);
     expect(canSeeRoute("finance_analyst", "/diagnosis/project-1")).toBe(true);
-    expect(canSeeRoute("finance_manager", "/diagnosis/project-1")).toBe(false);
+    expect(canSeeRoute("finance_manager", "/diagnosis/project-1")).toBe(true);
     expect(canSeeRoute("cfo", "/sign-off")).toBe(false);
     expect(canSeeRoute("cfo", "/ingestion")).toBe(false);
     expect(canSeeRoute("admin", "/sources")).toBe(true);

@@ -17,6 +17,7 @@ import {
   projectStatusLabel,
   projectStatusTone,
 } from "@/lib/project-status-workflow";
+import { projectOpenTarget } from "@/lib/project-navigation";
 import type { ProjectResponse } from "@/lib/api/types";
 
 const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
@@ -161,15 +162,11 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? selectedFY,
     });
-    // Route based on how far the project has progressed.
-    // Statuses that mean ingestion is not yet done (no accepted extraction results).
-    const needsIngestion = new Set([
-      "draft", "created", "setup",
-      "documents_uploaded",
-      "extracting",
-      "extraction_failed",
-    ]);
-    if (needsIngestion.has(project.status)) {
+    const target = projectOpenTarget({ role: user?.role ?? "finance_analyst", status: project.status });
+    if (target === "review") {
+      cycleStore.setStatus("review");
+      navigate({ to: "/review" });
+    } else if (target === "ingestion") {
       cycleStore.setStatus("ingestion");
       navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
     } else {
@@ -226,13 +223,11 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? "",
     });
-    const needsIngestion = new Set([
-      "draft", "created", "setup",
-      "documents_uploaded",
-      "extracting",
-      "extraction_failed",
-    ]);
-    if (needsIngestion.has(project.status)) {
+    const target = projectOpenTarget({ role: user?.role ?? "finance_analyst", status: project.status });
+    if (target === "review") {
+      cycleStore.setStatus("review");
+      navigate({ to: "/review" });
+    } else if (target === "ingestion") {
       cycleStore.setStatus("ingestion");
       navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
     } else {

@@ -42,7 +42,7 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/sources": ["admin"],
 };
 
-const diagnosisRoles: BackendRole[] = ["finance_analyst"];
+const diagnosisRoles: BackendRole[] = ["finance_analyst", "finance_manager"];
 
 export function canSeeRoute(role: BackendRole, pathname: string): boolean {
   if (pathname === "/login") return true;
