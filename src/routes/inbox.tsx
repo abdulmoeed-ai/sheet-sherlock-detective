@@ -103,6 +103,8 @@ function Inbox() {
     setActionError(null);
     setActiveRequestId(r.id);
     try {
+      // Track whether this is a fresh conversion (no project yet)
+      const isNewProject = r.projectId === null;
       const projectId = r.projectId ?? (await convertRequest.mutateAsync(r.id)).projectId;
       if (!projectId) {
         throw new Error("Backend did not return a project id for this request.");
@@ -113,7 +115,13 @@ function Inbox() {
         company: r.companyName,
         period: r.fiscalYear ?? "Current period",
       });
-      navigate({ to: "/registry" });
+      // New project → must go through ingestion (upload docs + extract) first.
+      // Returning to existing project → skip straight to registry.
+      if (isNewProject) {
+        navigate({ to: "/ingestion/$projectId", params: { projectId } });
+      } else {
+        navigate({ to: "/registry" });
+      }
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {
