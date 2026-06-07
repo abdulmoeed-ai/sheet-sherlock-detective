@@ -8,7 +8,7 @@ describe("buildAskAiRequestPayload", () => {
       question: "Hi",
       sessionId: "chat-1",
       routePath: "/inbox",
-      screenName: "Inbox",
+      screenName: "Analysis Requests",
       documents: [],
       project: null,
     });
@@ -33,6 +33,19 @@ describe("buildAskAiRequestPayload", () => {
 
     expect(payload.filters).toEqual({ period: "FY2026", company: "Actual Company" });
     expect(payload.documentIds).toEqual(["doc-1"]);
+    expect(payload.includeExternalSources).toBe(true);
+  });
+
+  it("auto-enables approved external sources for all forecast route prompts", () => {
+    const payload = buildAskAiRequestPayload({
+      question: "What assumptions should I use?",
+      sessionId: "chat-1",
+      routePath: "/forecast",
+      screenName: "Forecast",
+      documents: [],
+      project: null,
+    });
+
     expect(payload.includeExternalSources).toBe(true);
   });
 });

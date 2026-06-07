@@ -63,6 +63,8 @@ describe("buildModelSelectionPrompt", () => {
     expect(prompt).toContain("1. Millat Tractors Limited");
     expect(prompt).toContain("FY2025");
     expect(prompt).toContain("2. Millat Equipment Limited");
+    expect(prompt).toContain("Analysis Requests assignment");
+    expect(prompt).not.toContain("Inbox assignment");
     expect(prompt).toContain("type the number or name");
   });
 });

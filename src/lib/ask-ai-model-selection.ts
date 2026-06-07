@@ -14,7 +14,7 @@ export function buildModelSelectionPrompt(candidates: AskAiModelCandidate[]): st
     const meta = [
       candidate.projectLabel || candidate.fiscalYear,
       candidate.sector,
-      candidate.accessSource === "assigned_inbox" ? "Inbox assignment" : null,
+      candidate.accessSource === "assigned_inbox" ? "Analysis Requests assignment" : null,
     ].filter(Boolean);
     return `${index + 1}. ${candidate.companyName}${meta.length ? ` - ${meta.join(", ")}` : ""}`;
   });
@@ -34,7 +34,7 @@ export function buildWorkbookInventoryPrompt(items: AskAiWorkbookInventoryItem[]
       item.status,
       `${item.documentCount} PDF${item.documentCount === 1 ? "" : "s"}`,
       item.workbookAvailable ? "workbook ready" : "workbook not opened yet",
-      item.accessSource === "assigned_inbox" ? "Inbox assignment" : null,
+      item.accessSource === "assigned_inbox" ? "Analysis Requests assignment" : null,
     ].filter(Boolean);
     return `${index + 1}. ${item.companyName}${meta.length ? ` - ${meta.join(", ")}` : ""}`;
   });

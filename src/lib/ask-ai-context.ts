@@ -10,15 +10,22 @@ const DIAGNOSIS_SUGGESTIONS = [
   "What are the biggest risks in this financial model?",
 ];
 
+const FORECAST_SUGGESTIONS = [
+  "Give me a 5-year qualitative and quantitative forecast for this company",
+  "Calculate historical revenue CAGR and normalized CAGR",
+  "Identify outliers and summarize assumptions I can use",
+];
+
 export function askAiSuggestionsForRoute(routePath: string): string[] {
-  return routePath.startsWith("/diagnosis/") ? DIAGNOSIS_SUGGESTIONS : GENERIC_SUGGESTIONS;
+  const normalized = normalizeRoutePath(routePath);
+  if (normalized === "/forecast") return FORECAST_SUGGESTIONS;
+  return normalized.startsWith("/diagnosis/") ? DIAGNOSIS_SUGGESTIONS : GENERIC_SUGGESTIONS;
 }
 
 const PROJECT_CONTEXT_ROUTE_PREFIXES = ["/diagnosis/", "/ingestion/"];
 const PROJECT_CONTEXT_ROUTES = new Set([
   "/assumptions",
   "/audit",
-  "/forecast",
   "/review",
   "/sign-off",
 ]);

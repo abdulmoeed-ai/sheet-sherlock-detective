@@ -214,6 +214,17 @@ export function askAi(
   });
 }
 
+export function askAiForecast(
+  input: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {},
+) {
+  return apiStream("/api/ask-ai/forecast", {
+    method: "POST",
+    body: input,
+    signal: options.signal,
+  });
+}
+
 export function searchAskAiModels(input: { query: string }) {
   return apiFetch<AskAiModelSearchResponse>("/api/projects/ask-ai/model-search", {
     method: "POST",

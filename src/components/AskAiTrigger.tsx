@@ -25,7 +25,11 @@ import {
   Trash2,
 } from "lucide-react";
 import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
-import { SIDEBAR_WIDTH, useSidebarCollapsed } from "@/lib/sidebar-store";
+import {
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_WIDTH,
+  useSidebarCollapsed,
+} from "@/lib/sidebar-store";
 import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useAskAiSessions } from "@/hooks/use-ask-ai-sessions";
 import { useWorkspace } from "@/hooks/use-projects";
@@ -69,6 +73,7 @@ import {
 } from "@/lib/ask-ai-citations";
 import { buildAskAiReasoningSummary } from "@/lib/ask-ai-reasoning";
 import { normalizeForecastAnalysis, normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
+import { askAiRouteModeForPath } from "@/lib/ask-ai-route-mode";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
 import { markAskAiStreamStopped } from "@/lib/ask-ai-stop";
 import { clearLegacyAskAiChatHistoryStorage } from "@/lib/ask-ai-storage";
@@ -127,11 +132,14 @@ export function AskAiTrigger() {
   );
 
   const routePath = useRouterState({ select: (s) => s.location.pathname });
+  const routeMode = askAiRouteModeForPath(routePath);
   const selectedProjectId = useSelectedProjectId();
   const routeProjectId = shouldUseProjectContextForRoute(routePath) ? selectedProjectId : null;
   const activeProjectId = activeSession?.projectId ?? modelProjectContext?.id ?? routeProjectId;
-  const activeRoutePath = activeSession?.routePath ?? routePath;
-  const activeScreenName = activeSession?.screenName ?? screenNameForPath(routePath);
+  const activeRoutePath = routeMode.isForecastRoute ? routePath : activeSession?.routePath ?? routePath;
+  const activeScreenName = routeMode.isForecastRoute
+    ? screenNameForPath(routePath)
+    : activeSession?.screenName ?? screenNameForPath(routePath);
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
   const sessionsApi = useAskAiSessions();
@@ -145,6 +153,8 @@ export function AskAiTrigger() {
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
 
   const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
+  const panelOpen = routeMode.forceOpen || open;
+  const panelExpanded = routeMode.forceExpanded || expanded;
   const suggestions = askAiSuggestionsForRoute(routePath);
 
   const clearActiveStream = () => {
@@ -163,9 +173,22 @@ export function AskAiTrigger() {
     setAsking(false);
   };
 
+  const closeAskAiPanel = () => {
+    if (routeMode.isForecastRoute) return;
+    if (activeStreamIdRef.current) {
+      stopActiveStream();
+    } else {
+      clearActiveStream();
+    }
+    setPreviewSource(null);
+    setExternalPreviewSource(null);
+    setShowHistory(false);
+    setOpen(false);
+  };
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, open]);
+  }, [messages, panelOpen]);
 
   useEffect(() => {
     const textarea = inputRef.current;
@@ -183,8 +206,14 @@ export function AskAiTrigger() {
   }, []);
 
   useEffect(() => {
-    if (open) void sessionsApi.refreshSessions();
-  }, [open]);
+    if (panelOpen) void sessionsApi.refreshSessions();
+  }, [panelOpen]);
+
+  useEffect(() => {
+    if (!routeMode.forceOpen) return;
+    setOpen(true);
+    setExpanded(true);
+  }, [routeMode.forceOpen, routePath]);
 
   const contextChips = buildAskAiContextChips({
     company: activeSession?.companyName ?? workspace.data?.project.companyName,
@@ -199,7 +228,11 @@ export function AskAiTrigger() {
     screenName: activeScreenName,
     period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear,
   });
-  const expandedLeft = sidebarCollapsed ? 0 : SIDEBAR_WIDTH;
+  const expandedLeft = sidebarCollapsed
+    ? routeMode.reserveSidebar
+      ? SIDEBAR_COLLAPSED_WIDTH
+      : 0
+    : SIDEBAR_WIDTH;
 
   const startNewChat = () => {
     setMessages([]);
@@ -445,7 +478,7 @@ export function AskAiTrigger() {
     }
 
     const effectiveProjectId = modelOverride?.id ?? activeProjectId;
-    if (!effectiveProjectId) {
+    if (!effectiveProjectId && !routeMode.isForecastRoute) {
       setMessages((m) => [
         ...m,
         {
@@ -593,7 +626,7 @@ export function AskAiTrigger() {
 
   return (
     <>
-      {!open && (
+      {!panelOpen && (
         <>
           <style>{`
             @keyframes askAiGlow {
@@ -632,20 +665,20 @@ export function AskAiTrigger() {
         </>
       )}
 
-      {open && (
+      {panelOpen && (
         <aside
           className={`fixed right-0 top-0 z-50 flex h-screen max-w-full overflow-hidden bg-[var(--color-page)] slide-in-right ${
-            expanded ? "flex-row" : "flex-col w-[430px]"
+            panelExpanded ? "flex-row" : "flex-col w-[430px]"
           }`}
           style={{
-            left: expanded ? expandedLeft : undefined,
-            width: expanded ? `calc(100vw - ${expandedLeft}px)` : undefined,
+            left: panelExpanded ? expandedLeft : undefined,
+            width: panelExpanded ? `calc(100vw - ${expandedLeft}px)` : undefined,
             borderLeft: "1px solid var(--color-border-default)",
             boxShadow: "-24px 0 64px -32px rgba(17,24,39,0.45)",
           }}
         >
           {/* Expanded mode: integrated left history column */}
-          {expanded && showHistory && (
+          {panelExpanded && showHistory && (
             <div
               className="flex h-full w-[268px] shrink-0 flex-col border-r"
               style={{ borderColor: "var(--color-border-default)" }}
@@ -722,31 +755,32 @@ export function AskAiTrigger() {
                     </button>
                   </IconTooltip>
                 )}
-                <IconTooltip label={expanded ? "Collapse chat" : "Expand chat"}>
-                  <button
-                    onClick={() => setExpanded((v) => !v)}
-                    className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
-                    aria-label={expanded ? "Collapse chat" : "Expand chat"}
-                  >
-                    {expanded ? (
-                      <Minimize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
-                    ) : (
-                      <Maximize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
-                    )}
-                  </button>
-                </IconTooltip>
-                <IconTooltip label="Close Ask AI">
-                  <button
-                    onClick={() => {
-                      abortStream();
-                      setOpen(false);
-                    }}
-                    className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
-                    aria-label="Close Ask AI"
-                  >
-                    <X className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
-                  </button>
-                </IconTooltip>
+                {routeMode.showCollapse && (
+                  <IconTooltip label={panelExpanded ? "Collapse chat" : "Expand chat"}>
+                    <button
+                      onClick={() => setExpanded((v) => !v)}
+                      className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
+                      aria-label={panelExpanded ? "Collapse chat" : "Expand chat"}
+                    >
+                      {panelExpanded ? (
+                        <Minimize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
+                      ) : (
+                        <Maximize2 className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
+                      )}
+                    </button>
+                  </IconTooltip>
+                )}
+                {routeMode.showClose && (
+                  <IconTooltip label="Close Ask AI">
+                    <button
+                      onClick={closeAskAiPanel}
+                      className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
+                      aria-label="Close Ask AI"
+                    >
+                      <X className="h-[18px] w-[18px] text-[var(--color-text-muted)]" />
+                    </button>
+                  </IconTooltip>
+                )}
               </div>
             </div>
 
@@ -776,7 +810,7 @@ export function AskAiTrigger() {
             )}
 
             {/* Tab bar — non-expanded mode only */}
-            {!expanded && (
+            {!panelExpanded && (
               <div
                 className="flex shrink-0 border-b"
                 style={{ borderColor: "var(--color-border-default)" }}
@@ -800,7 +834,7 @@ export function AskAiTrigger() {
                   );
                 })}
                 {/* History toggle for expanded mode */}
-                {expanded && (
+                {panelExpanded && (
                   <IconTooltip label={showHistory ? "Close history" : "Show history"}>
                     <button
                       onClick={() => setShowHistory((v) => !v)}
@@ -820,7 +854,7 @@ export function AskAiTrigger() {
             )}
 
             {/* Non-expanded History tab content */}
-            {!expanded && showHistory ? (
+            {!panelExpanded && showHistory ? (
               <>
                 <div className="shrink-0 px-3 pb-2 pt-3">
                   <button
@@ -861,7 +895,7 @@ export function AskAiTrigger() {
                   className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
                 >
                   {messages.length === 0 && (
-                    <div className={`mx-auto w-full space-y-2.5 ${expanded ? "max-w-[80%]" : ""}`}>
+                    <div className={`mx-auto w-full space-y-2.5 ${panelExpanded ? "max-w-[80%]" : ""}`}>
                       {/* Finance expert ready card */}
                       <div
                         className="rounded-2xl border p-4"
@@ -875,9 +909,7 @@ export function AskAiTrigger() {
                           Finance expert ready
                         </div>
                         <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-                          {isDiagnosisRoute
-                            ? "Ask about the active model, selected Diagnosis cell, forecast scenario, source evidence, validation blockers, or next workflow action."
-                            : "Ask about uploaded PDFs, accepted cells, source-ingestion fields, or the screen you are reviewing."}
+                          {routeMode.emptyStateDescription}
                         </p>
                       </div>
                       {/* Suggestion pills */}
@@ -904,7 +936,7 @@ export function AskAiTrigger() {
                         <div key={m.id} className="mx-auto flex w-full max-w-[1180px] justify-end">
                           <div
                             className={`group flex flex-col items-end gap-1 ${
-                              expanded ? "max-w-[72%]" : "max-w-[86%]"
+                              panelExpanded ? "max-w-[72%]" : "max-w-[86%]"
                             }`}
                           >
                             <div
@@ -936,10 +968,10 @@ export function AskAiTrigger() {
                     }
                     if (m.kind === "text") {
                       return (
-                        <AiBubble key={m.id} copyText={m.text} expanded={expanded}>
+                        <AiBubble key={m.id} copyText={m.text} expanded={panelExpanded}>
                           <MarkdownContent
                             markdown={m.text}
-                            size={expanded ? "expanded" : "default"}
+                            size={panelExpanded ? "expanded" : "default"}
                           />
                         </AiBubble>
                       );
@@ -949,7 +981,7 @@ export function AskAiTrigger() {
                         <StreamingAiBubble
                           key={m.id}
                           message={m}
-                          expanded={expanded}
+                          expanded={panelExpanded}
                           projectId={activeProjectId}
                           onPreviewSource={setPreviewSource}
                           onPreviewExternalSource={setExternalPreviewSource}
@@ -978,7 +1010,7 @@ export function AskAiTrigger() {
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   />
-                  <div className={expanded ? "mx-auto max-w-[1180px]" : ""}>
+                  <div className={panelExpanded ? "mx-auto max-w-[1180px]" : ""}>
                     <div
                       className="rounded-2xl border bg-white p-2 shadow-[0_12px_34px_-24px_rgba(17,24,39,0.55)] focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[rgba(123,104,238,0.14)]"
                       style={{ borderColor: "var(--color-border-default)" }}
@@ -998,11 +1030,7 @@ export function AskAiTrigger() {
                             void send(input);
                           }
                         }}
-                        placeholder={
-                          isDiagnosisRoute
-                            ? "Ask about this model, a cell, or an assumption..."
-                            : "Ask about a PDF, cell, assumption, or source citation..."
-                        }
+                        placeholder={routeMode.placeholder}
                         rows={1}
                         className="max-h-[136px] min-h-11 w-full resize-none overflow-hidden bg-transparent px-2 py-2 text-[13px] leading-5 text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-placeholder)]"
                       />
@@ -1011,17 +1039,19 @@ export function AskAiTrigger() {
                         style={{ borderColor: "var(--color-border-default)" }}
                       >
                         <div className="flex items-center gap-1.5">
-                          <IconTooltip label="Attach PDF">
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              aria-label="Attach PDF"
-                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
-                              style={{ borderColor: "var(--color-border-default)" }}
-                            >
-                              <Paperclip className="h-4 w-4" />
-                            </button>
-                          </IconTooltip>
+                          {routeMode.showAttachment && (
+                            <IconTooltip label="Attach PDF">
+                              <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                aria-label="Attach PDF"
+                                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border text-[var(--color-text-secondary)] transition hover:bg-[var(--color-tag-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+                                style={{ borderColor: "var(--color-border-default)" }}
+                              >
+                                <Paperclip className="h-4 w-4" />
+                              </button>
+                            </IconTooltip>
+                          )}
                           <span className="hidden text-[11px] text-[var(--color-text-muted)] sm:inline">
                             Enter to send · Shift+Enter for new line
                           </span>
@@ -1055,13 +1085,13 @@ export function AskAiTrigger() {
 
       <CitationPreviewSidebar
         source={previewSource}
-        askAiExpanded={expanded}
+        askAiExpanded={panelExpanded}
         expandedLeft={expandedLeft}
         onClose={() => setPreviewSource(null)}
       />
       <ExternalSourcePreviewSidebar
         source={externalPreviewSource}
-        askAiExpanded={expanded}
+        askAiExpanded={panelExpanded}
         expandedLeft={expandedLeft}
         onClose={() => setExternalPreviewSource(null)}
       />
@@ -2556,6 +2586,10 @@ function StatusStream({ steps }: { steps: string[] }) {
 
 function screenNameForPath(path: string): string {
   const clean = path.replace(/^\/+/, "") || "Dashboard";
+  const labelByPath: Record<string, string> = {
+    inbox: "Analysis Requests",
+  };
+  if (labelByPath[clean]) return labelByPath[clean];
   return clean
     .split("-")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
