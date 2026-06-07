@@ -117,8 +117,9 @@ export interface AskAiChatMessageResponse {
 }
 
 export interface AskAiChatSessionSummary {
+  kind: "project" | "forecast";
   id: string;
-  projectId: string;
+  projectId: string | null;
   projectLabel: string | null;
   companyName: string | null;
   title: string | null;
