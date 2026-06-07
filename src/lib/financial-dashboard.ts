@@ -107,6 +107,20 @@ export interface SourceSyncStatus {
   lastSyncedLabel: string;
 }
 
+export interface ValuationDashboardChartPoint {
+  label: string;
+  value: number;
+  displayValue: string;
+}
+
+export interface ValuationDashboardChartSeries {
+  title: string;
+  kind: "bar" | "range" | "status";
+  source: DashboardSource;
+  unit?: string;
+  points: ValuationDashboardChartPoint[];
+}
+
 export function sectorOptions(companies: PsxCompany[]): DashboardOption[] {
   return [...new Set(companies.map((company) => company.sector).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right))
@@ -428,6 +442,103 @@ export function buildApprovedModelGraphPack({
   };
 }
 
+export function buildValuationDashboardChartSeries({
+  metrics,
+  sourceSyncSummary,
+  modelGraphPack,
+}: {
+  metrics: LiveMarketDashboardMetrics;
+  sourceSyncSummary: SourceSyncStatus[];
+  modelGraphPack: ApprovedModelGraphPack | null;
+}): ValuationDashboardChartSeries[] {
+  const lastPrice = numericFromDisplayValue(
+    metrics.cards.find((metric) => metric.label === "Last Price")?.value,
+  );
+  const low = numericFromDisplayValue(metrics.range.low);
+  const high = numericFromDisplayValue(metrics.range.high);
+  const volume = numericFromDisplayValue(metrics.cards.find((metric) => metric.label === "Volume")?.value);
+  const valueTraded = numericFromDisplayValue(
+    metrics.cards.find((metric) => metric.label === "Value Traded")?.value,
+  );
+  const marketCap = numericFromDisplayValue(metrics.cards.find((metric) => metric.label === "Market Cap")?.value);
+  const valuationPoints = metrics.valuation
+    .map((metric) => ({
+      label: metric.label,
+      value: numericFromDisplayValue(metric.value),
+      displayValue: metric.value,
+    }))
+    .filter((point): point is ValuationDashboardChartPoint => point.value !== null);
+
+  const series: ValuationDashboardChartSeries[] = [];
+  if (low !== null && lastPrice !== null && high !== null) {
+    series.push({
+      title: "Share Price Range",
+      kind: "range",
+      source: metrics.range.source,
+      unit: "PKR",
+      points: [
+        { label: "52W Low", value: low, displayValue: metrics.range.low },
+        { label: "Current", value: lastPrice, displayValue: `PKR ${lastPrice.toFixed(2)}` },
+        { label: "52W High", value: high, displayValue: metrics.range.high },
+      ],
+    });
+  }
+
+  if (valuationPoints.length >= 2) {
+    series.push({
+      title: "Valuation Multiples",
+      kind: "bar",
+      source: "AskAnalyst",
+      points: valuationPoints.slice(0, 4),
+    });
+  }
+
+  const scalePoints = [
+    volume === null ? null : { label: "Volume", value: volume, displayValue: "Volume" },
+    valueTraded === null ? null : { label: "Value Traded", value: valueTraded, displayValue: "Value traded" },
+    marketCap === null ? null : { label: "Market Cap", value: marketCap, displayValue: "Market cap" },
+  ].filter((point): point is ValuationDashboardChartPoint => point !== null);
+  if (scalePoints.length >= 2) {
+    series.push({
+      title: "Trading Scale",
+      kind: "bar",
+      source: "PSX",
+      points: scalePoints,
+    });
+  }
+
+  if (sourceSyncSummary.length >= 2) {
+    series.push({
+      title: "Source Readiness",
+      kind: "status",
+      source: "AskAnalyst",
+      points: sourceSyncSummary.map((item) => ({
+        label: item.source,
+        value: item.status === "synced" ? 100 : item.status === "pending" ? 50 : 0,
+        displayValue: item.lastSyncedLabel,
+      })),
+    });
+  }
+
+  const modelPoints = (modelGraphPack?.cards ?? [])
+    .map((card) => ({
+      label: card.title,
+      value: numericFromDisplayValue(card.value),
+      displayValue: card.value,
+    }))
+    .filter((point): point is ValuationDashboardChartPoint => point.value !== null);
+  if (modelPoints.length >= 2) {
+    series.push({
+      title: "Approved Model Snapshot",
+      kind: "bar",
+      source: "Approved Model",
+      points: modelPoints.slice(0, 5),
+    });
+  }
+
+  return series;
+}
+
 function modelSection(id: string, title: string): FinancialDashboardSection {
   return {
     id,
@@ -457,6 +568,21 @@ function compactNumber(value: number): string {
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}m`;
   if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
   return value.toLocaleString();
+}
+
+function numericFromDisplayValue(value?: string | null): number | null {
+  if (!value) return null;
+  const normalized = value.replace(/,/g, "").toLowerCase();
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  if (!Number.isFinite(parsed)) return null;
+  const unitMatch = normalized.match(/-?\d+(?:\.\d+)?\s*(bn|b|m|k)\b/);
+  const unit = unitMatch?.[1];
+  if (unit === "bn" || unit === "b") return parsed * 1_000_000_000;
+  if (unit === "m") return parsed * 1_000_000;
+  if (unit === "k") return parsed * 1_000;
+  return parsed;
 }
 
 function normalize(value: string): string {
