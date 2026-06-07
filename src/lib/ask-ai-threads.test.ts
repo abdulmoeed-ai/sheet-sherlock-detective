@@ -36,11 +36,23 @@ describe("askAiSessionToMessages", () => {
           screenName: "Diagnosis",
           citations: [{ index: 1, kind: "model" }],
           warnings: ["citation_limited"],
-          usage: { provider: "fake" },
+          usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64 },
           retrievalSnapshot: {
             sourcesUsed: [{ index: 1, kind: "model" }],
             modelCitations: [{ index: 1, kind: "model", cellReference: "BS!D42" }],
             sourceCitations: [],
+            forecastAnalysis: {
+              metric: "revenue",
+              forecastHorizon: 5,
+              historicalSeries: [
+                { period: "FY2025", value: 53.3, citationIndexes: [1], treatment: "included" },
+              ],
+              cagrResults: [],
+              scenarioTable: [],
+              forecastSets: [],
+              assumptions: [],
+              missingInputs: [],
+            },
             activityLog: [
               {
                 type: "status",
@@ -64,8 +76,20 @@ describe("askAiSessionToMessages", () => {
         answer: "Cash is missing [1].",
         sessionId: "chat-1",
         warnings: ["citation_limited"],
-        usage: { provider: "fake" },
+        usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64 },
         modelCitations: [{ index: 1, kind: "model", cellReference: "BS!D42" }],
+        forecastAnalysis: {
+          metric: "revenue",
+          forecastHorizon: 5,
+          historicalSeries: [
+            { period: "FY2025", value: 53.3, citationIndexes: [1], treatment: "included" },
+          ],
+          cagrResults: [],
+          scenarioTable: [],
+          forecastSets: [],
+          assumptions: [],
+          missingInputs: [],
+        },
       },
     });
   });

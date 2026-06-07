@@ -5,6 +5,7 @@ import {
   Sparkles,
   X,
   Send,
+  Square,
   Check,
   Loader2,
   ChevronDown,
@@ -67,8 +68,9 @@ import {
   type AskAiCitationPreview,
 } from "@/lib/ask-ai-citations";
 import { buildAskAiReasoningSummary } from "@/lib/ask-ai-reasoning";
-import { normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
+import { normalizeForecastAnalysis, normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
+import { markAskAiStreamStopped } from "@/lib/ask-ai-stop";
 import { clearLegacyAskAiChatHistoryStorage } from "@/lib/ask-ai-storage";
 import { askAiTokenUsageLabel } from "@/lib/ask-ai-usage";
 import { userFacingAskAiWarnings } from "@/lib/ask-ai-warnings";
@@ -79,6 +81,7 @@ import type { AskAiModelCandidate } from "@/lib/api/types";
 import type {
   AskAiClaimSourceGroup,
   AskAiFinalResponse,
+  AskAiForecastAnalysis,
   AskAiForecastVisuals,
   AskAiSourceEvent,
   AskAiStatusEvent,
@@ -137,14 +140,26 @@ export function AskAiTrigger() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
 
   const isDiagnosisRoute = routePath.startsWith("/diagnosis/");
   const suggestions = askAiSuggestionsForRoute(routePath);
 
-  const abortStream = () => {
+  const clearActiveStream = () => {
+    abortControllerRef.current = null;
     activeStreamIdRef.current = null;
+    setAsking(false);
+  };
+
+  const stopActiveStream = () => {
+    const streamId = activeStreamIdRef.current;
+    if (!streamId) return;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    activeStreamIdRef.current = null;
+    setMessages((messages) => markAskAiStreamStopped(messages, streamId));
     setAsking(false);
   };
 
@@ -161,7 +176,7 @@ export function AskAiTrigger() {
     textarea.style.overflowY = layout.overflowY;
   }, [input, open]);
 
-  useEffect(() => () => abortStream(), []);
+  useEffect(() => () => clearActiveStream(), []);
 
   useEffect(() => {
     clearLegacyAskAiChatHistoryStorage();
@@ -320,7 +335,8 @@ export function AskAiTrigger() {
 
   const send = async (text: string) => {
     if (!text.trim()) return;
-    abortStream();
+    if (asking) return;
+    clearActiveStream();
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -444,6 +460,8 @@ export function AskAiTrigger() {
 
     setAsking(true);
     const aiId = `a-${Date.now()}`;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     activeStreamIdRef.current = aiId;
     setMessages((m) => [
       ...m,
@@ -491,7 +509,7 @@ export function AskAiTrigger() {
             updateStreamMessage(aiId, { type: "error", message: event.message });
           },
         },
-        { projectIdOverride: modelOverride?.id },
+        { projectIdOverride: modelOverride?.id, signal: abortController.signal },
       );
       if (!final && !streamError && activeStreamIdRef.current === aiId) {
         updateStreamMessage(aiId, {
@@ -500,6 +518,9 @@ export function AskAiTrigger() {
         });
       }
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       if (activeStreamIdRef.current === aiId) {
         activeStreamIdRef.current = null;
         setAsking(false);
@@ -1005,17 +1026,17 @@ export function AskAiTrigger() {
                             Enter to send · Shift+Enter for new line
                           </span>
                         </div>
-                        <IconTooltip label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}>
+                        <IconTooltip label={asking ? "Stop Ask AI response" : "Send Ask AI prompt"}>
                           <button
                             type="button"
-                            onClick={() => void send(input)}
-                            disabled={!input.trim() || asking}
+                            onClick={asking ? stopActiveStream : () => void send(input)}
+                            disabled={!asking && !input.trim()}
                             className="flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg px-2 text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:ring-offset-2"
                             style={{ background: "var(--color-brand)" }}
-                            aria-label={asking ? "Ask AI is answering" : "Send Ask AI prompt"}
+                            aria-label={asking ? "Stop Ask AI response" : "Send Ask AI prompt"}
                           >
                             {asking ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Square className="h-3.5 w-3.5 fill-current" />
                             ) : (
                               <Send className="h-4 w-4" />
                             )}
@@ -1380,6 +1401,7 @@ function StreamingAiBubble({
     requestMode: message.final?.requestMode,
   });
   const forecastVisuals = normalizeForecastVisuals(message.final?.forecastVisuals);
+  const forecastAnalysis = normalizeForecastAnalysis(message.final?.forecastAnalysis);
   const claimSourceGroups = message.final?.claimSourceGroups ?? [];
   const reasoning = buildAskAiReasoningSummary({
     activity: message.activity,
@@ -1422,6 +1444,7 @@ function StreamingAiBubble({
         </div>
 
         <CurrentEventPanel summary={reasoning} message={message} />
+        {forecastAnalysis && <ForecastAnalysisPanel analysis={forecastAnalysis} />}
         {forecastVisuals && <ForecastSnapshot visuals={forecastVisuals} />}
         {message.error ? (
           <div
@@ -1756,6 +1779,172 @@ function citationSubline(citation: Record<string, unknown>): string {
 
 // ─── Forecast snapshot ───────────────────────────────────────────────────────
 
+function ForecastAnalysisPanel({ analysis }: { analysis: AskAiForecastAnalysis }) {
+  const scenarioPeriods = Array.from(
+    new Set(analysis.scenarioTable.flatMap((row) => Object.keys(row.values))),
+  ).slice(0, 6);
+  return (
+    <section
+      className="min-w-0 overflow-hidden rounded-xl border bg-white"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <div
+        className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5"
+        style={{ borderColor: "var(--color-border-default)", background: "#F8FAFC" }}
+      >
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold text-[var(--color-text-primary)]">
+            Forecast analysis
+          </div>
+          <div className="truncate text-[10px] text-[var(--color-text-muted)]">
+            {[analysis.metric, analysis.unit, analysis.mode].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        {analysis.forecastHorizon && (
+          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
+            {analysis.forecastHorizon} year horizon
+          </span>
+        )}
+      </div>
+      <div className="space-y-3 p-3">
+        {analysis.historicalSeries.length > 0 && (
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[440px] border-separate border-spacing-0 text-left text-[11px]">
+              <thead className="text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                <tr>
+                  <th className="border-b px-2 py-1.5 font-semibold">Period</th>
+                  <th className="border-b px-2 py-1.5 text-right font-semibold">Value</th>
+                  <th className="border-b px-2 py-1.5 font-semibold">Treatment</th>
+                  <th className="border-b px-2 py-1.5 font-semibold">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.historicalSeries.slice(0, 8).map((item) => (
+                  <tr key={`${item.period}-${item.treatment}`}>
+                    <td className="border-b px-2 py-1.5 font-medium text-[var(--color-text-primary)]">
+                      {item.period}
+                    </td>
+                    <td className="border-b px-2 py-1.5 text-right tabular-nums">
+                      {formatForecastValue(item.value)}
+                    </td>
+                    <td className="border-b px-2 py-1.5">
+                      <span
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          background:
+                            item.treatment === "excluded"
+                              ? "var(--color-warning-bg)"
+                              : "var(--color-success-bg)",
+                          color:
+                            item.treatment === "excluded"
+                              ? "var(--color-warning-fg)"
+                              : "var(--color-success-fg)",
+                        }}
+                      >
+                        {item.treatment}
+                      </span>
+                    </td>
+                    <td className="max-w-[220px] border-b px-2 py-1.5 text-[var(--color-text-secondary)]">
+                      <span className="line-clamp-2">{item.reason ?? ""}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(analysis.cagrResults.length > 0 || analysis.normalizedBase) && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {analysis.cagrResults.slice(0, 4).map((result) => (
+              <div
+                key={`${result.label}-${result.basis}`}
+                className="rounded-lg border px-2.5 py-2"
+                style={{ borderColor: "var(--color-border-default)", background: "#FAFBFF" }}
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                  {result.basis}
+                </div>
+                <div className="mt-1 text-[14px] font-semibold text-[var(--color-text-primary)]">
+                  {formatPercent(result.value)}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+                  {result.startPeriod} to {result.endPeriod}
+                </div>
+              </div>
+            ))}
+            {analysis.normalizedBase && (
+              <div
+                className="rounded-lg border px-2.5 py-2"
+                style={{ borderColor: "var(--color-border-default)", background: "#FAFBFF" }}
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                  Normalized base
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                  {typeof analysis.normalizedBase.mean === "number" && (
+                    <span>Mean {formatForecastValue(analysis.normalizedBase.mean)}</span>
+                  )}
+                  {typeof analysis.normalizedBase.median === "number" && (
+                    <span>Median {formatForecastValue(analysis.normalizedBase.median)}</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {analysis.scenarioTable.length > 0 && (
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[420px] border-separate border-spacing-0 text-left text-[11px]">
+              <thead className="text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                <tr>
+                  <th className="border-b px-2 py-1.5 font-semibold">Scenario</th>
+                  {scenarioPeriods.map((period) => (
+                    <th key={period} className="border-b px-2 py-1.5 text-right font-semibold">
+                      {period}
+                    </th>
+                  ))}
+                  <th className="border-b px-2 py-1.5 font-semibold">Basis</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.scenarioTable.slice(0, 3).map((row) => (
+                  <tr key={row.scenario}>
+                    <td className="border-b px-2 py-1.5 font-semibold text-[var(--color-text-primary)]">
+                      {row.scenario}
+                    </td>
+                    {scenarioPeriods.map((period) => (
+                      <td
+                        key={`${row.scenario}-${period}`}
+                        className="border-b px-2 py-1.5 text-right tabular-nums"
+                      >
+                        {formatScenarioValue(row.values[period])}
+                      </td>
+                    ))}
+                    <td className="max-w-[220px] border-b px-2 py-1.5 text-[var(--color-text-secondary)]">
+                      <span className="line-clamp-2">{row.basis}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {analysis.missingInputs.length > 0 && (
+          <div
+            className="rounded-lg px-2.5 py-2 text-[11px]"
+            style={{ background: "var(--color-warning-bg)", color: "var(--color-warning-fg)" }}
+          >
+            Missing inputs: {analysis.missingInputs.join(", ")}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ForecastSnapshot({ visuals }: { visuals: AskAiForecastVisuals }) {
   const charts = visuals.chartSeries.slice(0, 4);
   return (
@@ -1912,6 +2101,20 @@ function formatClaimId(value: string): string {
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+function formatForecastValue(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatScenarioValue(value: number | string | undefined): string {
+  if (typeof value === "number") return formatForecastValue(value);
+  if (typeof value === "string" && value.trim()) return value;
+  return "-";
 }
 
 function InlineCitationBadge({

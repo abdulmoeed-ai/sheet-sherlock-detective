@@ -28,6 +28,63 @@ export type AskAiClaimSourceGroup = {
   citationIndexes: number[];
 };
 
+export type AskAiForecastHistoricalSeriesItem = {
+  period: string;
+  value: number;
+  citationIndexes: number[];
+  treatment: "included" | "excluded" | "review";
+  reason?: string;
+};
+
+export type AskAiForecastCagrResult = {
+  label: string;
+  startPeriod: string;
+  endPeriod: string;
+  value: number;
+  basis: "reported" | "normalized" | "trendline" | "volume" | "nominal" | string;
+};
+
+export type AskAiForecastNormalizedBase = {
+  mean?: number;
+  median?: number;
+  selectedValue?: number;
+  citationIndexes: number[];
+};
+
+export type AskAiForecastScenarioRow = {
+  scenario: string;
+  values: Record<string, number | string>;
+  basis: string;
+  citationIndexes: number[];
+};
+
+export type AskAiForecastSet = {
+  kind: "trend_only" | "cycle_recovery" | string;
+  points: Record<string, number>;
+  basis: string;
+};
+
+export type AskAiForecastAssumption = {
+  label: string;
+  value: string;
+  scenario?: string;
+  citationIndexes: number[];
+};
+
+export type AskAiForecastAnalysis = {
+  mode?: string;
+  metric?: string;
+  unit?: string;
+  forecastHorizon?: number;
+  historicalSeries: AskAiForecastHistoricalSeriesItem[];
+  cagrResults: AskAiForecastCagrResult[];
+  normalizedBase?: AskAiForecastNormalizedBase;
+  scenarioTable: AskAiForecastScenarioRow[];
+  forecastSets: AskAiForecastSet[];
+  assumptions: AskAiForecastAssumption[];
+  missingInputs: string[];
+};
+
 export type AskAiFinalResponse = {
   answer: string;
   sessionId?: string | null;
@@ -39,6 +96,7 @@ export type AskAiFinalResponse = {
   usage: Record<string, unknown>;
   activityLog?: Array<Record<string, unknown>>;
   forecastVisuals?: AskAiForecastVisuals | null;
+  forecastAnalysis?: AskAiForecastAnalysis | null;
   claimSourceGroups?: AskAiClaimSourceGroup[];
   tavilyQuestions?: string[];
 };
