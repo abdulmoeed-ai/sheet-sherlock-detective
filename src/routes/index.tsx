@@ -69,6 +69,11 @@ import { SECTOR_PACKS } from "@/lib/sector-packs";
 import { cycleStore } from "@/lib/cycle-store";
 import { templateForSector } from "@/lib/sector-template";
 import {
+  dashboardProjectStatusLabel,
+  dashboardProjectStatusTone,
+  isFinalApprovedStatus,
+} from "@/lib/project-status-workflow";
+import {
   companyIntelligenceFromAskAnalyst,
   getMockCompanyIntelligence,
   type CompanyIntelligence,
@@ -129,40 +134,6 @@ const blankRequest: AnalysisRequestCreateInput = {
   dueDate: "",
   note: "",
 };
-
-const managerApprovedStatuses = new Set(["cfo_review", "approved"]);
-
-function dashboardProjectStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    draft: "Draft",
-    setup: "Draft",
-    created: "Draft",
-    documents_uploaded: "Documents Uploaded",
-    extracting: "Extraction in Progress",
-    extraction_failed: "Extraction Failed",
-    awaiting_review: "Ready for Review",
-    ready_for_diagnosis: "Ready for Diagnosis",
-    in_diagnosis: "In Diagnosis",
-    manager_review: "Manager Review",
-    manager_changes_requested: "Manager Changes Requested",
-    cfo_review: "Manager Approved",
-    approved: "Approved",
-    cfo_changes_requested: "CFO Changes Requested",
-  };
-  return labels[status] ?? status.toUpperCase().replace(/_/g, " ");
-}
-
-function dashboardProjectStatusTone(
-  status: string,
-): "neutral" | "success" | "danger" | "warning" | "info" | "ai" {
-  if (status === "approved" || status === "cfo_review") return "success";
-  if (status.includes("failed") || status.includes("changes_requested")) return "danger";
-  if (status === "extracting" || status.includes("review") || status.includes("diagnosis")) {
-    return "info";
-  }
-  if (status === "documents_uploaded") return "ai";
-  return "warning";
-}
 
 function formatProjectDate(value: string): string {
   const date = new Date(value);
@@ -347,7 +318,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
   const projectList = useMemo(() => projects.data ?? [], [projects.data]);
   const approvedWorkbookCount = projectList.filter((project) =>
-    managerApprovedStatuses.has(project.status),
+    isFinalApprovedStatus(project.status),
   ).length;
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
@@ -561,7 +532,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                       key={project.id}
                       onClick={() => {
                         setSelectedProjectId(project.id);
-                        navigate({ to: role === "cfo" ? "/sign-off" : "/registry" });
+                        navigate({ to: "/registry" });
                       }}
                       className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
                       style={{ borderColor: "var(--color-border-default)" }}

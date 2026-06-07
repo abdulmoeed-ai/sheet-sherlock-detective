@@ -10,6 +10,12 @@ import { listComments, readLatestExecutiveBrief } from "@/lib/api/projects";
 import type { ReviewCommentResponse, WorkspaceResponse } from "@/lib/api/types";
 import { auditRows, dashboardMetrics } from "@/lib/mappers/workspace";
 import {
+  managerApprovalButtonLabel,
+  managerReviewSubtitle,
+  managerReviewVersionLockMessage,
+  routeAfterManagerApproval,
+} from "@/lib/manager-review-workflow";
+import {
   useCreateComment,
   useDeleteComment,
   useManagerDecision,
@@ -235,17 +241,16 @@ function Review() {
     await managerDecision.mutateAsync({ action: "approve", note: draft.trim() || null });
     cycleStore.setStatus("approved");
     await brief.refetch();
-    navigate({ to: "/sign-off" });
+    const nextRoute = routeAfterManagerApproval();
+    if (nextRoute) {
+      navigate({ to: nextRoute });
+    }
   };
 
   return (
     <PageShell
       title={`Manager Review · ${project?.companyName || cycle.company || "MTL"} ${project?.fiscalYear || cycle.period || "FY2025"}`}
-      subtitle={
-        projectId
-          ? "Structured review pack from the backend workspace. Approve to forward to CFO sign-off, or send back with comments."
-          : "Select a project before reviewing the manager pack."
-      }
+      subtitle={managerReviewSubtitle(Boolean(projectId))}
       hideProgress
       actions={
         <>
@@ -263,7 +268,7 @@ function Review() {
             ) : (
               <CheckCircle2 className="h-4 w-4" />
             )}{" "}
-            Approve & forward to CFO
+            {managerApprovalButtonLabel()}
           </Button>
         </>
       }
@@ -565,7 +570,7 @@ function Review() {
 
           <div className="mt-5 flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
             <FileCheck className="h-4 w-4" />
-            This pack is version-locked. CFO will sign off on the exact version you approve.
+            {managerReviewVersionLockMessage()}
           </div>
         </>
       )}

@@ -404,7 +404,7 @@ function modelSection(id: string, title: string): FinancialDashboardSection {
     id,
     title,
     source: "Approved Model",
-    description: "Generated from reviewed and CFO-approved workbook data.",
+    description: "Generated from reviewed and Manager-approved workbook data.",
   };
 }
 

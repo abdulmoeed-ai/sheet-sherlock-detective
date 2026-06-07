@@ -12,6 +12,11 @@ import { setSelectedProjectId } from "@/lib/project-store";
 import { cycleStore } from "@/lib/cycle-store";
 import { paginateItems } from "@/lib/pagination";
 import { templateForSector } from "@/lib/sector-template";
+import {
+  isActiveProjectStatus,
+  projectStatusLabel,
+  projectStatusTone,
+} from "@/lib/project-status-workflow";
 import type { ProjectResponse } from "@/lib/api/types";
 
 const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
@@ -41,68 +46,8 @@ function completeness(project: ProjectResponse) {
   return Math.round((reviewed / total) * 100);
 }
 
-// Projects the analyst can still act on (not yet submitted to manager/CFO/approved)
-const ACTIVE_STATUSES = new Set([
-  "draft",
-  "setup",
-  "created",
-  "documents_uploaded",
-  "extracting",
-  "extraction_failed",
-  "ready_for_diagnosis",
-  "in_diagnosis",
-  "awaiting_review",
-  "manager_changes_requested",
-  "cfo_changes_requested",
-]);
-
-function isActive(status: string) {
-  return ACTIVE_STATUSES.has(status);
-}
-
-function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    draft: "Draft",
-    setup: "Draft",
-    created: "Draft",
-    documents_uploaded: "Documents Uploaded",
-    extracting: "Extracting",
-    extraction_failed: "Extraction Failed",
-    ready_for_diagnosis: "Ready for Diagnosis",
-    in_diagnosis: "In Diagnosis",
-    awaiting_review: "Ready for Diagnosis",
-    manager_changes_requested: "Manager Changes Requested",
-    manager_review: "Submitted to Manager",
-    cfo_review: "CFO Review",
-    cfo_changes_requested: "CFO Changes Requested",
-    approved: "Approved",
-  };
-  return map[status] ?? status.toUpperCase().replace(/_/g, " ");
-}
-
-function statusTone(status: string): "success" | "warning" | "info" | "neutral" {
-  if (status === "approved") return "success";
-  if (status === "extraction_failed") return "warning";
-  if (
-    status === "draft" ||
-    status === "setup" ||
-    status === "created" ||
-    status === "documents_uploaded"
-  )
-    return "info";
-  if (
-    status.includes("review") ||
-    status === "ready_for_diagnosis" ||
-    status === "in_diagnosis" ||
-    status === "manager_changes_requested" ||
-    status === "cfo_changes_requested"
-  )
-    return "warning";
-  return "neutral";
-}
-
 function StatusBadge({ status }: { status: string }) {
-  return <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>;
+  return <Badge tone={projectStatusTone(status)}>{projectStatusLabel(status)}</Badge>;
 }
 
 function Registry() {
@@ -158,7 +103,7 @@ function Registry() {
   );
 
   // Active = analyst can still act on it (not yet in manager/CFO review or approved)
-  const activeProject = fyProjects.find((p) => isActive(p.status));
+  const activeProject = fyProjects.find((p) => isActiveProjectStatus(p.status));
 
   // ── New version ───────────────────────────────────────────────────────────
   const handleNewVersion = async () => {

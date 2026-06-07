@@ -14,10 +14,8 @@ import {
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
-  Presentation,
   Reply,
   RotateCcw,
-  Save,
   Send,
   Stethoscope,
   Trash2,
@@ -47,6 +45,7 @@ import {
   readMappingRules,
   readWorkbookCellHistory,
   readWorkspace,
+  submitForManagerReview as submitProjectForManagerReview,
 } from "@/lib/api/projects";
 import type {
   DocumentResponse,
@@ -114,6 +113,15 @@ import {
   workbookDraftSaveSnapshot,
 } from "@/lib/diagnosis-draft";
 import {
+  canSubmitDiagnosisForManagerReview,
+  diagnosisManagerSubmitBlockedReason,
+  diagnosisManagerSubmitButtonLabel,
+} from "@/lib/diagnosis-submit-workflow";
+import {
+  draftManagerReviewSuccessMessage,
+  draftManagerReviewTarget,
+} from "@/lib/diagnosis-draft-manager-review";
+import {
   ADD_DOCUMENTS_RERUN_DISCLOSURE,
   buildBaselineRefreshSummary,
   buildDiagnosisDocumentSelection,
@@ -135,9 +143,7 @@ import {
   useUploadDocuments,
   useCreateComment,
   useCreateExcelExport,
-  useCreateValuationPresentation,
   useDownloadExcelExport,
-  useDownloadValuationPresentation,
   useReopenComment,
   useRevertReviewCell,
   useRevertWorkbookCell,
@@ -188,8 +194,6 @@ function Diagnosis() {
   const reopenComment = useReopenComment(projectId);
   const createExport = useCreateExcelExport(projectId);
   const downloadExport = useDownloadExcelExport(projectId);
-  const createValuationExport = useCreateValuationPresentation(projectId);
-  const downloadValuationExport = useDownloadValuationPresentation(projectId);
   const uploadDocuments = useUploadDocuments(projectId);
   const startExtraction = useStartExtraction(projectId);
   const comments = useQuery({
@@ -213,6 +217,7 @@ function Diagnosis() {
   const draftWorkbookRef = useRef<EditorWorkbookPayload | null>(null);
   const [pendingWorkbookEditCount, setPendingWorkbookEditCount] = useState(0);
   const [savingProjectVersion, setSavingProjectVersion] = useState(false);
+  const [submittingDraftToManager, setSubmittingDraftToManager] = useState(false);
   const [savedDraftVersion, setSavedDraftVersion] = useState<{
     id: string;
     label: string | null;
@@ -309,9 +314,14 @@ function Diagnosis() {
   const baselineRefreshLocked = isDiagnosisBaselineRefreshLocked(workspace.data?.project.status);
   const draftSaveLabel = diagnosisDraftSaveLabel({
     dirty,
-    saving: savingProjectVersion,
+    saving: savingProjectVersion || submittingDraftToManager,
     savedVersionLabel: savedDraftVersion?.label,
   });
+  const managerHandoffPending =
+    reviewCell.isPending ||
+    createComment.isPending ||
+    savingProjectVersion ||
+    submittingDraftToManager;
 
   useEffect(() => {
     draftWorkbookRef.current = null;
@@ -388,9 +398,14 @@ function Diagnosis() {
     }
   };
 
-  const saveDraft = async () => {
-    if (!projectId) return;
+  const saveAndSubmitToManager = async () => {
+    const blockedReason = diagnosisManagerSubmitBlockedReason({ projectId });
+    if (blockedReason) {
+      toast.error(blockedReason);
+      return;
+    }
     const fieldId = selectedMeta?.fieldId;
+    let reviewTarget = draftManagerReviewTarget({ currentProjectId: projectId });
     try {
       if (pendingWorkbookEditCount > 0 && workbook) {
         setSavingProjectVersion(true);
@@ -404,10 +419,12 @@ function Diagnosis() {
         draftWorkbookRef.current = null;
         setPendingWorkbookEditCount(0);
         setSavedDraftVersion({ id: nextProject.id, label: nextProject.projectLabel ?? null });
-        toast.success(`Draft saved as ${nextProject.projectLabel ?? "a new version"}`);
-        return;
+        reviewTarget = draftManagerReviewTarget({
+          currentProjectId: projectId,
+          savedVersionId: nextProject.id,
+        });
       }
-      if (draftValue.trim() && fieldId) {
+      if (pendingWorkbookEditCount === 0 && draftValue.trim() && fieldId) {
         const optimisticUpdate = buildOptimisticCellUpdate({
           fieldId,
           draftValue: draftValue.trim(),
@@ -427,14 +444,28 @@ function Diagnosis() {
       }
       setDraftValue("");
       await workspace.refetch();
-      toast.success("Draft saved");
+      if (!reviewTarget) {
+        toast.error("Open a workbook version before submitting for Manager review.");
+        return;
+      }
+      setSubmittingDraftToManager(true);
+      const response = await submitProjectForManagerReview(
+        reviewTarget.projectId,
+        "Draft saved and ready for Manager review.",
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(reviewTarget.projectId) });
+      cycleStore.setStatus("review");
+      toast.success(response.message || draftManagerReviewSuccessMessage(reviewTarget));
+      navigate({ to: "/review" });
     } catch (error) {
       if (fieldId) {
         setOptimisticCells((updates) => removeOptimisticCell(updates, fieldId));
       }
-      toast.error(error instanceof Error ? error.message : "Unable to save draft");
+      toast.error(error instanceof Error ? error.message : "Unable to save and submit draft");
     } finally {
       setSavingProjectVersion(false);
+      setSubmittingDraftToManager(false);
     }
   };
 
@@ -541,38 +572,6 @@ function Diagnosis() {
     }
   };
 
-  const exportValuationPPT = async () => {
-    if (!projectId) return;
-    try {
-      const created = await createValuationExport.mutateAsync();
-      if (created.warnings?.length) {
-        const isDetministic = created.generatedBy === "deterministic";
-        toast.info(
-          isDetministic
-            ? "Presentation generated using deterministic fallback (LLM unavailable)."
-            : "Presentation generated with warnings.",
-        );
-      }
-      const blob = await downloadValuationExport.mutateAsync(created.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(cycle?.company ?? "Company").replace(/\s+/g, "_")}_Valuation.pptx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("Valuation presentation downloaded.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "PPT generation failed.");
-    }
-  };
-
-  const markReady = () => {
-    cycleStore.setStatus("review");
-    toast.success("Diagnosis marked ready for review");
-    navigate({ to: "/review" });
-  };
   const openAddDocuments = () => {
     if (!canStartDiagnosisBaselineRefresh({ locked: baselineRefreshLocked, dirty, projectId })) {
       if (baselineRefreshLocked) {
@@ -858,7 +857,7 @@ function Diagnosis() {
             </button>
             <button
               onClick={openAddDocuments}
-              disabled={!projectId || baselineRefreshLocked || dirty}
+              disabled={!projectId || baselineRefreshLocked || dirty || managerHandoffPending}
               className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
               style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
             >
@@ -878,55 +877,29 @@ function Diagnosis() {
               )}
               Export to Excel
             </button>
-            <button
-              onClick={exportValuationPPT}
-              disabled={
-                !projectId ||
-                createValuationExport.isPending ||
-                downloadValuationExport.isPending
-              }
-              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
-              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-            >
-              {createValuationExport.isPending || downloadValuationExport.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Presentation className="h-3.5 w-3.5" />
-              )}
-              {createValuationExport.isPending
-                ? "Generating…"
-                : downloadValuationExport.isPending
-                  ? "Downloading…"
-                  : "Valuation PPT"}
-            </button>
             <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
               {draftSaveLabel}
             </span>
             <button
-              onClick={saveDraft}
+              onClick={saveAndSubmitToManager}
               disabled={
-                !projectId ||
-                !dirty ||
-                reviewCell.isPending ||
-                createComment.isPending ||
-                savingProjectVersion
+                !canSubmitDiagnosisForManagerReview({
+                  projectId,
+                  pending: managerHandoffPending,
+                })
               }
-              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
-              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-            >
-              {reviewCell.isPending || createComment.isPending || savingProjectVersion ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              Save draft
-            </button>
-            <button
-              onClick={markReady}
-              className="h-7 rounded-md px-3.5 text-[12px] font-semibold text-white"
+              className="flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold text-white disabled:opacity-50"
               style={{ background: "#7B68EE" }}
             >
-              Mark ready
+              {managerHandoffPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="h-3.5 w-3.5" />
+              )}
+              {diagnosisManagerSubmitButtonLabel({
+                dirty,
+                pending: managerHandoffPending,
+              })}
             </button>
           </div>
         </div>
