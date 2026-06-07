@@ -10,7 +10,6 @@ import {
   GitBranch,
   KeyRound,
   ClipboardCheck,
-  Lock,
   ChevronDown,
   LogOut,
 } from "lucide-react";
@@ -43,7 +42,6 @@ const nav = [
   },
   { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
   { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
-  { to: "/sign-off", label: "CFO Sign-Off", icon: Lock, roles: ["cfo"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
   {
     to: "/audit",

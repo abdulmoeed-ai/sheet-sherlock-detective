@@ -24,7 +24,7 @@ export function roleLabel(role: BackendRole): string {
 export function defaultRouteForRole(role: BackendRole): string {
   if (role === "finance_analyst") return "/inbox";
   if (role === "finance_manager") return "/";
-  if (role === "cfo") return "/sign-off";
+  if (role === "cfo") return "/";
   return "/sources";
 }
 
@@ -36,7 +36,6 @@ const routeRoles: Record<string, BackendRole[]> = {
   "/forecast": ["finance_analyst"],
   "/assumptions": ["finance_analyst"],
   "/review": ["finance_manager"],
-  "/sign-off": ["cfo"],
   "/protection": ["admin"],
   "/notifications": ["finance_analyst", "finance_manager", "cfo", "admin"],
   "/audit": ["finance_analyst", "finance_manager", "cfo", "admin"],
