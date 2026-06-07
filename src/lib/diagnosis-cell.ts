@@ -35,6 +35,9 @@ export type TermStandardizationMetadata = {
   riskFlags?: unknown;
   provider?: unknown;
   model?: unknown;
+  mappingRules?: unknown;
+  mappingRuleCautionIds?: unknown;
+  competingSourceValues?: unknown;
 };
 
 export function diagnosisCellTone({
@@ -134,6 +137,9 @@ export function workbookRevisionHistoryEntry(revision: {
 }
 
 export function warningDetails(warning: string) {
+  const mappingRule = mappingRuleWarningDetails(warning);
+  if (mappingRule) return mappingRule;
+
   if (warning === "llm.accepted_after_validation") {
     return {
       label: "AI accepted after validation",
@@ -233,6 +239,13 @@ export function formatTermStandardization(review?: TermStandardizationMetadata |
   const riskFlags = Array.isArray(review.riskFlags)
     ? review.riskFlags.map((flag) => String(flag)).filter(Boolean)
     : [];
+  const mappingRules = formatMappingRules(review.mappingRules);
+  const mappingRuleCautionIds = Array.isArray(review.mappingRuleCautionIds)
+    ? review.mappingRuleCautionIds.map((rule) => String(rule)).filter(Boolean)
+    : [];
+  const competingSourceValues = Array.isArray(review.competingSourceValues)
+    ? review.competingSourceValues.filter(isRecord)
+    : [];
   return {
     decision: stringValue(review.decision, "-"),
     validationStatus: stringValue(review.validationStatus, "-"),
@@ -244,6 +257,9 @@ export function formatTermStandardization(review?: TermStandardizationMetadata |
     provider: stringValue(review.provider, "-"),
     model: stringValue(review.model, "-"),
     riskFlags,
+    mappingRules,
+    mappingRuleCautionIds,
+    competingSourceValues,
   };
 }
 
@@ -281,6 +297,16 @@ export function ruleTooltipDetails(
     description: stringValue(rule.description, "No rule description available."),
     missing: false,
   };
+}
+
+export function formatMappingRules(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).map((rule) => ({
+    ruleCode: stringValue(rule.ruleCode, "-"),
+    status: stringValue(rule.status, "-"),
+    severity: stringValue(rule.severity, "-"),
+    message: stringValue(rule.message, "-"),
+  }));
 }
 
 export function orderedHistoryEntries<T extends Record<string, unknown>>(entries: T[]): T[] {
@@ -375,6 +401,40 @@ function readableHistoryValue(value: unknown): string {
 function stringValue(value: unknown, fallback: string): string {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
+}
+
+function mappingRuleWarningDetails(warning: string) {
+  const match = /^mapping_rule\.([A-Z0-9_]+)\.(warning|failed|blocked)$/i.exec(warning);
+  if (!match) return null;
+  const code = match[1].toUpperCase();
+  const status = match[2].toLowerCase();
+  const labelByCode: Record<string, string> = {
+    B4: "Blank needs review",
+    B5: "Nil confirmed as zero",
+    B6: "Narrative number",
+    C3: "Movement schedule caution",
+    D2: "Subtotal caution",
+    MULTI_SOURCE: "Multiple source files",
+  };
+  const descriptionByCode: Record<string, string> = {
+    B4: "A blank cell is not treated as zero. Review the source before accepting the value.",
+    B5: "The source used Nil as a confirmed zero. Review if this treatment is appropriate for the model.",
+    B6: "The value may come from narrative text rather than a structured financial table.",
+    C3: "A movement schedule component was mapped. Confirm whether this should feed the cell or only the closing balance should be used.",
+    D2: "A subtotal or formula-derived row was detected. Confirm this is not duplicating a workbook formula.",
+    MULTI_SOURCE: "Multiple uploaded files produced values for the same cell. The selected source should be reviewed against alternatives.",
+  };
+  return {
+    label: labelByCode[code] ?? `Mapping rule ${code}`,
+    description:
+      descriptionByCode[code] ??
+      `Mapping rule ${code} produced a ${status} caution. Review the source evidence before sign-off.`,
+    actionable: true,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function humanizeKey(value: string): string {

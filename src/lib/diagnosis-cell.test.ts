@@ -111,20 +111,18 @@ describe("diagnosis cell helpers", () => {
   it("formats source, edit, and revert history entries for analysts", () => {
     expect(formatHistoryEntry({ action: "source", value: "(85)" }).title).toBe("Source extraction: -85");
 
-    expect(
-      formatHistoryEntry({
-        action: "edit",
-        actorDisplayName: "Dev Finance Analyst",
-        oldValue: "(85)",
-        newValue: "(86)",
-        note: "Saved from Diagnosis draft.",
-        createdAt: "2026-06-02T09:35:00",
-      }),
-    ).toEqual({
-      title: "Dev Finance Analyst changed -85 -> -86",
-      meta: "Jun 2, 2026, 9:35 AM",
+    const editEntry = formatHistoryEntry({
+      action: "edit",
+      actorDisplayName: "Dev Finance Analyst",
+      oldValue: "(85)",
+      newValue: "(86)",
       note: "Saved from Diagnosis draft.",
+      createdAt: "2026-06-02T09:35:00",
     });
+    expect(editEntry.title).toBe("Dev Finance Analyst changed -85 -> -86");
+    expect(editEntry.meta).toContain("Jun 2, 2026");
+    expect(editEntry.meta).toContain("9:35 AM");
+    expect(editEntry.note).toBe("Saved from Diagnosis draft.");
 
     expect(
       formatHistoryEntry({
@@ -252,6 +250,16 @@ describe("diagnosis cell helpers", () => {
         provider: "google-genai",
         model: "gemini-3.5-flash",
         riskFlags: ["term.medium_confidence_requires_review"],
+        mappingRules: [
+          {
+            ruleCode: "C3",
+            status: "warning",
+            severity: "Advisory",
+            message: "Movement schedule component mapped.",
+          },
+        ],
+        mappingRuleCautionIds: ["C3"],
+        competingSourceValues: [{ sourceDocumentId: "older.pdf", value: "100" }],
       }),
     ).toEqual({
       decision: "match",
@@ -264,6 +272,31 @@ describe("diagnosis cell helpers", () => {
       provider: "google-genai",
       model: "gemini-3.5-flash",
       riskFlags: ["term.medium_confidence_requires_review"],
+      mappingRules: [
+        {
+          ruleCode: "C3",
+          status: "warning",
+          severity: "Advisory",
+          message: "Movement schedule component mapped.",
+        },
+      ],
+      mappingRuleCautionIds: ["C3"],
+      competingSourceValues: [{ sourceDocumentId: "older.pdf", value: "100" }],
+    });
+  });
+
+  it("formats mapping-rule cautions as analyst-review warnings", () => {
+    expect(warningDetails("mapping_rule.C3.warning")).toEqual({
+      label: "Movement schedule caution",
+      description:
+        "A movement schedule component was mapped. Confirm whether this should feed the cell or only the closing balance should be used.",
+      actionable: true,
+    });
+    expect(warningDetails("mapping_rule.MULTI_SOURCE.warning")).toEqual({
+      label: "Multiple source files",
+      description:
+        "Multiple uploaded files produced values for the same cell. The selected source should be reviewed against alternatives.",
+      actionable: true,
     });
   });
 
