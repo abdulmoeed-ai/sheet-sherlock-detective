@@ -1,13 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  LayoutDashboard,
+  ChartNoAxesCombined,
   TrendingUp,
   ShieldCheck,
   ChevronsLeft,
   ChevronsRight,
-  Inbox,
-  GitBranch,
+  FileInput,
+  FileSpreadsheet,
   KeyRound,
   ClipboardCheck,
   ChevronDown,
@@ -30,18 +30,18 @@ const nav = [
   {
     to: "/",
     label: "Dashboard",
-    icon: LayoutDashboard,
+    icon: ChartNoAxesCombined,
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },
-  { to: "/inbox", label: "Inbox", icon: Inbox, roles: ["finance_analyst"] },
+  { to: "/inbox", label: "Analysis Requests", icon: FileInput, roles: ["finance_analyst"] },
   {
     to: "/registry",
     label: "Excel Workbooks",
-    icon: GitBranch,
+    icon: FileSpreadsheet,
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },
   { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
-  { to: "/review", label: "Manager Review", icon: ClipboardCheck, roles: ["finance_manager"] },
+  { to: "/review", label: "Review Queue", icon: ClipboardCheck, roles: ["finance_manager"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
   {
     to: "/audit",

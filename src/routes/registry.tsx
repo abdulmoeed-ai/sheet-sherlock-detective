@@ -189,6 +189,8 @@ function Registry() {
   };
 
   const workbookTableTitle = user?.role === "finance_analyst" ? "My Workbooks" : "All Workbooks";
+  const createWorkbookTitle =
+    user?.role === "finance_manager" ? "Create Workbook Version" : "Create New Workbook";
 
   return (
     <PageShell
@@ -201,7 +203,7 @@ function Registry() {
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <Plus className="h-4 w-4 text-[var(--color-brand)]" />
-            <h3 className="text-[15px] font-semibold">Create New Workbook</h3>
+            <h3 className="text-[15px] font-semibold">{createWorkbookTitle}</h3>
           </div>
           <div className="grid grid-cols-[1fr_1fr_180px] gap-3 items-end">
             <Combobox
@@ -269,7 +271,11 @@ function Registry() {
                       Resume {versionId(selectedSymbol, selectedFY, activeProject.versionNum)}
                     </Button>
                     <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                      {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {createProject.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
                       {createProject.isPending ? "Creating…" : "New version"}
                     </Button>
                   </div>
@@ -290,8 +296,14 @@ function Registry() {
                     </p>
                   </div>
                   <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                    {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    {createProject.isPending ? "Creating…" : `Start ${versionId(selectedSymbol, selectedFY, 1)}`}
+                    {createProject.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {createProject.isPending
+                      ? "Creating…"
+                      : `Start ${versionId(selectedSymbol, selectedFY, 1)}`}
                   </Button>
                 </div>
               </Card>
