@@ -42,11 +42,10 @@ function BrandHeader() {
 function LoginIntroCopy() {
   return (
     <section className="mx-auto max-w-xl text-center md:mx-0 md:text-left">
-      <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">Model review</p>
-      <h2 className="mt-4 text-4xl font-semibold leading-tight text-white sm:text-5xl">
+      <h2 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">
         Financial models, built for review.
       </h2>
-      <div className="mt-8 space-y-3 text-xl font-medium leading-8 text-slate-300 sm:text-2xl">
+      <div className="mt-6 space-y-1.5 text-xl font-medium leading-7 text-slate-300 sm:text-2xl sm:leading-8">
         <p>For analysts.</p>
         <p>For managers.</p>
         <p>For the next decision.</p>
