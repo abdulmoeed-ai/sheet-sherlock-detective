@@ -3,11 +3,13 @@ import {
   acceptBalanceSheetDiagnosis,
   acknowledgeMappingRules,
   createExcelExport,
+  createDashboardValuationPresentation,
   createValuationPresentation,
   createComment,
   deleteComment,
   decideBalanceSheetDiagnosis,
   downloadExcelExport,
+  downloadDashboardValuationPresentation,
   downloadValuationPresentation,
   generateAssumptions,
   generateExecutiveBrief,
@@ -28,7 +30,13 @@ import {
   uploadDocument,
 } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
-import type { DocumentResponse, ExtractionJobResponse, ReviewCommentInput, WorkbookSaveInput } from "@/lib/api/types";
+import type {
+  DocumentResponse,
+  ExtractionJobResponse,
+  ReviewCommentInput,
+  ValuationPresentationInput,
+  WorkbookSaveInput,
+} from "@/lib/api/types";
 import { uploadDocumentsSequential } from "@/lib/upload-documents";
 
 function invalidateProject(queryClient: QueryClient, projectId: string) {
@@ -87,13 +95,25 @@ export function useDownloadExcelExport(projectId: string) {
 
 export function useCreateValuationPresentation(projectId: string) {
   return useMutation({
-    mutationFn: () => createValuationPresentation(projectId),
+    mutationFn: (input?: ValuationPresentationInput) => createValuationPresentation(projectId, input),
   });
 }
 
 export function useDownloadValuationPresentation(projectId: string) {
   return useMutation({
     mutationFn: (exportId: string) => downloadValuationPresentation(projectId, exportId),
+  });
+}
+
+export function useCreateDashboardValuationPresentation() {
+  return useMutation({
+    mutationFn: (input: ValuationPresentationInput) => createDashboardValuationPresentation(input),
+  });
+}
+
+export function useDownloadDashboardValuationPresentation() {
+  return useMutation({
+    mutationFn: (exportId: string) => downloadDashboardValuationPresentation(exportId),
   });
 }
 

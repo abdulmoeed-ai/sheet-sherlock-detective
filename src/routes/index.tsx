@@ -29,7 +29,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  useCreateDashboardValuationPresentation,
   useCreateValuationPresentation,
+  useDownloadDashboardValuationPresentation,
   useDownloadValuationPresentation,
 } from "@/hooks/use-project-actions";
 import { toast } from "sonner";
@@ -46,6 +48,7 @@ import type {
   PortfolioDashboardResponse,
   PortfolioDashboardVisibility,
   ProjectResponse,
+  ValuationPresentationInput,
 } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
@@ -2172,6 +2175,92 @@ function valuationMetrics(intelligence: CompanyIntelligence): IntelligenceMetric
   );
 }
 
+function dashboardValuationPayload({
+  company,
+  intelligence,
+  metrics,
+  brokerSummary,
+  sourceSyncSummary,
+  modelGraphPack,
+}: {
+  company: PsxCompany;
+  intelligence: CompanyIntelligence;
+  metrics: LiveMarketDashboardMetrics;
+  brokerSummary: BrokerResearchSummary;
+  sourceSyncSummary: SourceSyncStatus[];
+  modelGraphPack: ApprovedModelGraphPack | null;
+}): ValuationPresentationInput {
+  const metricRecord = (metric: SourceTaggedMetric): Record<string, unknown> => ({
+    label: metric.label,
+    value: metric.value,
+    source: metric.source,
+    detail: metric.detail ?? "",
+    syncedAt: metric.syncedAt ?? "",
+  });
+  const dashboardMetrics: Array<Record<string, unknown>> = [
+    ...metrics.cards.map(metricRecord),
+    ...metrics.valuation.map(metricRecord),
+    {
+      label: "52W Low",
+      value: metrics.range.low,
+      source: metrics.range.source,
+      detail: metrics.range.spreadLabel,
+    },
+    {
+      label: "52W High",
+      value: metrics.range.high,
+      source: metrics.range.source,
+      detail: metrics.range.spreadLabel,
+    },
+    ...sourceSyncSummary.map((item) => ({
+      label: `${item.source} sync status`,
+      value: item.status,
+      source: item.source,
+      detail: item.lastSyncedLabel,
+    })),
+    ...(modelGraphPack?.cards ?? []).map((card) => ({
+      label: card.title,
+      value: card.value,
+      source: card.source,
+      detail: card.delta ?? modelGraphPack?.reason ?? "",
+    })),
+  ];
+  const researchNotes = [
+    {
+      title: intelligence.headline,
+      source: intelligence.provider.label,
+      summary: intelligence.metricGroups
+        .flatMap((group) => group.items.map((item) => `${item.label}: ${item.value}`))
+        .slice(0, 12)
+        .join("; "),
+    },
+    {
+      title: brokerSummary.title,
+      source: brokerSummary.source,
+      summary: brokerSummary.detail,
+      detail: [brokerSummary.targetPrice, brokerSummary.rating].filter(Boolean).join("; "),
+    },
+  ];
+  const citations = brokerSummary.sourceUrl
+    ? [{
+        url: brokerSummary.sourceUrl,
+        title: brokerSummary.title,
+        sourceName: brokerSummary.source,
+        publicationDate: brokerSummary.date,
+      }]
+    : [];
+  return {
+    companyName: company.name,
+    ticker: company.symbol,
+    sector: company.sector,
+    fiscalYear: intelligence.identifiers.fiscalYear,
+    currencyUnit: intelligence.identifiers.currency,
+    dashboardMetrics,
+    researchNotes,
+    citations,
+  };
+}
+
 function portfolioDraftFromDashboard(
   dashboard: PortfolioDashboardResponse,
 ): PortfolioDashboardDraft {
@@ -2339,25 +2428,45 @@ function FinancialDashboardTab({
   const hasResearch =
     (brokerReports.length > 0) ||
     ((intelligence?.sourceCoverage.coveragePercent ?? 0) > 0);
-  const valuationPptEnabled = modelApproved && hasResearch;
+  const valuationPptEnabled = !!selectedCompany && !!intelligence && hasResearch;
 
   const disabledReasons: string[] = [];
-  if (!modelApproved)
-    disabledReasons.push("Financial model must be approved (open the company project and request CFO sign-off).");
   if (!hasResearch)
     disabledReasons.push("No market research available (broker reports or AskAnalyst data required).");
 
   const createValuationExport = useCreateValuationPresentation(approvedProjectId ?? "");
   const downloadValuationExport = useDownloadValuationPresentation(approvedProjectId ?? "");
+  const createDashboardValuationExport = useCreateDashboardValuationPresentation();
+  const downloadDashboardValuationExport = useDownloadDashboardValuationPresentation();
+  const valuationExportPending =
+    createValuationExport.isPending ||
+    downloadValuationExport.isPending ||
+    createDashboardValuationExport.isPending ||
+    downloadDashboardValuationExport.isPending;
+  const valuationPayload = useMemo<ValuationPresentationInput | null>(() => {
+    if (!selectedCompany || !intelligence || !liveMarketMetrics || !brokerSummary) return null;
+    return dashboardValuationPayload({
+      company: selectedCompany,
+      intelligence,
+      metrics: liveMarketMetrics,
+      brokerSummary,
+      sourceSyncSummary,
+      modelGraphPack,
+    });
+  }, [brokerSummary, intelligence, liveMarketMetrics, modelGraphPack, selectedCompany, sourceSyncSummary]);
 
   const handleValuationPPT = async () => {
-    if (!valuationPptEnabled || !approvedProjectId) return;
+    if (!valuationPptEnabled || !valuationPayload) return;
     try {
-      const created = await createValuationExport.mutateAsync();
+      const created = modelApproved && approvedProjectId
+        ? await createValuationExport.mutateAsync(valuationPayload)
+        : await createDashboardValuationExport.mutateAsync(valuationPayload);
       if (created.generatedBy === "deterministic") {
         toast.info("Presentation generated using deterministic fallback (LLM unavailable).");
       }
-      const blob = await downloadValuationExport.mutateAsync(created.id);
+      const blob = created.projectId
+        ? await downloadValuationExport.mutateAsync(created.id)
+        : await downloadDashboardValuationExport.mutateAsync(created.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -2432,7 +2541,7 @@ function FinancialDashboardTab({
                   <span className="inline-flex">
                     <button
                       onClick={handleValuationPPT}
-                      disabled={!valuationPptEnabled || createValuationExport.isPending || downloadValuationExport.isPending}
+                      disabled={!valuationPptEnabled || !valuationPayload || valuationExportPending}
                       className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       style={{
                         borderColor: valuationPptEnabled ? "var(--color-brand)" : "var(--color-border-default)",
@@ -2440,14 +2549,14 @@ function FinancialDashboardTab({
                         background: "var(--color-bg-card)",
                       }}
                     >
-                      {createValuationExport.isPending || downloadValuationExport.isPending ? (
+                      {valuationExportPending ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Presentation className="h-3.5 w-3.5" />
                       )}
-                      {createValuationExport.isPending
+                      {createValuationExport.isPending || createDashboardValuationExport.isPending
                         ? "Generating…"
-                        : downloadValuationExport.isPending
+                        : downloadValuationExport.isPending || downloadDashboardValuationExport.isPending
                           ? "Downloading…"
                           : "Valuation PPT"}
                       {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
@@ -2466,7 +2575,7 @@ function FinancialDashboardTab({
                 )}
                 {valuationPptEnabled && (
                   <TooltipContent side="bottom" className="text-[12px]">
-                    Generate an investment-banking quality valuation deck using the approved financial model and available market research.
+                    Generate an investment-banking quality valuation deck using dashboard intelligence, broker context, and approved model data when available.
                   </TooltipContent>
                 )}
               </Tooltip>

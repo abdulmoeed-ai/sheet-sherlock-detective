@@ -264,11 +264,22 @@ export interface ReviewHandoffResponse {
 
 export interface ValuationPresentationResponse {
   id: string;
-  projectId: string;
+  projectId: string | null;
   status: string;
   downloadUrl: string;
   generatedBy: string;
   warnings: string[];
+}
+
+export interface ValuationPresentationInput {
+  companyName?: string | null;
+  ticker?: string | null;
+  sector?: string | null;
+  fiscalYear?: string | null;
+  currencyUnit?: string | null;
+  dashboardMetrics?: Array<Record<string, unknown>>;
+  researchNotes?: Array<Record<string, unknown>>;
+  citations?: Array<Record<string, unknown>>;
 }
 
 export interface ReviewCommentInput {
