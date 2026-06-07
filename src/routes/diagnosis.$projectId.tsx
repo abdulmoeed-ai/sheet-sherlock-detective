@@ -171,7 +171,7 @@ export const Route = createFileRoute("/diagnosis/$projectId")({
       { title: "Diagnosis - finance" },
       {
         name: "description",
-        content: "Workbook-style cell diagnosis for Millat extraction review.",
+        content: "Workbook-style cell diagnosis for extraction review.",
       },
     ],
   }),
@@ -326,8 +326,9 @@ function Diagnosis() {
     savingProjectVersion ||
     submittingDraftToManager;
   const projectStatus = workspace.data?.project.status;
+  const isManagerUser = currentUser.data?.role === "finance_manager";
   const managerApprovalMode =
-    currentUser.data?.role === "finance_manager" && projectStatus === "manager_review";
+    isManagerUser && (projectStatus === "manager_review" || workspace.isLoading || workspace.isError);
 
   useEffect(() => {
     draftWorkbookRef.current = null;
@@ -731,7 +732,7 @@ function Diagnosis() {
       ) : workspace.isLoading ? (
         <EmptyState
           title="Loading workbook"
-          detail="Fetching the latest Millat diagnosis workbook."
+          detail="Fetching the latest diagnosis workbook."
           loading
         />
       ) : workspace.isError ? (
@@ -858,8 +859,8 @@ function Diagnosis() {
             </button>
           </IconTooltip>
           <div className="text-[12px] font-semibold" style={{ color: "#292D34" }}>
-            {workspace.data?.project.companyName ?? cycle.company} /{" "}
-            {workspace.data?.project.fiscalYear ?? cycle.period} / Diagnosis
+            {workspace.data?.project.companyName ?? "Selected Workbook"} /{" "}
+            {workspace.data?.project.fiscalYear ?? "Review Period"} / Diagnosis
           </div>
           <RagIndexStatusIndicator status={ragStatus.status} loading={ragStatus.isLoading} />
           <div className="ml-auto flex items-center gap-2">
