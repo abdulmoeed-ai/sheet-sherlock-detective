@@ -2,7 +2,7 @@ import type { PsxCompany } from "@/lib/api/users";
 import type { ProjectResponse, SourceSearchResponse, WorkspaceResponse } from "@/lib/api/types";
 import { dashboardMetrics } from "@/lib/mappers/workspace";
 
-export type DashboardSource = "AskAnalyst" | "PSX" | "Topline Securities" | "Approved Model";
+export type DashboardSource = "AskAnalyst" | "PSX" | "Broker Research" | "Approved Model";
 
 export interface DashboardOption {
   value: string;
@@ -78,7 +78,7 @@ export interface BrokerReportInput {
 
 export interface BrokerResearchSummary {
   status: "available" | "unavailable";
-  source: DashboardSource;
+  source: string;
   title: string;
   detail: string;
   date?: string;
@@ -153,9 +153,9 @@ export function buildFinancialDashboardSourcePlan({
       {
         id: "broker_view",
         title: "Broker View",
-        source: "Topline Securities",
+        source: "Broker Research",
         description:
-          "Broker commentary, target price, assumptions, and cited risks when available.",
+          "Topline first, then other trusted broker commentary, target price, assumptions, and cited risks when available.",
       },
     ],
     modelSections: [
@@ -282,7 +282,7 @@ export function buildSourceSyncSummary({
       lastSyncedLabel: marketSyncedAt ? `Last synced ${marketSyncedAt}` : "Not synced yet",
     },
     {
-      source: "Topline Securities",
+      source: "Broker Research",
       status: brokerSyncedAt ? "synced" : "pending",
       lastSyncedLabel: brokerSyncedAt ? `Last synced ${brokerSyncedAt}` : "Not synced yet",
     },
@@ -308,24 +308,25 @@ export function buildBrokerResearchSummary({
   const toplineReport = brokerReports.find(
     (report) => report.broker.trim().toLowerCase() === "topline securities",
   );
-  if (!toplineReport) {
+  const trustedReport = toplineReport ?? brokerReports[0];
+  if (!trustedReport) {
     return {
       status: "unavailable",
-      source: "Topline Securities",
+      source: "Broker Research",
       title: "Broker view not yet sourced",
-      detail: `No Topline Securities report or broker evidence has been attached for ${companyName}.`,
+      detail: `No trusted broker research was found for ${companyName}. Tried Topline Securities and approved brokerage sources.`,
     };
   }
 
   return {
     status: "available",
-    source: "Topline Securities",
-    title: toplineReport.title,
-    detail: toplineReport.summary,
-    date: toplineReport.date ?? undefined,
-    targetPrice: toplineReport.targetPrice ?? undefined,
-    rating: toplineReport.rating ?? undefined,
-    sourceUrl: toplineReport.sourceUrl ?? undefined,
+    source: trustedReport.broker,
+    title: trustedReport.title,
+    detail: trustedReport.summary,
+    date: trustedReport.date ?? undefined,
+    targetPrice: trustedReport.targetPrice ?? undefined,
+    rating: trustedReport.rating ?? undefined,
+    sourceUrl: trustedReport.sourceUrl ?? undefined,
   };
 }
 
@@ -335,13 +336,9 @@ export function brokerReportsFromSourceSearch(
   if (!response?.results?.length) return [];
 
   return response.results
-    .filter((result) => {
-      const sourceName = result.sourceName.trim().toLowerCase();
-      const sourceId = result.sourceId.trim().toLowerCase();
-      return sourceName === "topline securities" || sourceId === "topline";
-    })
+    .filter((result) => TRUSTED_BROKER_SOURCE_IDS.has(result.sourceId.trim().toLowerCase()))
     .map((result) => ({
-      broker: "Topline Securities",
+      broker: brokerNameForSource(result.sourceId, result.sourceName),
       title: result.title,
       date: result.publicationDate ?? null,
       summary: result.excerpt,
@@ -349,6 +346,38 @@ export function brokerReportsFromSourceSearch(
       rating: null,
       sourceUrl: result.url,
     }));
+}
+
+const TRUSTED_BROKER_SOURCE_IDS = new Set([
+  "topline",
+  "akd",
+  "arif-habib",
+  "js-global",
+  "intermarket",
+  "sherman",
+  "foundation",
+  "insight",
+  "askanalyst-research",
+  "investors-lounge",
+]);
+
+function brokerNameForSource(sourceId: string, sourceName: string): string {
+  const sourceIdNameMap: Record<string, string> = {
+    topline: "Topline Securities",
+    akd: "AKD Securities",
+    "arif-habib": "Arif Habib Limited",
+    "js-global": "JS Global Capital",
+    intermarket: "Intermarket Securities",
+    sherman: "Sherman Securities",
+    foundation: "Foundation Securities",
+    insight: "Insight Securities",
+    "askanalyst-research": "AskAnalyst Research",
+    "investors-lounge": "Investors Lounge Research",
+  };
+  const mappedName = sourceIdNameMap[sourceId.trim().toLowerCase()];
+  if (mappedName) return mappedName;
+  const fallbackName = sourceName.trim();
+  return fallbackName || "Broker Research";
 }
 
 export function buildApprovedModelGraphPack({

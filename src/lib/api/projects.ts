@@ -209,6 +209,17 @@ export function searchSources(
   });
 }
 
+export function searchTrustedSources(input: {
+  query: string;
+  sourceIds?: string[];
+  sourceGroup?: string | null;
+}) {
+  return apiFetch<SourceSearchResponse>("/api/projects/source-search", {
+    method: "POST",
+    body: input,
+  });
+}
+
 export function readRagIndexStatus(projectId: string) {
   return apiFetch<RagIndexStatusResponse>(`/api/projects/${projectId}/rag/status`);
 }

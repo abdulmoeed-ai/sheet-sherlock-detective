@@ -216,12 +216,37 @@
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
   body {
     background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body.portfolio-printing * {
+    visibility: hidden;
   }
 
   .portfolio-print-root {
     color: #111827;
+    background: #fff !important;
+  }
+
+  body.portfolio-printing .portfolio-print-root,
+  body.portfolio-printing .portfolio-print-root * {
+    visibility: visible;
+  }
+
+  body.portfolio-printing .portfolio-print-root {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100% !important;
+    max-width: none !important;
   }
 
   .portfolio-print-hide,
@@ -234,12 +259,13 @@
   .portfolio-print-root,
   .portfolio-print-root * {
     box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .portfolio-print-root > *,
   .portfolio-print-section {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    overflow: visible !important;
   }
 
   .portfolio-print-section {
@@ -247,9 +273,12 @@
     page-break-before: auto;
   }
 
-  .portfolio-print-section:nth-of-type(n + 4) {
-    break-before: page;
-    page-break-before: always;
+  .portfolio-print-section + .portfolio-print-section {
+    margin-top: 10mm;
+  }
+
+  .portfolio-print-section svg {
+    max-width: 100%;
   }
 
   .portfolio-print-footer {

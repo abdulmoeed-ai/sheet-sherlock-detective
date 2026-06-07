@@ -25,7 +25,7 @@ import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { Combobox } from "@/components/Combobox";
 import { ApiError } from "@/lib/api/errors";
-import { readWorkspace, searchSources } from "@/lib/api/projects";
+import { readWorkspace, searchTrustedSources } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 import type {
   BackendRole,
@@ -710,7 +710,20 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
 
   const exportDashboard = async (dashboard: PortfolioDashboardResponse) => {
     await markExported.mutateAsync(dashboard.id);
-    window.setTimeout(() => window.print(), 100);
+    const previousTitle = document.title;
+    const filenameSafeTitle = dashboard.name.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
+    const cleanup = () => {
+      document.body.classList.remove("portfolio-printing");
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", cleanup);
+    };
+    document.title = `${filenameSafeTitle || "Portfolio_Dashboard"}_Report`;
+    document.body.classList.add("portfolio-printing");
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(cleanup, 1200);
+    }, 300);
   };
 
   if (view === "create") {
@@ -1514,6 +1527,21 @@ function PortfolioDashboardReport({
       staleTime: 5 * 60 * 1000,
     })),
   });
+  const brokerResearchResults = useQueries({
+    queries: dashboard.companySelections.map((company) => {
+      return {
+        queryKey: queryKeys.brokerResearch(company.symbol, company.name),
+        queryFn: () =>
+          searchTrustedSources({
+            query: `${company.name} ${company.symbol} broker research report target price rating valuation Topline AKD Arif Habib JS Global Insight AskAnalyst Investors Lounge`,
+            sourceGroup: "brokerage",
+          }),
+        enabled: true,
+        retry: 1,
+        staleTime: 10 * 60 * 1000,
+      };
+    }),
+  });
   const workspaceByProjectId = useMemo(
     () =>
       new Map(
@@ -1535,15 +1563,22 @@ function PortfolioDashboardReport({
         const intelligence = overview
           ? companyIntelligenceFromAskAnalyst(overview, fallback)
           : fallback;
+        const brokerReports = brokerReportsFromSourceSearch(brokerResearchResults[index]?.data);
         return {
           company,
           intelligence,
+          liveMetrics: liveMarketMetricsFromIntelligence(intelligence),
           loading: askAnalystResults[index]?.isLoading ?? false,
           liveSource: overview ? "AskAnalyst" : "Local fallback",
           modelCoverage: modelCoverage.rows[index],
+          brokerLoading: brokerResearchResults[index]?.isLoading ?? false,
+          brokerSummary: buildBrokerResearchSummary({
+            companyName: company.name,
+            brokerReports,
+          }),
         };
       }),
-    [askAnalystResults, dashboard.companySelections, modelCoverage.rows],
+    [askAnalystResults, brokerResearchResults, dashboard.companySelections, modelCoverage.rows],
   );
   const sectorAllocation = useMemo(
     () => buildPortfolioSectorAllocation(dashboard.companySelections),
@@ -1578,6 +1613,12 @@ function PortfolioDashboardReport({
           <StatCard label="Models Available" value={modelCoverage.availableCount} />
         </div>
       </Card>
+
+      <PortfolioLiveMarketMatrix rows={analyticsRows} />
+      <PortfolioSharePriceTrendGrid rows={analyticsRows} />
+      <PortfolioValuationRangeGrid rows={analyticsRows} />
+      <PortfolioCompanySnapshotGrid rows={analyticsRows} />
+      <PortfolioBrokerResearchMatrix rows={analyticsRows} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]">
         <Card className="portfolio-print-section">
@@ -1709,7 +1750,11 @@ function PortfolioDashboardReport({
       </div>
 
       <Card className="portfolio-print-section">
-        <h3 className="text-[15px] font-semibold">Model Availability</h3>
+        <h3 className="text-[15px] font-semibold">Approved Model Financial Graphs</h3>
+        <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+          Workbook-backed metrics are displayed company by company. Values are not accumulated
+          across the portfolio.
+        </p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {modelCoverage.rows.map((row) => {
             const metrics = row.project
@@ -1761,6 +1806,8 @@ function PortfolioDashboardReport({
         </div>
       </Card>
 
+      <PortfolioMetricGroups rows={analyticsRows} />
+
       <Card className="portfolio-print-section">
         <h3 className="text-[15px] font-semibold">Source Coverage And Caveats</h3>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1786,6 +1833,284 @@ function PortfolioDashboardReport({
           />
         </div>
       </Card>
+    </div>
+  );
+}
+
+type PortfolioAnalyticsRow = {
+  company: PortfolioCompanySelection;
+  intelligence: CompanyIntelligence;
+  liveMetrics: LiveMarketDashboardMetrics;
+  loading: boolean;
+  liveSource: string;
+  modelCoverage: ReturnType<typeof buildPortfolioApprovedModelCoverage>["rows"][number];
+  brokerLoading: boolean;
+  brokerSummary: BrokerResearchSummary;
+};
+
+function PortfolioLiveMarketMatrix({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  const metricLabels = ["Last Price", "30D Change", "Volume", "Value Traded", "Market Cap"];
+  return (
+    <Card className="portfolio-print-section">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[15px] font-semibold">Live Market Metrics By Company</h3>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+            Same source fields as the single-company dashboard, shown side by side.
+          </p>
+        </div>
+        <Badge tone="success">AskAnalyst / PSX</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        {rows.map((row) => (
+          <div
+            key={row.company.symbol}
+            className="rounded-md border px-3 py-3"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold">{row.company.name}</div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">
+                  {row.company.symbol} · {row.liveSource}
+                </div>
+              </div>
+              <Badge tone={row.liveSource === "AskAnalyst" ? "success" : "info"}>
+                {row.loading ? "Loading" : row.liveSource}
+              </Badge>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-2">
+              {row.liveMetrics.cards
+                .filter((metric) => metricLabels.includes(metric.label))
+                .map((metric) => (
+                  <div key={metric.label} className="rounded-md bg-[var(--color-tag-bg)] px-3 py-2">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                      {metric.label}
+                    </dt>
+                    <dd
+                      className="mt-1 text-[14px] font-bold tnum"
+                      style={{ color: metricToneColor(metric.tone) }}
+                    >
+                      {metric.value}
+                    </dd>
+                    {metric.detail ? (
+                      <dd className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">
+                        {metric.detail}
+                      </dd>
+                    ) : null}
+                  </div>
+                ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioSharePriceTrendGrid({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Share Price Trends</h3>
+      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+        Each company is charted independently to avoid masking individual price movement.
+      </p>
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        {rows.map((row) => (
+          <div
+            key={row.company.symbol}
+            className="rounded-md border px-3 py-3"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold">{row.company.symbol}</div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">
+                  {row.intelligence.marketSignals.updatedAt}
+                </div>
+              </div>
+              <span
+                className="text-[12px] font-semibold tnum"
+                style={{
+                  color:
+                    row.intelligence.marketSignals.changePct30d >= 0
+                      ? "var(--color-success-fg)"
+                      : "var(--color-danger-fg)",
+                }}
+              >
+                {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
+                {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
+              </span>
+            </div>
+            <SharePriceTrendChart points={row.intelligence.marketSignals.sharePriceTrend} />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioValuationRangeGrid({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Valuation & Range By Company</h3>
+      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+        P/E, P/BV, yield, free float, and range fields are provider values per company.
+      </p>
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        {rows.map((row) => (
+          <div
+            key={row.company.symbol}
+            className="rounded-md border px-3 py-3"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <div className="text-[13px] font-semibold">{row.company.symbol}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {row.liveMetrics.valuation.map((metric) => (
+                <MiniSourceMetric key={metric.label} metric={metric} />
+              ))}
+            </div>
+            <div
+              className="mt-3 rounded-md border px-3 py-2"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="font-semibold text-[var(--color-text-muted)]">52W Low</span>
+                <span className="font-bold tnum">{row.liveMetrics.range.low}</span>
+              </div>
+              <div className="my-2 h-2 rounded-full bg-[var(--color-border-default)]">
+                <div className="h-full w-[68%] rounded-full bg-[#FFC400]" />
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px]">
+                <span className="font-semibold text-[var(--color-text-muted)]">52W High</span>
+                <span className="font-bold tnum">{row.liveMetrics.range.high}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioCompanySnapshotGrid({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Company Snapshot & Data Readiness</h3>
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        {rows.map((row) => (
+          <div
+            key={row.company.symbol}
+            className="rounded-md border px-3 py-3"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold">{row.company.name}</div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">
+                  {row.intelligence.identifiers.exchange} · {row.company.symbol}
+                </div>
+              </div>
+              <span className="text-[16px] font-bold tnum">
+                {row.intelligence.dataReadiness.score}%
+              </span>
+            </div>
+            <div
+              className="mt-3 h-2 overflow-hidden rounded-full"
+              style={{ background: "var(--color-border-default)" }}
+            >
+              <div
+                className="h-full rounded-full bg-[var(--color-brand)]"
+                style={{ width: `${row.intelligence.dataReadiness.score}%` }}
+              />
+            </div>
+            <div className="mt-3 space-y-2">
+              {row.intelligence.dataReadiness.items.slice(0, 4).map((item) => (
+                <ReadinessRow
+                  key={item.label}
+                  label={item.label}
+                  detail={item.detail}
+                  status={item.status}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioBrokerResearchMatrix({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Broker Research By Company</h3>
+      <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+        Target price and rating are kept separate from long-term financial forecasts.
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[780px] border-collapse text-left text-[12px]">
+          <thead>
+            <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+              <th className="py-2 pr-3 font-semibold">Company</th>
+              <th className="py-2 pr-3 font-semibold">Status</th>
+              <th className="py-2 pr-3 font-semibold">Target Price</th>
+              <th className="py-2 pr-3 font-semibold">Rating</th>
+              <th className="py-2 pr-3 font-semibold">Latest Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.company.symbol}
+                className="border-b last:border-0"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <td className="py-2 pr-3">
+                  <div className="font-semibold">{row.company.name}</div>
+                  <div className="text-[11px] text-[var(--color-text-muted)]">
+                    {row.company.symbol}
+                  </div>
+                </td>
+                <td className="py-2 pr-3">
+                  {row.brokerLoading ? "Searching trusted sources" : row.brokerSummary.status}
+                </td>
+                <td className="py-2 pr-3">{row.brokerSummary.targetPrice ?? "Not sourced"}</td>
+                <td className="py-2 pr-3">{row.brokerSummary.rating ?? "Not sourced"}</td>
+                <td className="py-2 pr-3">{row.brokerSummary.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioMetricGroups({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  const groupTitles = ["Trading Data", "Returns & History", "Valuation Context"];
+  return (
+    <div className="grid gap-4 xl:grid-cols-3">
+      {groupTitles.map((title) => (
+        <Card key={title} className="portfolio-print-section">
+          <h3 className="text-[15px] font-semibold">{title}</h3>
+          <div className="mt-3 space-y-3">
+            {rows.map((row) => {
+              const group = row.intelligence.metricGroups.find((item) => item.title === title);
+              return (
+                <div key={`${title}-${row.company.symbol}`} className="rounded-md bg-[var(--color-tag-bg)] px-3 py-2">
+                  <div className="text-[12px] font-semibold">{row.company.symbol}</div>
+                  <dl className="mt-2 grid grid-cols-2 gap-2">
+                    {(group?.items ?? []).slice(0, 6).map((item) => (
+                      <MetricCell key={`${row.company.symbol}-${item.label}`} item={item} />
+                    ))}
+                  </dl>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -1922,14 +2247,13 @@ function FinancialDashboardTab({
   const approvedProjectId = sourcePlan?.modelGraphAvailability.project?.id ?? null;
   const approvedWorkspace = useWorkspace(approvedProjectId);
   const brokerResearch = useQuery({
-    queryKey: queryKeys.brokerResearch(approvedProjectId, selectedCompany?.symbol),
+    queryKey: queryKeys.brokerResearch(selectedCompany?.symbol, selectedCompany?.name),
     queryFn: () =>
-      searchSources(approvedProjectId ?? "", {
-        query: `${selectedCompany?.name ?? ""} ${selectedCompany?.symbol ?? ""} Topline Securities broker report target price rating valuation`,
-        sourceIds: ["topline"],
+      searchTrustedSources({
+        query: `${selectedCompany?.name ?? ""} ${selectedCompany?.symbol ?? ""} broker research report target price rating valuation Topline AKD Arif Habib JS Global Insight AskAnalyst Investors Lounge`,
         sourceGroup: "brokerage",
       }),
-    enabled: !!approvedProjectId && !!selectedCompany,
+    enabled: !!selectedCompany,
     retry: 1,
     staleTime: 10 * 60 * 1000,
   });
@@ -2037,6 +2361,7 @@ function FinancialDashboardTab({
             <FinancialSourcePlanCard
               sourcePlan={sourcePlan}
               askAnalystLoading={askAnalystOverview.isLoading}
+              brokerResearchLoading={brokerResearch.isLoading}
               brokerSummary={brokerSummary}
               syncSummary={sourceSyncSummary}
             />
@@ -2055,7 +2380,7 @@ function FinancialDashboardTab({
             <DataReadinessCard intelligence={intelligence} />
           </div>
 
-          <BrokerResearchCard summary={brokerSummary} />
+          <BrokerResearchCard summary={brokerSummary} loading={brokerResearch.isLoading} />
           <MetricGroupsGrid intelligence={intelligence} />
           <ModelGraphPack sourcePlan={sourcePlan} graphPack={modelGraphPack} />
           <SourceCoverageCard intelligence={intelligence} />
@@ -2218,11 +2543,13 @@ function MiniSourceMetric({ metric }: { metric: SourceTaggedMetric }) {
 function FinancialSourcePlanCard({
   sourcePlan,
   askAnalystLoading,
+  brokerResearchLoading,
   brokerSummary,
   syncSummary,
 }: {
   sourcePlan: FinancialDashboardSourcePlan;
   askAnalystLoading: boolean;
+  brokerResearchLoading: boolean;
   brokerSummary: BrokerResearchSummary;
   syncSummary: SourceSyncStatus[];
 }) {
@@ -2251,7 +2578,7 @@ function FinancialSourcePlanCard({
             source={section.source}
             syncedAt={syncSummary.find((item) => item.source === section.source)?.lastSyncedLabel}
             locked={section.id === "broker_view" && brokerSummary.status !== "available"}
-            lockedLabel="Pending"
+            lockedLabel={brokerResearchLoading ? "Searching" : "Pending"}
           />
         ))}
         {sourcePlan.modelSections.slice(0, 1).map((section) => (
@@ -2300,7 +2627,16 @@ function SourcePlanRow({
   );
 }
 
-function BrokerResearchCard({ summary }: { summary: BrokerResearchSummary }) {
+function BrokerResearchCard({
+  summary,
+  loading = false,
+}: {
+  summary: BrokerResearchSummary;
+  loading?: boolean;
+}) {
+  const detail = loading
+    ? "Searching Topline Securities and approved brokerage sources now."
+    : summary.detail;
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2312,10 +2648,13 @@ function BrokerResearchCard({ summary }: { summary: BrokerResearchSummary }) {
             {summary.date ? (
               <span className="text-[11px] text-[var(--color-text-muted)]">{summary.date}</span>
             ) : null}
+            {loading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-brand)]" />
+            ) : null}
           </div>
           <h3 className="mt-3 text-[16px] font-semibold">{summary.title}</h3>
           <p className="mt-2 max-w-[760px] text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-            {summary.detail}
+            {detail}
           </p>
           {summary.sourceUrl ? (
             <a
