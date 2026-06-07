@@ -46,6 +46,35 @@ function completeness(project: ProjectResponse) {
   return Math.round((reviewed / total) * 100);
 }
 
+function workbookActionLabel(status: string): string {
+  switch (status) {
+    case "draft":
+    case "created":
+    case "setup":
+      return "Start upload";
+    case "documents_uploaded":
+      return "Run extraction";
+    case "extracting":
+      return "View progress";
+    case "extraction_failed":
+      return "Retry";
+    case "ready_for_diagnosis":
+    case "in_diagnosis":
+    case "awaiting_review":
+      return "Diagnose";
+    case "manager_changes_requested":
+    case "cfo_changes_requested":
+      return "Revise";
+    case "manager_review":
+    case "cfo_review":
+      return "View";
+    case "approved":
+      return "View";
+    default:
+      return "Open";
+  }
+}
+
 function StatusBadge({ status }: { status: string }) {
   return <Badge tone={projectStatusTone(status)}>{projectStatusLabel(status)}</Badge>;
 }
@@ -132,8 +161,21 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? selectedFY,
     });
-    cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
+    // Route based on how far the project has progressed.
+    // Statuses that mean ingestion is not yet done (no accepted extraction results).
+    const needsIngestion = new Set([
+      "draft", "created", "setup",
+      "documents_uploaded",
+      "extracting",
+      "extraction_failed",
+    ]);
+    if (needsIngestion.has(project.status)) {
+      cycleStore.setStatus("ingestion");
+      navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
+    } else {
+      cycleStore.setStatus("diagnosis");
+      navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
+    }
   };
 
   // Build versioned projects list: correct version numbers per company, PSX symbol resolved
@@ -184,11 +226,24 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? "",
     });
-    cycleStore.setStatus("diagnosis");
-    navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
+    const needsIngestion = new Set([
+      "draft", "created", "setup",
+      "documents_uploaded",
+      "extracting",
+      "extraction_failed",
+    ]);
+    if (needsIngestion.has(project.status)) {
+      cycleStore.setStatus("ingestion");
+      navigate({ to: "/ingestion/$projectId", params: { projectId: project.id } });
+    } else {
+      cycleStore.setStatus("diagnosis");
+      navigate({ to: "/diagnosis/$projectId", params: { projectId: project.id } });
+    }
   };
 
   const workbookTableTitle = user?.role === "finance_analyst" ? "My Workbooks" : "All Workbooks";
+  const createWorkbookTitle =
+    user?.role === "finance_manager" ? "Create Workbook Version" : "Create New Workbook";
 
   return (
     <PageShell
@@ -201,7 +256,7 @@ function Registry() {
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <Plus className="h-4 w-4 text-[var(--color-brand)]" />
-            <h3 className="text-[15px] font-semibold">Create New Workbook</h3>
+            <h3 className="text-[15px] font-semibold">{createWorkbookTitle}</h3>
           </div>
           <div className="grid grid-cols-[1fr_1fr_180px] gap-3 items-end">
             <Combobox
@@ -269,7 +324,11 @@ function Registry() {
                       Resume {versionId(selectedSymbol, selectedFY, activeProject.versionNum)}
                     </Button>
                     <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                      {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {createProject.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
                       {createProject.isPending ? "Creating…" : "New version"}
                     </Button>
                   </div>
@@ -290,8 +349,14 @@ function Registry() {
                     </p>
                   </div>
                   <Button onClick={handleNewVersion} disabled={createProject.isPending}>
-                    {createProject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    {createProject.isPending ? "Creating…" : `Start ${versionId(selectedSymbol, selectedFY, 1)}`}
+                    {createProject.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {createProject.isPending
+                      ? "Creating…"
+                      : `Start ${versionId(selectedSymbol, selectedFY, 1)}`}
                   </Button>
                 </div>
               </Card>
@@ -337,7 +402,7 @@ function Registry() {
                       project.versionNum,
                     );
                     const pct = completeness(project);
-                    const active = isActive(project.status);
+                    const active = isActiveProjectStatus(project.status);
                     return (
                       <div key={project.id} className="flex items-center gap-3">
                         <div
@@ -359,7 +424,7 @@ function Registry() {
                         {active && (
                           <Button variant="secondary" onClick={() => handleResume(project)}>
                             <Eye className="h-3.5 w-3.5" />
-                            Resume
+                            {workbookActionLabel(project.status)}
                           </Button>
                         )}
                       </div>
@@ -523,7 +588,7 @@ function Registry() {
                         </span>
                       </div>
 
-                      {/* Open button */}
+                      {/* Action button */}
                       <div className="justify-self-end">
                         <button
                           className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold"
@@ -532,7 +597,7 @@ function Registry() {
                             color: "var(--color-brand)",
                           }}
                         >
-                          Open
+                          {workbookActionLabel(project.status)}
                           <ArrowRight className="h-3 w-3" />
                         </button>
                       </div>

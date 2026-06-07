@@ -8,12 +8,12 @@ import {
 
 describe("manager review workflow copy", () => {
   it("treats manager approval as final instead of routing to CFO sign-off", () => {
-    expect(managerApprovalButtonLabel()).toBe("Approve & Lock Model");
+    expect(managerApprovalButtonLabel()).toBe("Approve Workbook");
     expect(managerReviewSubtitle(true)).toBe(
-      "Structured review pack from the backend workspace. Approve to lock this model as the final version, or send back with comments.",
+      "Review the analyst submission, add comments where needed, then approve the workbook or send it back.",
     );
     expect(managerReviewVersionLockMessage()).toBe(
-      "This pack is version-locked when the Finance Manager approves it.",
+      "Approval marks this workbook as the final approved version.",
     );
     expect(routeAfterManagerApproval()).toBeNull();
   });

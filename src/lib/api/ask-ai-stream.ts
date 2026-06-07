@@ -169,6 +169,10 @@ export async function readAskAiSseStream(
     const result = dispatchSseEvents(parts, callbacks, answer);
     answer = result.answer;
     finalResponse = result.finalResponse ?? finalResponse;
+    if (result.terminalError) {
+      await reader.cancel();
+      return null;
+    }
   }
 
   buffer += decoder.decode();
@@ -176,6 +180,7 @@ export async function readAskAiSseStream(
     const result = dispatchSseEvents([buffer], callbacks, answer);
     answer = result.answer;
     finalResponse = result.finalResponse ?? finalResponse;
+    if (result.terminalError) return null;
   }
 
   return finalResponse;
@@ -193,9 +198,10 @@ function dispatchSseEvents(
   blocks: string[],
   callbacks: AskAiStreamCallbacks,
   currentAnswer: string,
-): { answer: string; finalResponse: AskAiFinalResponse | null } {
+): { answer: string; finalResponse: AskAiFinalResponse | null; terminalError: boolean } {
   let answer = currentAnswer;
   let finalResponse: AskAiFinalResponse | null = null;
+  let terminalError = false;
 
   for (const event of blocks.map((block) => parseSseBlock(block))) {
     if (!event) continue;
@@ -217,10 +223,12 @@ function dispatchSseEvents(
       callbacks.onChunk?.(answer);
     } else if (event.type === "error") {
       callbacks.onError?.(event.payload as AskAiErrorEvent);
+      terminalError = true;
+      break;
     }
   }
 
-  return { answer, finalResponse };
+  return { answer, finalResponse, terminalError };
 }
 
 function parseSseBlock(block: string): ParsedSseEvent | null {

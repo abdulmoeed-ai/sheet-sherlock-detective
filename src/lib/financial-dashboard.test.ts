@@ -77,7 +77,7 @@ describe("financial dashboard helpers", () => {
     expect(plan.liveSections).toEqual([
       expect.objectContaining({ id: "market_snapshot", source: "AskAnalyst" }),
       expect.objectContaining({ id: "psx_trading", source: "PSX" }),
-      expect.objectContaining({ id: "broker_view", source: "Topline Securities" }),
+      expect.objectContaining({ id: "broker_view", source: "Broker Research" }),
     ]);
     expect(plan.modelSections.map((section) => section.title)).toEqual([
       "Key Ratios",
@@ -144,25 +144,34 @@ describe("financial dashboard helpers", () => {
       [
         ["AskAnalyst", "synced", "Last synced 2026-06-05 15:30 PKT"],
         ["PSX", "synced", "Last synced 2026-06-05 15:30 PKT"],
-        ["Topline Securities", "pending", "Not synced yet"],
+        ["Broker Research", "pending", "Not synced yet"],
         ["Approved Model", "synced", "Last synced 2026-06-01T09:00:00Z"],
       ],
     );
   });
 
-  it("keeps broker commentary unavailable until sourced broker evidence exists", () => {
+  it("keeps broker commentary unavailable until trusted broker evidence exists", () => {
     expect(buildBrokerResearchSummary({ companyName: "Lucky Cement Limited" })).toMatchObject({
       status: "unavailable",
-      source: "Topline Securities",
+      source: "Broker Research",
       title: "Broker view not yet sourced",
       detail:
-        "No Topline Securities report or broker evidence has been attached for Lucky Cement Limited.",
+        "No trusted broker research was found for Lucky Cement Limited. Tried Topline Securities and approved brokerage sources.",
     });
+  });
 
+  it("prefers Topline when multiple trusted broker reports are available", () => {
     expect(
       buildBrokerResearchSummary({
         companyName: "Lucky Cement Limited",
         brokerReports: [
+          {
+            broker: "AKD Securities",
+            title: "Lucky Cement result preview",
+            date: "2026-06-04",
+            summary: "AKD commentary on cement dispatches.",
+            rating: "Buy",
+          },
           {
             broker: "Topline Securities",
             title: "Lucky Cement valuation update",
@@ -182,12 +191,34 @@ describe("financial dashboard helpers", () => {
     });
   });
 
-  it("maps sourced Topline search results into broker evidence without inventing valuation fields", () => {
+  it("uses alternate trusted broker research when Topline is not found", () => {
+    expect(
+      buildBrokerResearchSummary({
+        companyName: "Lucky Cement Limited",
+        brokerReports: [
+          {
+            broker: "AKD Securities",
+            title: "Lucky Cement result preview",
+            date: "2026-06-04",
+            summary: "AKD commentary on cement dispatches.",
+            rating: "Buy",
+          },
+        ],
+      }),
+    ).toMatchObject({
+      status: "available",
+      source: "AKD Securities",
+      title: "Lucky Cement result preview",
+      rating: "Buy",
+    });
+  });
+
+  it("maps sourced brokerage search results into broker evidence without inventing valuation fields", () => {
     const reports = brokerReportsFromSourceSearch({
       status: "available",
-      query: "Lucky Cement Topline Securities target price rating",
-      rejectedResults: 0,
-      allowedDomains: ["topline.com.pk"],
+      query: "Lucky Cement broker research target price rating",
+      rejectedResults: 1,
+      allowedDomains: ["topline.com.pk", "akdsl.com", "askanalyst.com.pk", "psx.com.pk"],
       results: [
         {
           title: "Lucky Cement valuation update",
@@ -199,6 +230,15 @@ describe("financial dashboard helpers", () => {
           score: 0.91,
         },
         {
+          title: "Lucky Cement result preview",
+          url: "https://research.akdsl.com/luck.pdf",
+          excerpt: "AKD Securities commentary on demand recovery and margins.",
+          sourceId: "akd",
+          sourceName: "AKD Securities",
+          publicationDate: "2026-06-04",
+          score: 0.89,
+        },
+        {
           title: "Exchange notice",
           url: "https://psx.com.pk/notices/luck",
           excerpt: "PSX filing.",
@@ -206,6 +246,15 @@ describe("financial dashboard helpers", () => {
           sourceName: "Pakistan Stock Exchange",
           publicationDate: "2026-06-04",
           score: 0.8,
+        },
+        {
+          title: "Research reports",
+          url: "https://askanalyst.com.pk/researchreport/home",
+          excerpt: "AskAnalyst research reports for listed companies.",
+          sourceId: "askanalyst-research",
+          sourceName: "AskAnalyst Research",
+          publicationDate: null,
+          score: 0.77,
         },
       ],
     });
@@ -219,6 +268,24 @@ describe("financial dashboard helpers", () => {
         targetPrice: null,
         rating: null,
         sourceUrl: "https://topline.com.pk/research/luck",
+      },
+      {
+        broker: "AKD Securities",
+        title: "Lucky Cement result preview",
+        date: "2026-06-04",
+        summary: "AKD Securities commentary on demand recovery and margins.",
+        targetPrice: null,
+        rating: null,
+        sourceUrl: "https://research.akdsl.com/luck.pdf",
+      },
+      {
+        broker: "AskAnalyst Research",
+        title: "Research reports",
+        date: null,
+        summary: "AskAnalyst research reports for listed companies.",
+        targetPrice: null,
+        rating: null,
+        sourceUrl: "https://askanalyst.com.pk/researchreport/home",
       },
     ]);
   });

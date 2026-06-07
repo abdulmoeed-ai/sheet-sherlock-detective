@@ -18,6 +18,7 @@ export function buildAskAiRequestPayload(input: {
 }) {
   const period = input.project?.projectLabel || input.project?.fiscalYear || null;
   const company = input.project?.companyName || null;
+  const forecastRoute = normalizeRoutePath(input.routePath) === "/forecast";
   return {
     question: input.question,
     sessionId: input.sessionId,
@@ -28,7 +29,7 @@ export function buildAskAiRequestPayload(input: {
       ...(period ? { period } : {}),
       ...(company ? { company } : {}),
     },
-    includeExternalSources: shouldUseExternalSources(input.question),
+    includeExternalSources: forecastRoute || shouldUseExternalSources(input.question),
   };
 }
 
@@ -36,4 +37,10 @@ export function shouldUseExternalSources(question: string): boolean {
   return /\b(forecast|forcast|predict|prediction|projection|outlook|sector|next\s+\d+\s+years?|market|macro|current|latest|recent|today|rate|rates|price|prices|news|industry|competitor|regulation)\b/i.test(
     question,
   );
+}
+
+function normalizeRoutePath(routePath: string | null): string {
+  const clean = (routePath || "").trim();
+  if (!clean) return "/";
+  return clean.startsWith("/") ? clean : `/${clean}`;
 }

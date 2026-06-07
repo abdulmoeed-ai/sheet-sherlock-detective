@@ -108,6 +108,17 @@ export function startExtraction(projectId: string, force = false) {
   );
 }
 
+export function readActiveExtractionJob(projectId: string) {
+  return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/active`);
+}
+
+export function cancelExtractionJob(projectId: string, jobId: string) {
+  return apiFetch<ExtractionJobResponse>(
+    `/api/projects/${projectId}/extractions/${jobId}/cancel`,
+    { method: "POST" },
+  );
+}
+
 export function readExtractionJob(projectId: string, jobId: string) {
   return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/${jobId}`);
 }
@@ -199,6 +210,17 @@ export function searchSources(
   });
 }
 
+export function searchTrustedSources(input: {
+  query: string;
+  sourceIds?: string[];
+  sourceGroup?: string | null;
+}) {
+  return apiFetch<SourceSearchResponse>("/api/projects/source-search", {
+    method: "POST",
+    body: input,
+  });
+}
+
 export function readRagIndexStatus(projectId: string) {
   return apiFetch<RagIndexStatusResponse>(`/api/projects/${projectId}/rag/status`);
 }
@@ -209,6 +231,17 @@ export function askAi(
   options: { signal?: AbortSignal } = {},
 ) {
   return apiStream(`/api/projects/${projectId}/ask-ai`, {
+    method: "POST",
+    body: input,
+    signal: options.signal,
+  });
+}
+
+export function askAiForecast(
+  input: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {},
+) {
+  return apiStream("/api/ask-ai/forecast", {
     method: "POST",
     body: input,
     signal: options.signal,

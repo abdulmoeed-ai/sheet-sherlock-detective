@@ -1,14 +1,14 @@
 export function managerApprovalButtonLabel() {
-  return "Approve & Lock Model";
+  return "Approve Workbook";
 }
 
 export function managerReviewSubtitle(hasProject: boolean) {
-  if (!hasProject) return "Select a project before reviewing the manager pack.";
-  return "Structured review pack from the backend workspace. Approve to lock this model as the final version, or send back with comments.";
+  if (!hasProject) return "Create analysis requests and review submitted workbooks.";
+  return "Review the analyst submission, add comments where needed, then approve the workbook or send it back.";
 }
 
 export function managerReviewVersionLockMessage() {
-  return "This pack is version-locked when the Finance Manager approves it.";
+  return "Approval marks this workbook as the final approved version.";
 }
 
 export function routeAfterManagerApproval(): null {
