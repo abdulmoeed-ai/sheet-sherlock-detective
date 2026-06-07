@@ -202,13 +202,14 @@ function ManagerDashboard() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!draft.sector) return;
     await createRequest.mutateAsync({
       ...draft,
       companySymbol: draft.companySymbol || null,
-      sector: draft.sector || null,
+      sector: draft.sector,
       dueDate: draft.dueDate || null,
       note: draft.note || null,
-      template: templateForSector(draft.sector || null),
+      template: templateForSector(draft.sector),
     });
     setDraft(blankRequest);
   };
@@ -247,11 +248,12 @@ function ManagerDashboard() {
             required
           />
           <Combobox
-            label="Sector (optional)"
+            label="Sector"
             options={sectorOptions}
             value={draft.sector ?? ""}
             onChange={(value) => setDraft({ ...draft, sector: value })}
             placeholder="Search sector…"
+            required
           />
           <div />
           <label className="col-span-2">
