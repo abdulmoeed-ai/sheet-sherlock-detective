@@ -15,7 +15,7 @@ describe("role access", () => {
   it("routes each role to its default workflow", () => {
     expect(defaultRouteForRole("finance_manager")).toBe("/");
     expect(defaultRouteForRole("finance_analyst")).toBe("/inbox");
-    expect(defaultRouteForRole("cfo")).toBe("/sign-off");
+    expect(defaultRouteForRole("cfo")).toBe("/");
     expect(defaultRouteForRole("admin")).toBe("/sources");
   });
 
@@ -26,7 +26,7 @@ describe("role access", () => {
     expect(canSeeRoute("finance_analyst", "/diagnosis")).toBe(false);
     expect(canSeeRoute("finance_analyst", "/diagnosis/project-1")).toBe(true);
     expect(canSeeRoute("finance_manager", "/diagnosis/project-1")).toBe(false);
-    expect(canSeeRoute("cfo", "/sign-off")).toBe(true);
+    expect(canSeeRoute("cfo", "/sign-off")).toBe(false);
     expect(canSeeRoute("cfo", "/ingestion")).toBe(false);
     expect(canSeeRoute("admin", "/sources")).toBe(true);
     expect(canSeeRoute("admin", "/assumptions")).toBe(false);
