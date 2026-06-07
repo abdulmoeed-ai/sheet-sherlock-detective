@@ -108,4 +108,46 @@ describe("parseSseEvents", () => {
       ),
     ).rejects.toThrow("Ask AI requires a streaming response.");
   });
+
+  it("treats backend error events as terminal and ignores later stream frames", async () => {
+    const encoder = new TextEncoder();
+    const finalPayload = {
+      answer: "This answer should not render.",
+      sourcesUsed: [],
+      modelCitations: [],
+      sourceCitations: [],
+      warnings: [],
+      usage: {},
+    };
+    let pullCount = 0;
+    const stream = new ReadableStream({
+      pull(controller) {
+        pullCount += 1;
+        if (pullCount === 1) {
+          controller.enqueue(
+            encoder.encode(
+              'event: error\ndata: {"message":"Approved web search timed out.","code":"external_search_unavailable"}\n\n',
+            ),
+          );
+          return;
+        }
+        controller.enqueue(encoder.encode(`event: final\ndata: ${JSON.stringify(finalPayload)}\n\n`));
+        controller.close();
+      },
+    });
+    const errors: string[] = [];
+    const finals: unknown[] = [];
+
+    const result = await readAskAiSseStream(
+      new Response(stream, { headers: { "Content-Type": "text/event-stream" } }),
+      {
+        onError: (event) => errors.push(event.message),
+        onFinal: (event) => finals.push(event),
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(errors).toEqual(["Approved web search timed out."]);
+    expect(finals).toEqual([]);
+  });
 });

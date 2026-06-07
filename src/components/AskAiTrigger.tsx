@@ -744,6 +744,22 @@ export function AskAiTrigger() {
                 </div>
               </div>
               <div className="flex items-center gap-0.5">
+                {panelExpanded && (
+                  <IconTooltip label={showHistory ? "Close history" : "Show history"}>
+                    <button
+                      onClick={() => setShowHistory((v) => !v)}
+                      className="cursor-pointer rounded-md p-1.5 transition hover:bg-[var(--color-tag-bg)] focus:outline-none"
+                      aria-label="Toggle history"
+                    >
+                      <History
+                        className="h-[18px] w-[18px]"
+                        style={{
+                          color: showHistory ? "var(--color-brand)" : "var(--color-text-muted)",
+                        }}
+                      />
+                    </button>
+                  </IconTooltip>
+                )}
                 {messages.length > 0 && (
                   <IconTooltip label="New chat">
                     <button
@@ -833,23 +849,6 @@ export function AskAiTrigger() {
                     </button>
                   );
                 })}
-                {/* History toggle for expanded mode */}
-                {panelExpanded && (
-                  <IconTooltip label={showHistory ? "Close history" : "Show history"}>
-                    <button
-                      onClick={() => setShowHistory((v) => !v)}
-                      className="px-3 py-2 transition hover:bg-[var(--color-tag-bg)]"
-                      aria-label="Toggle history"
-                    >
-                      <History
-                        className="h-4 w-4"
-                        style={{
-                          color: showHistory ? "var(--color-brand)" : "var(--color-text-muted)",
-                        }}
-                      />
-                    </button>
-                  </IconTooltip>
-                )}
               </div>
             )}
 
@@ -1493,11 +1492,11 @@ function StreamingAiBubble({
               size={expanded ? "expanded" : "default"}
             />
           </div>
-        ) : (
+        ) : !message.error ? (
           <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
             The answer will appear here as soon as AI starts drafting it.
           </div>
-        )}
+        ) : null}
 
         {warnings.length > 0 && (
           <div
@@ -2364,13 +2363,18 @@ function CurrentEventPanel({
   const isAnswering = message.text.length > 0 || message.done;
   const displayTitle = message.done && !message.error ? summary.compactLabel : current.title;
   const displayMessage = message.done && !message.error ? "" : current.message;
+  const hasError = Boolean(message.error);
 
   return (
     <div
       className="min-w-0 rounded-2xl border px-3 py-2.5"
       style={{
-        borderColor: message.done ? "var(--color-border-default)" : "rgba(123,104,238,0.22)",
-        background: message.done ? "#fff" : "#FAFBFF",
+        borderColor: hasError
+          ? "rgba(220,38,38,0.28)"
+          : message.done
+            ? "var(--color-border-default)"
+            : "rgba(123,104,238,0.22)",
+        background: hasError ? "var(--color-danger-bg)" : message.done ? "#fff" : "#FAFBFF",
       }}
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -2378,11 +2382,21 @@ function CurrentEventPanel({
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
             style={{
-              background: message.done ? "var(--color-success-bg)" : "var(--color-tag-bg)",
-              color: message.done ? "var(--color-success)" : "var(--color-brand)",
+              background: hasError
+                ? "#FEE2E2"
+                : message.done
+                  ? "var(--color-success-bg)"
+                  : "var(--color-tag-bg)",
+              color: hasError
+                ? "var(--color-danger-fg)"
+                : message.done
+                  ? "var(--color-success)"
+                  : "var(--color-brand)",
             }}
           >
-            {message.done ? (
+            {hasError ? (
+              <X className="h-3.5 w-3.5" />
+            ) : message.done ? (
               <Check className="h-3.5 w-3.5" />
             ) : (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2407,9 +2421,9 @@ function CurrentEventPanel({
         </div>
         <span
           className="shrink-0 text-[11px] font-medium"
-          style={{ color: "var(--color-text-muted)" }}
+          style={{ color: hasError ? "var(--color-danger-fg)" : "var(--color-text-muted)" }}
         >
-          {message.done ? "done" : "live"}
+          {hasError ? "error" : message.done ? "done" : "live"}
         </span>
       </div>
       {!isAnswering && (
@@ -2441,7 +2455,7 @@ function currentStreamEvent(message: Extract<Msg, { kind: "stream" }>): {
 } {
   if (message.done) {
     return {
-      title: message.error ? "Ask AI stopped" : "Answer ready",
+      title: message.error ? "Ask AI ran into an error" : "Answer ready",
       message: message.error ?? "AI finished generating the cited answer.",
     };
   }

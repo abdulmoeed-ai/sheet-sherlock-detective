@@ -11,9 +11,9 @@ const DIAGNOSIS_SUGGESTIONS = [
 ];
 
 const FORECAST_SUGGESTIONS = [
-  "Give me a 5-year qualitative and quantitative forecast for this company",
-  "Calculate historical revenue CAGR and normalized CAGR",
-  "Identify outliers and summarize assumptions I can use",
+  "Build a 5-year Revenue, PAT, and EPS forecast for a company I specify",
+  "Use approved web sources to identify forecast drivers and risks",
+  "Compare base, upside, and downside scenarios with defensible assumptions",
 ];
 
 export function askAiSuggestionsForRoute(routePath: string): string[] {

@@ -17,4 +17,13 @@ describe("userFacingAskAiWarnings", () => {
       userFacingAskAiWarnings(["rag_index_building"], { requestMode: "partial_project_context" }),
     ).toEqual([]);
   });
+
+  it("maps Tavily transport failures to a generic web-search warning", () => {
+    expect(userFacingAskAiWarnings(["tavily_request_failed:ReadTimeout"])).toEqual([
+      "Approved web search is temporarily unavailable. Try again in a moment.",
+    ]);
+    expect(userFacingAskAiWarnings(["external_search_unavailable"])).toEqual([
+      "Approved web search is temporarily unavailable. Try again in a moment.",
+    ]);
+  });
 });
