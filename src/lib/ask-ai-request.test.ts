@@ -18,12 +18,12 @@ describe("buildAskAiRequestPayload", () => {
     expect(payload.includeExternalSources).toBe(false);
   });
 
-  it("includes project filters only from real selected workspace context", () => {
+  it("includes project filters only from real selected workspace context on project routes", () => {
     const payload = buildAskAiRequestPayload({
       question: "Forecast the company outlook",
       sessionId: "chat-1",
-      routePath: "/forecast",
-      screenName: "Forecast",
+      routePath: "/diagnosis/project-1",
+      screenName: "Diagnosis",
       documents: [{ id: "doc-1" }],
       project: {
         companyName: "Actual Company",
@@ -33,6 +33,24 @@ describe("buildAskAiRequestPayload", () => {
 
     expect(payload.filters).toEqual({ period: "FY2026", company: "Actual Company" });
     expect(payload.documentIds).toEqual(["doc-1"]);
+    expect(payload.includeExternalSources).toBe(true);
+  });
+
+  it("strips project filters and documents on the forecast route", () => {
+    const payload = buildAskAiRequestPayload({
+      question: "What are analysts saying for the next 4 years?",
+      sessionId: "chat-1",
+      routePath: "/forecast",
+      screenName: "Forecast",
+      documents: [{ id: "doc-ogdc" }],
+      project: {
+        companyName: "Oil & Gas Development Company Limited",
+        fiscalYear: "FY2025",
+      },
+    });
+
+    expect(payload.filters).toEqual({});
+    expect(payload.documentIds).toEqual([]);
     expect(payload.includeExternalSources).toBe(true);
   });
 

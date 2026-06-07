@@ -135,11 +135,14 @@ export function AskAiTrigger() {
   const routeMode = askAiRouteModeForPath(routePath);
   const selectedProjectId = useSelectedProjectId();
   const routeProjectId = shouldUseProjectContextForRoute(routePath) ? selectedProjectId : null;
-  const activeProjectId = activeSession?.projectId ?? modelProjectContext?.id ?? routeProjectId;
+  const projectScopedActiveSession = routeMode.isForecastRoute ? null : activeSession;
+  const activeProjectId = routeMode.isForecastRoute
+    ? null
+    : projectScopedActiveSession?.projectId ?? modelProjectContext?.id ?? routeProjectId;
   const activeRoutePath = routeMode.isForecastRoute ? routePath : activeSession?.routePath ?? routePath;
   const activeScreenName = routeMode.isForecastRoute
     ? screenNameForPath(routePath)
-    : activeSession?.screenName ?? screenNameForPath(routePath);
+    : projectScopedActiveSession?.screenName ?? screenNameForPath(routePath);
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
   const sessionsApi = useAskAiSessions(routeMode.isForecastRoute ? "forecast" : "project");
@@ -217,17 +220,25 @@ export function AskAiTrigger() {
   }, [routeMode.forceOpen, routePath]);
 
   const contextChips = buildAskAiContextChips({
-    company: activeSession?.companyName ?? workspace.data?.project.companyName,
-    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear,
-    sector: workspace.data?.project.sector,
-    documentCount: workspace.data?.documents.length,
+    company: routeMode.isForecastRoute
+      ? null
+      : projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName,
+    period: routeMode.isForecastRoute
+      ? null
+      : projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear,
+    sector: routeMode.isForecastRoute ? null : workspace.data?.project.sector,
+    documentCount: routeMode.isForecastRoute ? undefined : workspace.data?.documents.length,
     isDiagnosis: isDiagnosisRoute,
     screenName: activeScreenName,
   });
   const subtitleParts = buildAskAiSubtitleParts({
-    company: activeSession?.companyName ?? workspace.data?.project.companyName,
+    company: routeMode.isForecastRoute
+      ? null
+      : projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName,
     screenName: activeScreenName,
-    period: activeSession?.projectLabel ?? workspace.data?.project.fiscalYear,
+    period: routeMode.isForecastRoute
+      ? null
+      : projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear,
   });
   const expandedLeft = sidebarCollapsed
     ? routeMode.reserveSidebar
@@ -395,7 +406,7 @@ export function AskAiTrigger() {
     setInput("");
 
     let modelOverride: AskAiModelCandidate | null = null;
-    if (pendingModelSelection && !activeProjectId) {
+    if (pendingModelSelection && !activeProjectId && !routeMode.isForecastRoute) {
       const selected = matchModelSelection(text, pendingModelSelection.candidates);
       if (!selected) {
         setMessages((m) => [
@@ -427,7 +438,7 @@ export function AskAiTrigger() {
         return;
       }
       text = pendingModelSelection.question;
-    } else if (!activeProjectId && isWorkbookInventoryQuestion(text)) {
+    } else if (!activeProjectId && !routeMode.isForecastRoute && isWorkbookInventoryQuestion(text)) {
       try {
         const result = await listAskAiWorkbooks();
         const candidates = workbookInventoryToModelCandidates(result.items);
@@ -458,7 +469,7 @@ export function AskAiTrigger() {
         ]);
       }
       return;
-    } else if (!activeProjectId && shouldSearchModelsBeforeAskAi(text)) {
+    } else if (!activeProjectId && !routeMode.isForecastRoute && shouldSearchModelsBeforeAskAi(text)) {
       try {
         const result = await searchAskAiModels({ query: text });
         if (result.candidates.length > 0) {
@@ -497,7 +508,7 @@ export function AskAiTrigger() {
       }
     }
 
-    const effectiveProjectId = modelOverride?.id ?? activeProjectId;
+    const effectiveProjectId = routeMode.isForecastRoute ? null : modelOverride?.id ?? activeProjectId;
     if (!effectiveProjectId && !routeMode.isForecastRoute) {
       setMessages((m) => [
         ...m,
@@ -523,28 +534,31 @@ export function AskAiTrigger() {
 
     try {
       let streamError = false;
-      const requestProject =
-        modelOverride ??
-        (workspace.data?.project
-          ? {
-              companyName: activeSession?.companyName ?? workspace.data.project.companyName,
-              projectLabel: activeSession?.projectLabel ?? workspace.data.project.projectLabel,
-              fiscalYear: workspace.data.project.fiscalYear,
-            }
-          : activeSession
+      const requestProject = routeMode.isForecastRoute
+        ? null
+        : modelOverride ??
+          (workspace.data?.project
             ? {
-                companyName: activeSession.companyName,
-                projectLabel: activeSession.projectLabel,
-                fiscalYear: null,
+                companyName:
+                  projectScopedActiveSession?.companyName ?? workspace.data.project.companyName,
+                projectLabel:
+                  projectScopedActiveSession?.projectLabel ?? workspace.data.project.projectLabel,
+                fiscalYear: workspace.data.project.fiscalYear,
               }
-            : null);
+            : projectScopedActiveSession
+              ? {
+                  companyName: projectScopedActiveSession.companyName,
+                  projectLabel: projectScopedActiveSession.projectLabel,
+                  fiscalYear: null,
+                }
+              : null);
       const final = await askAi.sendQuestion(
         buildAskAiRequestPayload({
           question: text,
           sessionId: chatSessionIdRef.current,
           routePath: activeRoutePath,
           screenName: activeScreenName,
-          documents: modelOverride ? [] : workspace.data?.documents,
+          documents: routeMode.isForecastRoute || modelOverride ? [] : workspace.data?.documents,
           project: requestProject,
         }),
         {
