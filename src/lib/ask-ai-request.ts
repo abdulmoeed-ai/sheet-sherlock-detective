@@ -19,16 +19,22 @@ export function buildAskAiRequestPayload(input: {
   const period = input.project?.projectLabel || input.project?.fiscalYear || null;
   const company = input.project?.companyName || null;
   const forecastRoute = normalizeRoutePath(input.routePath) === "/forecast";
+  const documentIds = forecastRoute
+    ? []
+    : (input.documents?.map((document) => document.id) ?? []);
+  const filters = forecastRoute
+    ? {}
+    : {
+        ...(period ? { period } : {}),
+        ...(company ? { company } : {}),
+      };
   return {
     question: input.question,
     sessionId: input.sessionId,
     routePath: input.routePath,
     screenName: input.screenName,
-    documentIds: input.documents?.map((document) => document.id) ?? [],
-    filters: {
-      ...(period ? { period } : {}),
-      ...(company ? { company } : {}),
-    },
+    documentIds,
+    filters,
     includeExternalSources: forecastRoute || shouldUseExternalSources(input.question),
   };
 }

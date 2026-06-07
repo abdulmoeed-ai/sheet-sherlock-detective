@@ -19,7 +19,7 @@ export function useAskAiStream(projectId: string | null) {
     ): Promise<AskAiFinalResponse | null> => {
       const effectiveProjectId = requestOptions.projectIdOverride ?? projectId;
       const routePath = typeof input.routePath === "string" ? input.routePath : null;
-      const useForecastRoute = !effectiveProjectId && routePath === "/forecast";
+      const useForecastRoute = routePath === "/forecast";
       if (!effectiveProjectId) {
         if (!useForecastRoute) {
           setError("Select a project before using Ask AI.");
