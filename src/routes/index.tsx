@@ -63,7 +63,7 @@ import {
   useUpdatePortfolioDashboard,
 } from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
-import { setSelectedProjectId } from "@/lib/project-store";
+import { clearSelectedProjectId, setSelectedProjectId } from "@/lib/project-store";
 import { paginateItems } from "@/lib/pagination";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
 import { cycleStore } from "@/lib/cycle-store";
@@ -73,6 +73,7 @@ import {
   dashboardProjectStatusTone,
   isFinalApprovedStatus,
 } from "@/lib/project-status-workflow";
+import { projectOpenTarget } from "@/lib/project-navigation";
 import { buildManagerDashboardCounts } from "@/lib/manager-workspace";
 import {
   companyIntelligenceFromAskAnalyst,
@@ -382,6 +383,23 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
     }
   };
 
+  const openProject = (project: ProjectResponse) => {
+    setSelectedProjectId(project.id);
+    const target = projectOpenTarget({ role, status: project.status });
+    if (target === "review") {
+      cycleStore.setStatus("review");
+      navigate({ to: "/review" });
+      return;
+    }
+    navigate({ to: "/registry" });
+  };
+
+  const openReviewQueue = () => {
+    clearSelectedProjectId();
+    cycleStore.setStatus("review");
+    navigate({ to: "/review" });
+  };
+
   const tabs =
     role === "finance_analyst" || role === "finance_manager"
       ? [
@@ -409,7 +427,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                 value={managerCounts.approvedWorkbooks}
               />
             </div>
-            <Button variant="secondary" onClick={() => navigate({ to: "/review" })}>
+            <Button variant="secondary" onClick={openReviewQueue}>
               Open Review Queue
             </Button>
           </div>
@@ -552,10 +570,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                 {paginatedProjects.map((project) => (
                   <button
                     key={project.id}
-                    onClick={() => {
-                      setSelectedProjectId(project.id);
-                      navigate({ to: "/registry" });
-                    }}
+                    onClick={() => openProject(project)}
                     className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
                     style={{ borderColor: "var(--color-border-default)" }}
                   >

@@ -295,7 +295,7 @@ function Review() {
             loading={projects.isLoading}
             onOpen={(id) => {
               setSelectedProjectId(id);
-              navigate({ to: "/review" });
+              navigate({ to: "/diagnosis/$projectId", params: { projectId: id } });
             }}
           />
         </div>

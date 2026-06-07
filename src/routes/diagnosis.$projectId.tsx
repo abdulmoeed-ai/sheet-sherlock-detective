@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   AlertTriangle,
+  CheckCircle2,
   CloudUpload,
   Download,
   FileText,
@@ -148,6 +149,7 @@ import {
   useRevertReviewCell,
   useRevertWorkbookCell,
   useResolveComment,
+  useManagerDecision,
   useReviewCell,
 } from "@/hooks/use-project-actions";
 import {
@@ -196,6 +198,7 @@ function Diagnosis() {
   const downloadExport = useDownloadExcelExport(projectId);
   const uploadDocuments = useUploadDocuments(projectId);
   const startExtraction = useStartExtraction(projectId);
+  const managerDecision = useManagerDecision(projectId);
   const comments = useQuery({
     queryKey: projectId ? queryKeys.comments(projectId) : ["projects", "none", "comments"],
     queryFn: () => listComments(projectId as string),
@@ -322,6 +325,9 @@ function Diagnosis() {
     createComment.isPending ||
     savingProjectVersion ||
     submittingDraftToManager;
+  const projectStatus = workspace.data?.project.status;
+  const managerApprovalMode =
+    currentUser.data?.role === "finance_manager" && projectStatus === "manager_review";
 
   useEffect(() => {
     draftWorkbookRef.current = null;
@@ -466,6 +472,20 @@ function Diagnosis() {
     } finally {
       setSavingProjectVersion(false);
       setSubmittingDraftToManager(false);
+    }
+  };
+
+  const markApproved = async () => {
+    if (!managerApprovalMode) return;
+    try {
+      const response = await managerDecision.mutateAsync({ action: "approve", note: null });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      await workspace.refetch();
+      cycleStore.setStatus("approved");
+      toast.success(response.message || "Workbook marked approved.");
+      navigate({ to: "/review" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to mark workbook approved");
     }
   };
 
@@ -855,15 +875,17 @@ function Diagnosis() {
               )}
               {panelOpen ? "Hide panel" : "Show panel"}
             </button>
-            <button
-              onClick={openAddDocuments}
-              disabled={!projectId || baselineRefreshLocked || dirty || managerHandoffPending}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
-              style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Add PDFs
-            </button>
+            {!managerApprovalMode ? (
+              <button
+                onClick={openAddDocuments}
+                disabled={!projectId || baselineRefreshLocked || dirty || managerHandoffPending}
+                className="flex h-7 items-center gap-1.5 rounded-md border px-3 text-[12px] font-semibold disabled:opacity-50"
+                style={{ borderColor: "#E3E6EA", color: "#4F546B", background: "#fff" }}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Add PDFs
+              </button>
+            ) : null}
             <button
               onClick={exportWorkbook}
               disabled={!projectId || createExport.isPending || downloadExport.isPending}
@@ -877,30 +899,48 @@ function Diagnosis() {
               )}
               Export to Excel
             </button>
-            <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
-              {draftSaveLabel}
-            </span>
-            <button
-              onClick={saveAndSubmitToManager}
-              disabled={
-                !canSubmitDiagnosisForManagerReview({
-                  projectId,
-                  pending: managerHandoffPending,
-                })
-              }
-              className="flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold text-white disabled:opacity-50"
-              style={{ background: "#7B68EE" }}
-            >
-              {managerHandoffPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              {diagnosisManagerSubmitButtonLabel({
-                dirty,
-                pending: managerHandoffPending,
-              })}
-            </button>
+            {managerApprovalMode ? (
+              <button
+                onClick={markApproved}
+                disabled={managerDecision.isPending}
+                className="flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                style={{ background: "#7B68EE" }}
+              >
+                {managerDecision.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                Mark Approved
+              </button>
+            ) : (
+              <>
+                <span className="min-w-[96px] text-right text-[11px]" style={{ color: "#818EA0" }}>
+                  {draftSaveLabel}
+                </span>
+                <button
+                  onClick={saveAndSubmitToManager}
+                  disabled={
+                    !canSubmitDiagnosisForManagerReview({
+                      projectId,
+                      pending: managerHandoffPending,
+                    })
+                  }
+                  className="flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                  style={{ background: "#7B68EE" }}
+                >
+                  {managerHandoffPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  {diagnosisManagerSubmitButtonLabel({
+                    dirty,
+                    pending: managerHandoffPending,
+                  })}
+                </button>
+              </>
+            )}
           </div>
         </div>
 

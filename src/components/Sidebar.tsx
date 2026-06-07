@@ -19,6 +19,7 @@ import { useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { initialsFor, roleLabel } from "@/lib/role-access";
 import { IconTooltip } from "@/components/IconTooltip";
 import { ProductLogo } from "@/components/ProductLogo";
+import { clearSelectedProjectId } from "@/lib/project-store";
 import {
   sidebarStore,
   useSidebarCollapsed,
@@ -92,11 +93,13 @@ export function Sidebar() {
       >
         {visibleNav.map(({ to, label, icon: Icon }) => {
           const active = pathname === to;
+          const onNavClick = label === "Review Queue" ? clearSelectedProjectId : undefined;
           if (collapsed) {
             return (
               <IconTooltip key={to} label={label} side="right" className="block">
                 <Link
                   to={to}
+                  onClick={onNavClick}
                   aria-label={label}
                   className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors"
                   style={{
@@ -117,6 +120,7 @@ export function Sidebar() {
             <Link
               key={to}
               to={to}
+              onClick={onNavClick}
               className="mx-2 my-0.5 flex h-10 items-center gap-2.5 rounded-lg px-3 transition-colors"
               style={{
                 background: active ? "var(--color-sidebar-active)" : "transparent",
