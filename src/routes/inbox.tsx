@@ -10,6 +10,8 @@ import {
   ArrowRight,
   AlertTriangle,
   Loader2,
+  ClipboardList,
+  FolderOpen,
 } from "lucide-react";
 import { cycleStore } from "@/lib/cycle-store";
 import {
@@ -19,15 +21,21 @@ import {
 } from "@/hooks/use-analysis-requests";
 import { setSelectedProjectId } from "@/lib/project-store";
 import { paginateItems } from "@/lib/pagination";
-import type { AnalysisRequestResponse } from "@/lib/api/types";
+import {
+  dashboardProjectStatusLabel,
+  dashboardProjectStatusTone,
+  isFinalApprovedStatus,
+} from "@/lib/project-status-workflow";
+import { useProjects } from "@/hooks/use-projects";
+import type { AnalysisRequestResponse, ProjectResponse } from "@/lib/api/types";
 
 export const Route = createFileRoute("/inbox")({
   head: () => ({
     meta: [
-      { title: "Inbox · Teams Requests — finance" },
+      { title: "Analysis Requests — finance" },
       {
         name: "description",
-        content: "Requests sent by Finance Manager via Microsoft Teams integration.",
+        content: "Analysis requests assigned by Finance Manager.",
       },
     ],
   }),
@@ -44,9 +52,36 @@ function Inbox() {
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [projectPage, setProjectPage] = useState(1);
+  const projects = useProjects();
 
-  const items = requests.data ?? [];
+  const items = useMemo(() => requests.data ?? [], [requests.data]);
   const paginatedItems = useMemo(() => paginateItems(items, page), [items, page]);
+  const projectList = useMemo(() => projects.data ?? [], [projects.data]);
+  const pendingRequests = items.filter((r) => requestStatus(r) === "pending");
+  const approvedWorkbookCount = projectList.filter((project) =>
+    isFinalApprovedStatus(project.status),
+  ).length;
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    if (!query) return projectList;
+    return projectList.filter((project) =>
+      [
+        project.companyName,
+        project.projectLabel,
+        project.sector,
+        project.fiscalYear,
+        dashboardProjectStatusLabel(project.status),
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [projectList, projectSearch]);
+  const paginatedProjects = useMemo(
+    () => paginateItems(filteredProjects, projectPage),
+    [filteredProjects, projectPage],
+  );
   const openCount = items.filter((i) => requestStatus(i) === "pending").length;
   const readyCount = items.filter((i) => requestStatus(i) === "acknowledged").length;
   const convertedCount = items.filter((i) => requestStatus(i) === "converted").length;
@@ -96,7 +131,7 @@ function Inbox() {
 
   return (
     <PageShell
-      title="Inbox"
+      title="Analysis Requests"
       subtitle="Analysis requests for a company, or against a workbook can be found here"
       hideProgress
     >
@@ -106,7 +141,7 @@ function Inbox() {
             <AlertTriangle className="mt-0.5 h-4 w-4 text-(--color-danger)" />
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold text-(--color-danger)">
-                Inbox request failed
+                Analysis request failed
               </div>
               <div className="mt-1 text-[13px] text-(--color-danger-fg)">{visibleError}</div>
             </div>
@@ -135,11 +170,18 @@ function Inbox() {
       </div>
 
       <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+          <h2 className="text-[16px] font-semibold text-[var(--color-text-primary)]">
+            Assigned Requests
+          </h2>
+        </div>
+
         {requests.isLoading ? (
           <Card>
             <div className="flex items-center gap-2 text-[13px] text-(--color-text-secondary)">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading manager requests...
+              Loading analysis requests...
             </div>
           </Card>
         ) : null}
@@ -147,7 +189,7 @@ function Inbox() {
         {!requests.isLoading && items.length === 0 ? (
           <Card>
             <div className="text-[15px] font-semibold text-(--color-text-primary)">
-              No manager requests
+              No analysis requests
             </div>
             <p className="mt-1 text-[13px] text-(--color-text-secondary)">
               New analysis requests assigned to you will appear here.
@@ -221,7 +263,117 @@ function Inbox() {
           label="requests"
         />
       </div>
+
+      <div className="mt-7 space-y-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+            <h2 className="text-[17px] font-semibold text-[var(--color-text-primary)]">
+              My Tasks Overview
+            </h2>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <TaskStatCard label="Projects" value={projectList.length} />
+          <TaskStatCard label="Pending requests" value={pendingRequests.length} />
+          <TaskStatCard label="Approved Workbooks" value={approvedWorkbookCount} />
+        </div>
+
+        <Card>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
+              <h2 className="text-[16px] font-semibold">Related Workbooks & Projects</h2>
+            </div>
+            <input
+              value={projectSearch}
+              onChange={(event) => {
+                setProjectSearch(event.target.value);
+                setProjectPage(1);
+              }}
+              placeholder="Search projects"
+              className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+              style={{ borderColor: "var(--color-border-default)" }}
+            />
+          </div>
+          {projects.isLoading ? (
+            <div className="text-[13px] text-[var(--color-text-muted)]">Loading projects...</div>
+          ) : projectList.length === 0 ? (
+            <EmptyProjectState message="No projects are available for this account." />
+          ) : filteredProjects.length === 0 ? (
+            <EmptyProjectState message="No projects match that search." />
+          ) : (
+            <div className="space-y-2">
+              {paginatedProjects.map((project) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  onOpen={() => {
+                    setSelectedProjectId(project.id);
+                    navigate({ to: "/registry" });
+                  }}
+                />
+              ))}
+              <PaginationControls
+                totalItems={filteredProjects.length}
+                page={projectPage}
+                onPageChange={setProjectPage}
+                label="projects"
+              />
+            </div>
+          )}
+        </Card>
+      </div>
     </PageShell>
+  );
+}
+
+function TaskStatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <Card>
+      <div className="text-[12px] uppercase tracking-wider text-[var(--color-text-secondary)]">
+        {label}
+      </div>
+      <div className="mt-2 text-[24px] font-bold tnum">{value}</div>
+    </Card>
+  );
+}
+
+function ProjectRow({ project, onOpen }: { project: ProjectResponse; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold">{project.companyName}</span>
+          <Badge tone={dashboardProjectStatusTone(project.status)}>
+            {dashboardProjectStatusLabel(project.status)}
+          </Badge>
+        </div>
+        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+          {project.fiscalYear ?? "Current period"}
+          {project.sector ? ` · ${project.sector}` : ""}
+          {project.projectLabel ? ` · ${project.projectLabel}` : ""}
+          {" · "}Last edited {formatProjectDate(project.updatedAt)}
+        </div>
+      </div>
+      <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
+    </button>
+  );
+}
+
+function EmptyProjectState({ message }: { message: string }) {
+  return (
+    <div
+      className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
+      {message}
+    </div>
   );
 }
 
@@ -263,6 +415,16 @@ function formatDate(value: string | null | undefined): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatProjectDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "recently";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 

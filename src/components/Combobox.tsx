@@ -36,6 +36,7 @@ export function Combobox({
     <label>
       <span className="mb-1 block text-[12px] font-semibold text-[var(--color-text-secondary)]">
         {label}
+        {required ? <span className="ml-0.5 text-[var(--color-danger)]">*</span> : null}
       </span>
       <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
         <PopoverTrigger asChild>

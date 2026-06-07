@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import { PageShell, Card, Badge } from "@/components/PageShell";
 import { Button } from "@/components/Button";
 import { ApiErrorDetails } from "@/components/ApiErrorDetails";
+import { ManagerRequestPanel } from "@/components/manager/ManagerRequestPanel";
+import { ManagerReviewDetailHeader } from "@/components/manager/ManagerReviewDetailHeader";
+import { ManagerReviewQueue } from "@/components/manager/ManagerReviewQueue";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { queryKeys } from "@/lib/api/query-keys";
 import { listComments, readLatestExecutiveBrief } from "@/lib/api/projects";
@@ -23,8 +26,12 @@ import {
   useResolveComment,
   useUpdateComment,
 } from "@/hooks/use-project-actions";
-import { useWorkspace } from "@/hooks/use-projects";
-import { useSelectedProjectId } from "@/lib/project-store";
+import { useProjects, useWorkspace } from "@/hooks/use-projects";
+import {
+  clearSelectedProjectId,
+  setSelectedProjectId,
+  useSelectedProjectId,
+} from "@/lib/project-store";
 import {
   CheckCircle2,
   MessageSquare,
@@ -143,6 +150,7 @@ function Review() {
   const cycle = useCycle();
   const navigate = useNavigate();
   const projectId = useSelectedProjectId();
+  const projects = useProjects();
   const workspace = useWorkspace(projectId);
   const managerDecision = useManagerDecision(projectId ?? "");
   const createComment = useCreateComment(projectId ?? "");
@@ -249,36 +257,48 @@ function Review() {
 
   return (
     <PageShell
-      title={`Manager Review · ${project?.companyName || cycle.company || "MTL"} ${project?.fiscalYear || cycle.period || "FY2025"}`}
+      title={
+        projectId
+          ? `Manager Review · ${project?.companyName || cycle.company || "Selected Workbook"} ${project?.fiscalYear || cycle.period || ""}`
+          : "Review Queue"
+      }
       subtitle={managerReviewSubtitle(Boolean(projectId))}
       hideProgress
       actions={
-        <>
-          <Button variant="secondary" onClick={sendBack} disabled={actionDisabled}>
-            {decisionPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RotateCcw className="h-4 w-4" />
-            )}{" "}
-            Send back
-          </Button>
-          <Button onClick={approve} disabled={actionDisabled}>
-            {decisionPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}{" "}
-            {managerApprovalButtonLabel()}
-          </Button>
-        </>
+        projectId && !workspace.isError ? (
+          <>
+            <Button variant="secondary" onClick={sendBack} disabled={actionDisabled}>
+              {decisionPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}{" "}
+              Send Back to Analyst
+            </Button>
+            <Button onClick={approve} disabled={actionDisabled}>
+              {decisionPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}{" "}
+              {managerApprovalButtonLabel()}
+            </Button>
+          </>
+        ) : null
       }
     >
       {!projectId ? (
-        <Card>
-          <div className="text-[13px] text-[var(--color-text-secondary)]">
-            No workbook selected. Open Excel Workbooks and choose one to review.
-          </div>
-        </Card>
+        <div className="space-y-5">
+          <ManagerRequestPanel />
+          <ManagerReviewQueue
+            projects={projects.data ?? []}
+            loading={projects.isLoading}
+            onOpen={(id) => {
+              setSelectedProjectId(id);
+              navigate({ to: "/review" });
+            }}
+          />
+        </div>
       ) : workspace.isLoading ? (
         <Card>
           <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-muted)]">
@@ -288,8 +308,19 @@ function Review() {
         </Card>
       ) : workspace.isError ? (
         <Card>
-          <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[13px] text-[var(--color-danger-fg)]">
-            {pageError}
+          <div className="flex items-start justify-between gap-4">
+            <div className="rounded-md bg-[var(--color-danger-bg)] px-3 py-2 text-[13px] text-[var(--color-danger-fg)]">
+              {pageError}
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                clearSelectedProjectId();
+                navigate({ to: "/review" });
+              }}
+            >
+              Back to Review Queue
+            </Button>
           </div>
         </Card>
       ) : (
@@ -300,12 +331,14 @@ function Review() {
             </div>
           ) : null}
 
+          {project ? <ManagerReviewDetailHeader project={project} /> : null}
+
           <Card className="mb-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-[15px] font-semibold">Manager approval handoff</h3>
+                <h3 className="text-[15px] font-semibold">Approval Status</h3>
                 <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                  Latest executive brief status after approval.
+                  Workbook approval status and generated review pack details.
                 </p>
               </div>
               {brief.isLoading ? (
@@ -338,10 +371,8 @@ function Review() {
 
           <Card className="mb-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold">KPI Summary</h3>
-              <Badge tone={workspace.data?.dashboard ? "info" : "neutral"}>
-                {workspace.data?.dashboard ? "Workspace" : "Fallback"}
-              </Badge>
+              <h3 className="text-[15px] font-semibold">Key Financial Summary</h3>
+              <Badge tone="info">Source-backed</Badge>
             </div>
             <div className="grid grid-cols-3 gap-4">
               {kpis.map((kpi) => (
@@ -365,10 +396,8 @@ function Review() {
           <div className="grid grid-cols-2 gap-5">
             <Card>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold">Diff log ({diffs.length})</h3>
-                <Badge tone={hasReviewRows(workspace.data) ? "info" : "neutral"}>
-                  {hasReviewRows(workspace.data) ? "Review" : "Fallback"}
-                </Badge>
+                <h3 className="text-[15px] font-semibold">Model Changes ({diffs.length})</h3>
+                <Badge tone="info">Changes</Badge>
               </div>
               <table className="w-full text-[12px]">
                 <thead className="border-b text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -403,10 +432,8 @@ function Review() {
 
             <Card>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold">Analyst override log</h3>
-                <Badge tone={overrides === FALLBACK_OVERRIDES ? "neutral" : "info"}>
-                  {overrides === FALLBACK_OVERRIDES ? "Fallback" : "Audit"}
-                </Badge>
+                <h3 className="text-[15px] font-semibold">Analyst Adjustments</h3>
+                <Badge tone="info">Adjustments</Badge>
               </div>
               <ol className="space-y-3">
                 {overrides.map((override) => (
@@ -437,7 +464,7 @@ function Review() {
           <Card className="mt-5">
             <div className="mb-3 flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-[var(--color-brand)]" />
-              <h3 className="text-[15px] font-semibold">Inline comments</h3>
+              <h3 className="text-[15px] font-semibold">Review Comments</h3>
               {commentsSummary?.open !== undefined ? (
                 <Badge tone="info">{String(commentsSummary.open)} open</Badge>
               ) : null}
@@ -456,7 +483,7 @@ function Review() {
                 className="rounded-md border bg-[var(--color-table-row-alt)] p-3 text-[13px] text-[var(--color-text-secondary)]"
                 style={{ borderColor: "var(--color-border-default)" }}
               >
-                No comments have been added to this review pack yet.
+                No review comments have been added yet.
               </div>
             ) : (
               <ol className="space-y-2">
@@ -553,7 +580,7 @@ function Review() {
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Add a manager comment..."
+                placeholder="Add review comment..."
                 className="h-9 flex-1 rounded-md border px-3 text-[13px]"
                 style={{ borderColor: "var(--color-border-strong)" }}
               />

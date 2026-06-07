@@ -60,6 +60,7 @@ import {
   dashboardProjectStatusTone,
   isFinalApprovedStatus,
 } from "@/lib/project-status-workflow";
+import { buildManagerDashboardCounts } from "@/lib/manager-workspace";
 import {
   companyIntelligenceFromAskAnalyst,
   getMockCompanyIntelligence,
@@ -301,7 +302,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
   const [startError, setStartError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "financial" | "portfolio">("financial");
+  const [activeTab, setActiveTab] = useState<"financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
   const [projectPage, setProjectPage] = useState(1);
 
@@ -310,6 +311,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const approvedWorkbookCount = projectList.filter((project) =>
     isFinalApprovedStatus(project.status),
   ).length;
+  const managerCounts = useMemo(() => buildManagerDashboardCounts(projectList), [projectList]);
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
     if (!query) return projectList;
@@ -372,12 +374,35 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
       ? [
           { id: "financial" as const, label: "Financial Dashboard" },
           { id: "portfolio" as const, label: "Portfolio Dashboards" },
-          { id: "overview" as const, label: "My Tasks Overview" },
         ]
       : null;
 
   return (
     <div className="space-y-4">
+      {role === "finance_manager" && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="grid flex-1 grid-cols-3 gap-4">
+              <ManagerDashboardMetric
+                label="Awaiting Review"
+                value={managerCounts.awaitingReview}
+              />
+              <ManagerDashboardMetric
+                label="With Analyst"
+                value={managerCounts.sentBackOrAnalystWork}
+              />
+              <ManagerDashboardMetric
+                label="Approved Workbooks"
+                value={managerCounts.approvedWorkbooks}
+              />
+            </div>
+            <Button variant="secondary" onClick={() => navigate({ to: "/review" })}>
+              Open Review Queue
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Sub-tabs */}
       {tabs && (
         <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
@@ -415,154 +440,159 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
 
       {activeTab === "portfolio" && <PortfolioDashboardsTab role={role} />}
 
-      {/* Overview tab (original dashboard) */}
-      {activeTab === "overview" && role === "finance_manager" && <ManagerDashboard />}
-
-      {(activeTab === "overview" || role === "cfo" || role === "admin") &&
-        role !== "finance_manager" && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-3 gap-4">
-              <StatCard label="Projects" value={projectList.length} />
-              {role === "finance_analyst" && (
-                <StatCard label="Pending requests" value={pendingRequests.length} />
-              )}
-              <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
-            </div>
-
+      {(role === "cfo" || role === "admin") && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-3 gap-4">
+            <StatCard label="Projects" value={projectList.length} />
             {role === "finance_analyst" && (
-              <Card>
-                <div className="mb-3 flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
-                  <h2 className="text-[16px] font-semibold">Assigned requests</h2>
-                  <Badge tone="info">Analyst</Badge>
-                </div>
-                {requests.isLoading ? (
-                  <div className="text-[13px] text-[var(--color-text-muted)]">
-                    Loading requests...
-                  </div>
-                ) : pendingRequests.length === 0 ? (
-                  <div
-                    className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    No pending requests assigned to you.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {pendingRequests.map((request) => (
-                      <div
-                        key={request.id}
-                        className="flex items-center justify-between rounded-md border px-4 py-3"
-                        style={{ borderColor: "var(--color-border-default)" }}
-                      >
-                        <div>
-                          <div className="text-[13px] font-semibold">
-                            {request.companyName}
-                            {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
-                            {request.fiscalYear ?? "Current"}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
-                            Priority: {request.priority ?? "normal"} · Received{" "}
-                            {new Date(request.createdAt).toLocaleDateString()}
-                            {request.note ? ` · ${request.note}` : ""}
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => acknowledge.mutate(request.id)}
-                          disabled={acknowledge.isPending}
-                        >
-                          {acknowledge.isPending && acknowledge.variables === request.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : null}
-                          Acknowledge
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
+              <StatCard label="Pending requests" value={pendingRequests.length} />
             )}
+            <StatCard label="Approved Workbooks" value={approvedWorkbookCount} />
+          </div>
 
+          {role === "finance_analyst" && (
             <Card>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
-                  <h2 className="text-[16px] font-semibold">Projects</h2>
-                </div>
-                <input
-                  value={projectSearch}
-                  onChange={(event) => setProjectSearch(event.target.value)}
-                  placeholder="Search projects"
-                  className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
-                  style={{ borderColor: "var(--color-border-default)" }}
-                />
+              <div className="mb-3 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-[var(--color-brand)]" />
+                <h2 className="text-[16px] font-semibold">Assigned requests</h2>
+                <Badge tone="info">Analyst</Badge>
               </div>
-              {projects.isLoading ? (
+              {requests.isLoading ? (
                 <div className="text-[13px] text-[var(--color-text-muted)]">
-                  Loading projects...
+                  Loading requests...
                 </div>
-              ) : projectList.length === 0 ? (
+              ) : pendingRequests.length === 0 ? (
                 <div
                   className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
                   style={{ borderColor: "var(--color-border-default)" }}
                 >
-                  No projects are available for this account.
-                </div>
-              ) : filteredProjects.length === 0 ? (
-                <div
-                  className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
-                  style={{ borderColor: "var(--color-border-default)" }}
-                >
-                  No projects match that search.
+                  No pending requests assigned to you.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {paginatedProjects.map((project) => (
-                    <button
-                      key={project.id}
-                      onClick={() => {
-                        setSelectedProjectId(project.id);
-                        navigate({ to: "/registry" });
-                      }}
-                      className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
+                  {pendingRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between rounded-md border px-4 py-3"
                       style={{ borderColor: "var(--color-border-default)" }}
                     >
                       <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[13px] font-semibold">{project.companyName}</span>
-                          <Badge tone={dashboardProjectStatusTone(project.status)}>
-                            {dashboardProjectStatusLabel(project.status)}
-                          </Badge>
+                        <div className="text-[13px] font-semibold">
+                          {request.companyName}
+                          {request.companySymbol ? ` (${request.companySymbol})` : ""} ·{" "}
+                          {request.fiscalYear ?? "Current"}
                         </div>
-                        <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-                          {project.fiscalYear ?? "Current period"}
-                          {project.sector ? ` · ${project.sector}` : ""}
-                          {project.projectLabel ? ` · ${project.projectLabel}` : ""}
-                          {" · "}Last edited {formatProjectDate(project.updatedAt)}
+                        <div className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                          Priority: {request.priority ?? "normal"} · Received{" "}
+                          {new Date(request.createdAt).toLocaleDateString()}
+                          {request.note ? ` · ${request.note}` : ""}
                         </div>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
-                    </button>
+                      <Button
+                        onClick={() => acknowledge.mutate(request.id)}
+                        disabled={acknowledge.isPending}
+                      >
+                        {acknowledge.isPending && acknowledge.variables === request.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        Acknowledge
+                      </Button>
+                    </div>
                   ))}
-                  <PaginationControls
-                    totalItems={filteredProjects.length}
-                    page={projectPage}
-                    onPageChange={setProjectPage}
-                    label="projects"
-                  />
                 </div>
               )}
             </Card>
-            {role === "admin" && (
-              <Card>
-                <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
-                  <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
-                  Admin source controls are available from Sources Admin.
-                </div>
-              </Card>
+          )}
+
+          <Card>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-[var(--color-brand)]" />
+                <h2 className="text-[16px] font-semibold">Projects</h2>
+              </div>
+              <input
+                value={projectSearch}
+                onChange={(event) => setProjectSearch(event.target.value)}
+                placeholder="Search projects"
+                className="h-9 w-full max-w-[320px] rounded-md border bg-white px-3 text-[13px] outline-none transition focus:border-[var(--color-brand)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              />
+            </div>
+            {projects.isLoading ? (
+              <div className="text-[13px] text-[var(--color-text-muted)]">Loading projects...</div>
+            ) : projectList.length === 0 ? (
+              <div
+                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                No projects are available for this account.
+              </div>
+            ) : filteredProjects.length === 0 ? (
+              <div
+                className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-secondary)]"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                No projects match that search.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {paginatedProjects.map((project) => (
+                  <button
+                    key={project.id}
+                    onClick={() => {
+                      setSelectedProjectId(project.id);
+                      navigate({ to: "/registry" });
+                    }}
+                    className="flex w-full items-center justify-between rounded-md border px-4 py-3 text-left hover:bg-[var(--color-tag-bg)]"
+                    style={{ borderColor: "var(--color-border-default)" }}
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-semibold">{project.companyName}</span>
+                        <Badge tone={dashboardProjectStatusTone(project.status)}>
+                          {dashboardProjectStatusLabel(project.status)}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                        {project.fiscalYear ?? "Current period"}
+                        {project.sector ? ` · ${project.sector}` : ""}
+                        {project.projectLabel ? ` · ${project.projectLabel}` : ""}
+                        {" · "}Last edited {formatProjectDate(project.updatedAt)}
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-[var(--color-text-muted)]" />
+                  </button>
+                ))}
+                <PaginationControls
+                  totalItems={filteredProjects.length}
+                  page={projectPage}
+                  onPageChange={setProjectPage}
+                  label="projects"
+                />
+              </div>
             )}
-          </div>
-        )}
+          </Card>
+          {role === "admin" && (
+            <Card>
+              <div className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
+                <ShieldCheck className="h-4 w-4 text-[var(--color-brand)]" />
+                Admin source controls are available from Sources Admin.
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManagerDashboardMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <div className="text-[12px] uppercase tracking-wider text-[var(--color-text-secondary)]">
+        {label}
+      </div>
+      <div className="mt-2 text-[24px] font-bold tnum">{value}</div>
     </div>
   );
 }
@@ -584,7 +614,6 @@ const emptyPortfolioDashboardDraft: PortfolioDashboardDraft = {
 };
 
 function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
-  const isManagerView = role === "finance_manager";
   const { data: user } = useCurrentUser();
   const psxCompanies = usePsxCompanies();
   const projects = useProjects();
@@ -596,7 +625,6 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
   const markExported = useMarkPortfolioDashboardExported();
   const [view, setView] = useState<PortfolioDashboardView>("list");
   const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
-  const [managerCreatorFilter, setManagerCreatorFilter] = useState("");
 
   const myItems = useMemo(() => myDashboards.data ?? [], [myDashboards.data]);
   const publicItems = useMemo(() => publicDashboards.data ?? [], [publicDashboards.data]);
@@ -605,19 +633,11 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
     () => visibleItems.find((dashboard) => dashboard.id === selectedDashboardId) ?? null,
     [selectedDashboardId, visibleItems],
   );
-  const creatorOptions = useMemo(
-    () => [...new Set(publicItems.map((dashboard) => dashboard.createdByName))].sort(),
-    [publicItems],
-  );
-  const filteredPublicItems = useMemo(
-    () => filterPortfolioDashboards(publicItems, "", managerCreatorFilter || null),
-    [managerCreatorFilter, publicItems],
-  );
   const createError = createPortfolio.error instanceof Error ? createPortfolio.error.message : null;
   const updateError = updatePortfolio.error instanceof Error ? updatePortfolio.error.message : null;
   const deleteError = deletePortfolio.error instanceof Error ? deletePortfolio.error.message : null;
   const exportError = markExported.error instanceof Error ? markExported.error.message : null;
-  const canCreate = role === "finance_analyst" || role === "admin";
+  const canCreate = role === "finance_analyst" || role === "finance_manager" || role === "admin";
 
   const openDashboard = (dashboard: PortfolioDashboardResponse) => {
     setSelectedDashboardId(dashboard.id);
@@ -637,6 +657,17 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
       companySelections: dashboard.companySelections,
     });
     setSelectedDashboardId(duplicated.id);
+    setView("detail");
+  };
+
+  const saveDashboardVersion = async (dashboard: PortfolioDashboardResponse) => {
+    const versioned = await createPortfolio.mutateAsync({
+      name: nextPortfolioVersionName(dashboard.name, visibleItems),
+      description: dashboard.description,
+      visibility: dashboard.visibility,
+      companySelections: dashboard.companySelections,
+    });
+    setSelectedDashboardId(versioned.id);
     setView("detail");
   };
 
@@ -721,62 +752,16 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
         deleting={deletePortfolio.isPending}
         duplicating={createPortfolio.isPending}
         exporting={markExported.isPending}
+        versioning={createPortfolio.isPending}
         projects={projects.data ?? []}
         error={deleteError ?? createError ?? exportError}
         onBack={() => setView("list")}
         onEdit={() => startEdit(selectedDashboard)}
         onDelete={() => removeDashboard(selectedDashboard)}
         onDuplicate={() => duplicateDashboard(selectedDashboard)}
+        onSaveVersion={() => saveDashboardVersion(selectedDashboard)}
         onExport={() => exportDashboard(selectedDashboard)}
       />
-    );
-  }
-
-  if (isManagerView) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-[var(--color-brand)]" />
-                <h2 className="text-[16px] font-semibold">Public Portfolio Dashboards</h2>
-              </div>
-              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
-                Open public dashboards in read-only mode and see who created them.
-              </p>
-            </div>
-            <label className="min-w-[220px]">
-              <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-muted)]">
-                Creator
-              </span>
-              <select
-                value={managerCreatorFilter}
-                onChange={(event) => setManagerCreatorFilter(event.target.value)}
-                className="h-9 w-full rounded-md border bg-white px-3 text-[13px] outline-none focus:border-[var(--color-brand)]"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                <option value="">All creators</option>
-                {creatorOptions.map((creator) => (
-                  <option key={creator} value={creator}>
-                    {creator}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </Card>
-        <PortfolioDashboardList
-          dashboards={filteredPublicItems}
-          loading={publicDashboards.isLoading}
-          emptyLabel="Create a dashboard to compare companies across one or more sectors."
-          currentUserId={user?.id ?? null}
-          readOnly
-          showCreatorFilter={false}
-          onOpen={openDashboard}
-          onDuplicate={duplicateDashboard}
-        />
-      </div>
     );
   }
 
@@ -1345,12 +1330,14 @@ function PortfolioDashboardDetail({
   deleting,
   duplicating,
   exporting,
+  versioning,
   projects,
   error,
   onBack,
   onEdit,
   onDelete,
   onDuplicate,
+  onSaveVersion,
   onExport,
 }: {
   dashboard: PortfolioDashboardResponse;
@@ -1359,12 +1346,14 @@ function PortfolioDashboardDetail({
   deleting: boolean;
   duplicating: boolean;
   exporting: boolean;
+  versioning: boolean;
   projects: ProjectResponse[];
   error: string | null;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onSaveVersion: () => void;
   onExport: () => void;
 }) {
   const summary = portfolioCompanySummary(dashboard.companySelections);
@@ -1409,6 +1398,16 @@ function PortfolioDashboardDetail({
               )}
               Duplicate
             </Button>
+            {canEdit ? (
+              <Button variant="secondary" onClick={onSaveVersion} disabled={versioning}>
+                {versioning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                Save as Version
+              </Button>
+            ) : null}
             {canEdit ? (
               <>
                 <Button variant="secondary" onClick={onEdit}>
@@ -1829,6 +1828,28 @@ function portfolioDraftFromDashboard(
     visibility: dashboard.visibility,
     companySelections: dashboard.companySelections,
   };
+}
+
+function nextPortfolioVersionName(
+  currentName: string,
+  dashboards: PortfolioDashboardResponse[],
+): string {
+  const baseName = currentName.replace(/\s+v\d+$/i, "").trim() || currentName.trim();
+  const versionPattern = new RegExp(`^${escapeRegExp(baseName)}\\s+v(\\d+)$`, "i");
+  const maxVersion = dashboards.reduce(
+    (max, dashboard) => {
+      const match = dashboard.name.match(versionPattern);
+      if (!match) return max;
+      const version = Number.parseInt(match[1], 10);
+      return Number.isFinite(version) ? Math.max(max, version) : max;
+    },
+    currentName.toLowerCase() === baseName.toLowerCase() ? 1 : 0,
+  );
+  return `${baseName} v${maxVersion + 1}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function FinancialDashboardTab({
