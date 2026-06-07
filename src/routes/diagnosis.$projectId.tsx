@@ -1413,6 +1413,39 @@ function DiagnosisPanel({
                 ))}
               </div>
             ) : null}
+            {termStandardization.mappingRuleCautionIds.length ? (
+              <div
+                className="rounded-lg border p-2"
+                style={{ borderColor: "#FCD34D", background: "var(--color-warning-bg)" }}
+              >
+                <div className="text-[11px] font-semibold uppercase" style={{ color: "var(--color-warning-fg)" }}>
+                  Mapping rule cautions
+                </div>
+                <div className="mt-2 space-y-1.5">
+                  {termStandardization.mappingRules
+                    .filter((rule) => termStandardization.mappingRuleCautionIds.includes(rule.ruleCode))
+                    .map((rule) => (
+                      <div key={`${rule.ruleCode}-${rule.status}`} className="text-[11px] leading-relaxed" style={{ color: "#4F546B" }}>
+                        <span className="font-semibold">{rule.ruleCode}</span>
+                        {" · "}
+                        {rule.message}
+                      </div>
+                    ))}
+                </div>
+                {termStandardization.competingSourceValues.length ? (
+                  <div className="mt-2 space-y-1 border-t pt-2" style={{ borderColor: "#FCD34D" }}>
+                    <div className="text-[11px] font-semibold" style={{ color: "var(--color-warning-fg)" }}>
+                      Alternate source values
+                    </div>
+                    {termStandardization.competingSourceValues.slice(0, 3).map((source, index) => (
+                      <div key={index} className="text-[11px]" style={{ color: "#4F546B" }}>
+                        {stringValue(source.sourceDocumentId, "Source file")} · {stringValue(source.value, "-")}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )}
       </section>
