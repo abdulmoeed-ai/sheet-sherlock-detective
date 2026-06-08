@@ -25,11 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { setSelectedProjectId, useSelectedProjectId } from "@/lib/project-store";
-import {
-  SIDEBAR_COLLAPSED_WIDTH,
-  SIDEBAR_WIDTH,
-  useSidebarCollapsed,
-} from "@/lib/sidebar-store";
+import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_WIDTH, useSidebarCollapsed } from "@/lib/sidebar-store";
 import { useAskAiStream } from "@/hooks/use-ask-ai-stream";
 import { useAskAiSessions } from "@/hooks/use-ask-ai-sessions";
 import { useWorkspace } from "@/hooks/use-projects";
@@ -72,7 +68,17 @@ import {
   type AskAiCitationPreview,
 } from "@/lib/ask-ai-citations";
 import { buildAskAiReasoningSummary } from "@/lib/ask-ai-reasoning";
-import { normalizeForecastAnalysis, normalizeForecastVisuals } from "@/lib/ask-ai-forecast";
+import {
+  formatForecastConfidenceLabel,
+  forecastChartCardClassName,
+  forecastChartContainerClassName,
+  forecastChartGridClassName,
+  forecastChartMargin,
+  forecastChartYAxisProps,
+  normalizeForecastAnalysis,
+  normalizeForecastVisuals,
+} from "@/lib/ask-ai-forecast";
+import { formatAskAiElapsedTime } from "@/lib/ask-ai-duration";
 import { askAiRouteModeForPath } from "@/lib/ask-ai-route-mode";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
 import { markAskAiStreamStopped } from "@/lib/ask-ai-stop";
@@ -138,11 +144,13 @@ export function AskAiTrigger() {
   const projectScopedActiveSession = routeMode.isForecastRoute ? null : activeSession;
   const activeProjectId = routeMode.isForecastRoute
     ? null
-    : projectScopedActiveSession?.projectId ?? modelProjectContext?.id ?? routeProjectId;
-  const activeRoutePath = routeMode.isForecastRoute ? routePath : activeSession?.routePath ?? routePath;
+    : (projectScopedActiveSession?.projectId ?? modelProjectContext?.id ?? routeProjectId);
+  const activeRoutePath = routeMode.isForecastRoute
+    ? routePath
+    : (activeSession?.routePath ?? routePath);
   const activeScreenName = routeMode.isForecastRoute
     ? screenNameForPath(routePath)
-    : projectScopedActiveSession?.screenName ?? screenNameForPath(routePath);
+    : (projectScopedActiveSession?.screenName ?? screenNameForPath(routePath));
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
   const sessionsApi = useAskAiSessions(routeMode.isForecastRoute ? "forecast" : "project");
@@ -222,10 +230,10 @@ export function AskAiTrigger() {
   const contextChips = buildAskAiContextChips({
     company: routeMode.isForecastRoute
       ? null
-      : projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName,
+      : (projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName),
     period: routeMode.isForecastRoute
       ? null
-      : projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear,
+      : (projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear),
     sector: routeMode.isForecastRoute ? null : workspace.data?.project.sector,
     documentCount: routeMode.isForecastRoute ? undefined : workspace.data?.documents.length,
     isDiagnosis: isDiagnosisRoute,
@@ -234,11 +242,11 @@ export function AskAiTrigger() {
   const subtitleParts = buildAskAiSubtitleParts({
     company: routeMode.isForecastRoute
       ? null
-      : projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName,
+      : (projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName),
     screenName: activeScreenName,
     period: routeMode.isForecastRoute
       ? null
-      : projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear,
+      : (projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear),
   });
   const expandedLeft = sidebarCollapsed
     ? routeMode.reserveSidebar
@@ -438,7 +446,11 @@ export function AskAiTrigger() {
         return;
       }
       text = pendingModelSelection.question;
-    } else if (!activeProjectId && !routeMode.isForecastRoute && isWorkbookInventoryQuestion(text)) {
+    } else if (
+      !activeProjectId &&
+      !routeMode.isForecastRoute &&
+      isWorkbookInventoryQuestion(text)
+    ) {
       try {
         const result = await listAskAiWorkbooks();
         const candidates = workbookInventoryToModelCandidates(result.items);
@@ -469,7 +481,11 @@ export function AskAiTrigger() {
         ]);
       }
       return;
-    } else if (!activeProjectId && !routeMode.isForecastRoute && shouldSearchModelsBeforeAskAi(text)) {
+    } else if (
+      !activeProjectId &&
+      !routeMode.isForecastRoute &&
+      shouldSearchModelsBeforeAskAi(text)
+    ) {
       try {
         const result = await searchAskAiModels({ query: text });
         if (result.candidates.length > 0) {
@@ -508,7 +524,9 @@ export function AskAiTrigger() {
       }
     }
 
-    const effectiveProjectId = routeMode.isForecastRoute ? null : modelOverride?.id ?? activeProjectId;
+    const effectiveProjectId = routeMode.isForecastRoute
+      ? null
+      : (modelOverride?.id ?? activeProjectId);
     if (!effectiveProjectId && !routeMode.isForecastRoute) {
       setMessages((m) => [
         ...m,
@@ -536,7 +554,7 @@ export function AskAiTrigger() {
       let streamError = false;
       const requestProject = routeMode.isForecastRoute
         ? null
-        : modelOverride ??
+        : (modelOverride ??
           (workspace.data?.project
             ? {
                 companyName:
@@ -551,7 +569,7 @@ export function AskAiTrigger() {
                   projectLabel: projectScopedActiveSession.projectLabel,
                   fiscalYear: null,
                 }
-              : null);
+              : null));
       const final = await askAi.sendQuestion(
         buildAskAiRequestPayload({
           question: text,
@@ -928,7 +946,9 @@ export function AskAiTrigger() {
                   className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
                 >
                   {messages.length === 0 && (
-                    <div className={`mx-auto w-full space-y-2.5 ${panelExpanded ? "max-w-[80%]" : ""}`}>
+                    <div
+                      className={`mx-auto w-full space-y-2.5 ${panelExpanded ? "max-w-[80%]" : ""}`}
+                    >
                       {/* Finance expert ready card */}
                       <div
                         className="rounded-2xl border p-4"
@@ -1499,7 +1519,7 @@ function StreamingAiBubble({
               className="tnum font-medium"
               style={{ color: message.done ? "var(--color-success)" : "var(--color-brand)" }}
             >
-              {(elapsed / 1000).toFixed(1)}s
+              {formatAskAiElapsedTime(elapsed)}
             </span>
           </span>
           <span className="h-3 w-px" style={{ background: "var(--color-border-default)" }} />
@@ -2024,33 +2044,35 @@ function ForecastSnapshot({ visuals }: { visuals: AskAiForecastVisuals }) {
         </div>
         {visuals.confidence && (
           <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]">
-            {visuals.confidence} confidence
+            {formatForecastConfidenceLabel(visuals.confidence)} confidence
           </span>
         )}
       </div>
       <div className="space-y-3 p-3">
         {charts.length > 0 && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className={forecastChartGridClassName(charts.length)}>
             {charts.map((series) => (
               <div
                 key={series.id}
-                className="min-w-0 rounded-lg border bg-white p-2"
+                className={forecastChartCardClassName(charts.length)}
                 style={{ borderColor: "var(--color-border-default)" }}
               >
                 <div className="mb-1 truncate text-[11px] font-semibold text-[var(--color-text-secondary)]">
                   {series.title}
                 </div>
                 <ChartContainer
-                  className="h-[150px] min-h-[150px] w-full aspect-auto"
+                  className={forecastChartContainerClassName(charts.length)}
                   config={{ value: { label: series.title, color: "var(--color-brand)" } }}
                 >
-                  <LineChart
-                    data={series.points}
-                    margin={{ left: 0, right: 10, top: 10, bottom: 0 }}
-                  >
+                  <LineChart data={series.points} margin={forecastChartMargin}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
-                    <YAxis tickLine={false} axisLine={false} width={36} />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      width={forecastChartYAxisProps.width}
+                      tickMargin={forecastChartYAxisProps.tickMargin}
+                    />
                     <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                     <Line
                       type="monotone"
@@ -2066,15 +2088,27 @@ function ForecastSnapshot({ visuals }: { visuals: AskAiForecastVisuals }) {
           </div>
         )}
         {visuals.assumptionPills.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {visuals.assumptionPills.map((pill) => (
-              <span
-                key={pill}
-                className="rounded-full bg-[var(--color-tag-bg)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-brand)]"
-              >
-                {pill}
-              </span>
-            ))}
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[320px] border-separate border-spacing-0 text-left text-[11px]">
+              <thead className="text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                <tr>
+                  <th className="border-b px-2 py-1.5 font-semibold">Assumption</th>
+                  <th className="border-b px-2 py-1.5 font-semibold">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visuals.assumptionPills.map((pill) => (
+                  <tr key={`${pill.label}-${pill.value ?? ""}`}>
+                    <td className="border-b px-2 py-1.5 font-medium text-[var(--color-text-primary)]">
+                      {pill.label}
+                    </td>
+                    <td className="border-b px-2 py-1.5 text-[var(--color-text-secondary)]">
+                      {pill.value ?? "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         {visuals.riskCallouts.length > 0 && (

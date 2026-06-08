@@ -15,10 +15,15 @@ export type AskAiRiskCallout = {
   severity: "High" | "Medium" | "Low";
 };
 
+export type AskAiForecastAssumptionPill = {
+  label: string;
+  value?: string;
+};
+
 export type AskAiForecastVisuals = {
   executiveSummary?: string[];
   chartSeries: AskAiForecastChartSeries[];
-  assumptionPills: string[];
+  assumptionPills: AskAiForecastAssumptionPill[];
   riskCallouts: AskAiRiskCallout[];
   confidence?: string;
 };

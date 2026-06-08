@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { MarkdownContent } from "./MarkdownContent";
 
 function renderMarkdown(markdown: string, renderCitation?: (index: number) => React.ReactNode) {
-  return renderToStaticMarkup(<MarkdownContent markdown={markdown} renderCitation={renderCitation} />);
+  return renderToStaticMarkup(
+    <MarkdownContent markdown={markdown} renderCitation={renderCitation} />,
+  );
 }
 
 describe("MarkdownContent", () => {
@@ -31,6 +33,28 @@ describe("MarkdownContent", () => {
     expect(html).toContain("<th");
     expect(html).toContain("Scenario");
     expect(html).toContain("Base");
+  });
+
+  it("renders backend LaTeX formulas instead of raw dollar-delimited markdown", () => {
+    const html = renderMarkdown(
+      String.raw`Calculation: $$\text{CAGR} = \left( \frac{95,020.57}{45,665.24} \right)^{\frac{1}{3}} - 1 \approx (2.0808)^{0.3333} - 1 \approx \mathbf{27.66%}$$`,
+    );
+
+    expect(html).toContain("katex");
+    expect(html).toContain("CAGR");
+    expect(html).toContain("27.66%");
+    expect(html).not.toContain("$$");
+    expect(html).not.toContain("katex-error");
+  });
+
+  it("renders escaped br markers inside table cells as line breaks", () => {
+    const html = renderMarkdown(
+      "| Scenario | Metric | FY26E |\n| --- | --- | ---: |\n| Base Case | Revenue (PKR M)<br>Net Income (PKR M)<br>EPS (PKR) | 60,000.00<br>8,000.00<br>40.10 |",
+    );
+
+    expect(html).toContain("Revenue (PKR M)<br/>Net Income (PKR M)<br/>EPS (PKR)");
+    expect(html).toContain("60,000.00<br/>8,000.00<br/>40.10");
+    expect(html).not.toContain("&lt;br&gt;");
   });
 
   it("renders thematic breaks as separators instead of literal dashes", () => {

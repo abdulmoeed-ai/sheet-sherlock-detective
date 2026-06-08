@@ -1,5 +1,6 @@
 import type {
   AskAiForecastAnalysis,
+  AskAiForecastAssumptionPill,
   AskAiForecastAssumption,
   AskAiForecastCagrResult,
   AskAiForecastChartSeries,
@@ -16,7 +17,7 @@ const SUPPORTED_METRICS = new Set(["revenue", "eps", "share_price", "pe_vs_secto
 export function normalizeForecastVisuals(value: unknown): AskAiForecastVisuals | null {
   if (!isRecord(value)) return null;
   const chartSeries = normalizeChartSeries(value.chartSeries);
-  const assumptionPills = stringList(value.assumptionPills, 6);
+  const assumptionPills = normalizeAssumptionPills(value.assumptionPills);
   const riskCallouts = normalizeRiskCallouts(value.riskCallouts);
   const confidence = stringValue(value.confidence);
   const executiveSummary = stringList(value.executiveSummary, 3);
@@ -74,6 +75,33 @@ export function normalizeForecastAnalysis(value: unknown): AskAiForecastAnalysis
     ...(unit ? { unit } : {}),
   };
 }
+
+export function formatForecastConfidenceLabel(value: string): string {
+  const text = value.trim().replace(/\s+confidence$/i, "");
+  const numericValue = Number(text.replace(/%$/, ""));
+  if (!Number.isFinite(numericValue)) return text;
+  const percentValue = text.endsWith("%") || numericValue > 1 ? numericValue : numericValue * 100;
+  return `${Math.round(percentValue)}%`;
+}
+
+export function forecastChartGridClassName(chartCount: number) {
+  return chartCount === 1 ? "grid justify-items-center gap-3" : "grid gap-3 md:grid-cols-2";
+}
+
+export function forecastChartCardClassName(chartCount: number) {
+  const base = "min-w-0 rounded-lg border bg-white p-3";
+  return chartCount === 1 ? `${base} w-full max-w-[820px]` : `${base} w-full`;
+}
+
+export function forecastChartContainerClassName(chartCount: number) {
+  return chartCount === 1
+    ? "h-[260px] min-h-[260px] w-full aspect-auto"
+    : "h-[190px] min-h-[190px] w-full aspect-auto";
+}
+
+export const forecastChartMargin = { left: 14, right: 14, top: 10, bottom: 0 } as const;
+
+export const forecastChartYAxisProps = { width: 62, tickMargin: 10 } as const;
 
 function normalizeChartSeries(value: unknown): AskAiForecastChartSeries[] {
   if (!Array.isArray(value)) return [];
@@ -235,6 +263,53 @@ function normalizeAssumptions(value: unknown): AskAiForecastAssumption[] {
     })
     .filter((item): item is AskAiForecastAssumption => item !== null)
     .slice(0, 12);
+}
+
+function normalizeAssumptionPills(value: unknown): AskAiForecastAssumptionPill[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  const result: AskAiForecastAssumptionPill[] = [];
+  for (const item of raw) {
+    const pill = assumptionPillValue(item);
+    if (!pill) continue;
+    const exists = result.some(
+      (current) => current.label === pill.label && (current.value ?? "") === (pill.value ?? ""),
+    );
+    if (!exists) result.push(pill);
+    if (result.length >= 6) break;
+  }
+  return result;
+}
+
+function assumptionPillValue(value: unknown): AskAiForecastAssumptionPill | null {
+  if (isRecord(value)) {
+    const label = stringValue(value.label);
+    const textValue = stringValue(value.value);
+    if (!label && !textValue) return null;
+    return {
+      label: label ?? textValue ?? "",
+      ...(label && textValue ? { value: textValue } : {}),
+    };
+  }
+  const text = stringValue(value);
+  if (!text) return null;
+  const parsed = parseSerializedAssumptionPill(text);
+  return parsed ?? { label: text };
+}
+
+function parseSerializedAssumptionPill(value: string): AskAiForecastAssumptionPill | null {
+  const normalizedJson = value.replace(/'/g, '"');
+  try {
+    const parsed: unknown = JSON.parse(normalizedJson);
+    return isRecord(parsed) ? assumptionPillValue(parsed) : null;
+  } catch {
+    const label = value.match(/["']label["']\s*:\s*["']([^"']+)["']/)?.[1];
+    const textValue = value.match(/["']value["']\s*:\s*["']([^"']+)["']/)?.[1];
+    if (!label && !textValue) return null;
+    return {
+      label: label ?? textValue ?? "",
+      ...(label && textValue ? { value: textValue } : {}),
+    };
+  }
 }
 
 function stringList(value: unknown, limit: number): string[] {

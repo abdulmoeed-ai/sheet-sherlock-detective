@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { normalizeForecastAnalysis, normalizeForecastVisuals } from "./ask-ai-forecast";
+import {
+  formatForecastConfidenceLabel,
+  forecastChartCardClassName,
+  forecastChartGridClassName,
+  forecastChartMargin,
+  forecastChartYAxisProps,
+  normalizeForecastAnalysis,
+  normalizeForecastVisuals,
+} from "./ask-ai-forecast";
 
 describe("normalizeForecastVisuals", () => {
   it("keeps supported chart series with numeric points and filters unsupported data", () => {
     const visuals = normalizeForecastVisuals({
       confidence: "Medium",
-      assumptionPills: ["Demand recovery", ""],
+      assumptionPills: [
+        { label: "Base Case Revenue CAGR", value: "10.4%" },
+        "{'label': 'Base Case Net Margin', 'value': '12.0%'}",
+        "Demand recovery",
+        "",
+      ],
       riskCallouts: [
         { label: "Margin pressure", severity: "Medium" },
         { label: "", severity: "High" },
@@ -31,7 +44,11 @@ describe("normalizeForecastVisuals", () => {
     });
 
     expect(visuals?.confidence).toBe("Medium");
-    expect(visuals?.assumptionPills).toEqual(["Demand recovery"]);
+    expect(visuals?.assumptionPills).toEqual([
+      { label: "Base Case Revenue CAGR", value: "10.4%" },
+      { label: "Base Case Net Margin", value: "12.0%" },
+      { label: "Demand recovery" },
+    ]);
     expect(visuals?.riskCallouts).toEqual([{ label: "Margin pressure", severity: "Medium" }]);
     expect(visuals?.chartSeries).toEqual([
       {
@@ -49,6 +66,21 @@ describe("normalizeForecastVisuals", () => {
   it("returns null when no valid forecast visual data exists", () => {
     expect(normalizeForecastVisuals({ chartSeries: [] })).toBeNull();
     expect(normalizeForecastVisuals(null)).toBeNull();
+  });
+});
+
+describe("forecast chart layout", () => {
+  it("centers and enlarges a single forecast chart", () => {
+    expect(forecastChartGridClassName(1)).toContain("justify-items-center");
+    expect(forecastChartGridClassName(1)).not.toContain("md:grid-cols-2");
+    expect(forecastChartCardClassName(1)).toContain("w-full");
+    expect(forecastChartCardClassName(1)).toContain("max-w-[820px]");
+  });
+
+  it("reserves left padding for readable Y-axis labels", () => {
+    expect(forecastChartMargin.left).toBeGreaterThan(0);
+    expect(forecastChartYAxisProps.width).toBeGreaterThanOrEqual(56);
+    expect(forecastChartYAxisProps.tickMargin).toBeGreaterThanOrEqual(8);
   });
 });
 
@@ -129,5 +161,13 @@ describe("normalizeForecastAnalysis", () => {
   it("returns null when no valid forecast analysis data exists", () => {
     expect(normalizeForecastAnalysis({ historicalSeries: [], scenarioTable: [] })).toBeNull();
     expect(normalizeForecastAnalysis(null)).toBeNull();
+  });
+});
+
+describe("formatForecastConfidenceLabel", () => {
+  it("formats decimal confidence as a whole-number percentage", () => {
+    expect(formatForecastConfidenceLabel("0.85")).toBe("85%");
+    expect(formatForecastConfidenceLabel("85% confidence")).toBe("85%");
+    expect(formatForecastConfidenceLabel("Medium")).toBe("Medium");
   });
 });

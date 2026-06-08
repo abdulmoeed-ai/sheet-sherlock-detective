@@ -3,7 +3,14 @@ import { userFacingAskAiWarnings } from "./ask-ai-warnings";
 
 describe("userFacingAskAiWarnings", () => {
   it("hides internal model fallback codes from the analyst", () => {
-    expect(userFacingAskAiWarnings(["prompt_guardrail_exceeded", "llm_unavailable"])).toEqual([]);
+    expect(
+      userFacingAskAiWarnings([
+        "prompt_guardrail_exceeded",
+        "llm_unavailable",
+        "unsupported_numeric_claim",
+        "unverified_web_result_used",
+      ]),
+    ).toEqual([]);
   });
 
   it("hides pdf readiness warnings for generic finance responses", () => {
