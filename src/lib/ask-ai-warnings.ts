@@ -1,6 +1,8 @@
 const WARNING_LABELS: Record<string, string> = {
   prompt_guardrail_exceeded: "",
   llm_unavailable: "",
+  unsupported_numeric_claim: "",
+  unverified_web_result_used: "",
   unsupported_claim_removed: "Some unsupported external claims were removed.",
   rag_index_building:
     "PDF search is still being prepared. Ask AI is using workbook context and available project evidence for now.",

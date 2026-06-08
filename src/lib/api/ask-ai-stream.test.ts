@@ -53,7 +53,7 @@ describe("parseSseEvents", () => {
       activityLog: [],
       forecastVisuals: {
         confidence: "Medium",
-        assumptionPills: ["Demand recovery"],
+        assumptionPills: [{ label: "Demand recovery" }],
         riskCallouts: [{ label: "Margin pressure", severity: "Medium" }],
         chartSeries: [
           {
@@ -131,7 +131,9 @@ describe("parseSseEvents", () => {
           );
           return;
         }
-        controller.enqueue(encoder.encode(`event: final\ndata: ${JSON.stringify(finalPayload)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`event: final\ndata: ${JSON.stringify(finalPayload)}\n\n`),
+        );
         controller.close();
       },
     });

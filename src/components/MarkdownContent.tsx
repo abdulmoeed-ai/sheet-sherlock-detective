@@ -1,9 +1,13 @@
+import { Children, Fragment, cloneElement, isValidElement } from "react";
 import type { ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { visit } from "unist-util-visit";
 import type { Root, RootContent, Text } from "mdast";
 import type { Plugin } from "unified";
+import "katex/dist/katex.min.css";
 
 const CITATION_NODE_TYPE = "askAiCitation";
 
@@ -30,6 +34,8 @@ export function MarkdownContent({
   renderCitation,
   size = "default",
 }: MarkdownContentProps) {
+  const normalizedMarkdown = normalizeDollarMath(markdown);
+
   return (
     <div
       className={`min-w-0 space-y-2 break-words leading-relaxed ${
@@ -38,37 +44,56 @@ export function MarkdownContent({
       style={{ color: "var(--color-text-primary)" }}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkAskAiCitations]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkEscapeMathPercent, remarkAskAiCitations]}
+        rehypePlugins={[rehypeKatex]}
         urlTransform={defaultUrlTransform}
         components={{
           p: ({ children }) => <p className="whitespace-pre-wrap break-words">{children}</p>,
           h1: ({ children }) => (
-            <h3 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h3
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h3>
           ),
           h2: ({ children }) => (
-            <h4 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h4
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h4>
           ),
           h3: ({ children }) => (
-            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h5
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h5>
           ),
           h4: ({ children }) => (
-            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h5
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h5>
           ),
           h5: ({ children }) => (
-            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h5
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h5>
           ),
           h6: ({ children }) => (
-            <h5 className="break-words font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <h5
+              className="break-words font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {children}
             </h5>
           ),
@@ -97,7 +122,7 @@ export function MarkdownContent({
               className="border-b px-3 py-2 font-semibold text-[var(--color-text-primary)]"
               style={{ borderColor: "var(--color-border-default)" }}
             >
-              {children}
+              {renderTableCellChildren(children)}
             </th>
           ),
           td: ({ children }) => (
@@ -105,14 +130,16 @@ export function MarkdownContent({
               className="border-b px-3 py-2 align-top text-[var(--color-text-secondary)] last:border-r-0"
               style={{ borderColor: "var(--color-border-default)" }}
             >
-              {children}
+              {renderTableCellChildren(children)}
             </td>
           ),
           code: ({ children, className }) => {
             const isBlock = typeof className === "string" && className.startsWith("language-");
             if (isBlock) {
               return (
-                <code className={`${className} block overflow-x-auto whitespace-pre rounded-md bg-[var(--color-tag-bg)] p-3 text-[12px]`}>
+                <code
+                  className={`${className} block overflow-x-auto whitespace-pre rounded-md bg-[var(--color-tag-bg)] p-3 text-[12px]`}
+                >
                   {children}
                 </code>
               );
@@ -129,7 +156,7 @@ export function MarkdownContent({
               {children}
             </a>
           ),
-          span: ({ children, node }) => {
+          span: ({ children, node, ...props }) => {
             const citationIndex = Number.parseInt(
               String(node?.properties?.dataAskAiCitation ?? ""),
               10,
@@ -137,17 +164,58 @@ export function MarkdownContent({
             if (Number.isFinite(citationIndex)) {
               return renderCitation ? <>{renderCitation(citationIndex)}</> : <>{children}</>;
             }
-            return <span>{children}</span>;
+            return <span {...props}>{children}</span>;
           },
           hr: () => (
-            <hr className="my-2 border-0 border-t" style={{ borderColor: "var(--color-border-default)" }} />
+            <hr
+              className="my-2 border-0 border-t"
+              style={{ borderColor: "var(--color-border-default)" }}
+            />
           ),
         }}
       >
-        {markdown}
+        {normalizedMarkdown}
       </ReactMarkdown>
     </div>
   );
+}
+
+function normalizeDollarMath(markdown: string): string {
+  return markdown.replace(/\$\$([\s\S]*?)\$\$/g, (_match, formula: string) => {
+    return `$$${escapeUnescapedPercent(formula)}$$`;
+  });
+}
+
+function escapeUnescapedPercent(value: string): string {
+  return value.replace(/(^|[^\\])%/g, "$1\\%");
+}
+
+function renderTableCellChildren(children: ReactNode): ReactNode {
+  return Children.toArray(children).flatMap((child, childIndex) => {
+    if (typeof child === "string") {
+      return renderBreakSeparatedText(child, `cell-${childIndex}`);
+    }
+    if (
+      isValidElement<{ children?: ReactNode }>(child) &&
+      typeof child.props.children === "string"
+    ) {
+      const parts = renderBreakSeparatedText(child.props.children, `cell-${childIndex}`);
+      return parts.length === 1 ? child : cloneElement(child, { children: parts });
+    }
+    return child;
+  });
+}
+
+function renderBreakSeparatedText(text: string, keyPrefix: string): ReactNode[] {
+  const parts = text.split(/<br\s*\/?>/gi);
+  if (parts.length === 1) return [text];
+
+  return parts.flatMap((part, index) => {
+    const nodes: ReactNode[] = [];
+    if (index > 0) nodes.push(<br key={`${keyPrefix}-br-${index}`} />);
+    if (part) nodes.push(<Fragment key={`${keyPrefix}-text-${index}`}>{part}</Fragment>);
+    return nodes;
+  });
 }
 
 const remarkAskAiCitations: Plugin<[], Root> = () => (tree) => {
@@ -160,6 +228,21 @@ const remarkAskAiCitations: Plugin<[], Root> = () => (tree) => {
 
     parent.children.splice(index, 1, ...(parts as RootContent[]));
   });
+};
+
+const remarkEscapeMathPercent: Plugin<[], Root> = () => (tree) => {
+  const escapeMathNode = (node: unknown) => {
+    if (
+      typeof node === "object" &&
+      node !== null &&
+      "value" in node &&
+      typeof node.value === "string"
+    ) {
+      node.value = escapeUnescapedPercent(node.value);
+    }
+  };
+  visit(tree, "math", escapeMathNode);
+  visit(tree, "inlineMath", escapeMathNode);
 };
 
 function splitCitationText(value: string): Array<Text | AskAiCitationNode> | null {
