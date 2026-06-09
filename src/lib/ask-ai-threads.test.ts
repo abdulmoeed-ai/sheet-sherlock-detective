@@ -37,7 +37,7 @@ describe("askAiSessionToMessages", () => {
           screenName: "Diagnosis",
           citations: [{ index: 1, kind: "model" }],
           warnings: ["citation_limited"],
-          usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64 },
+          usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64, elapsedMs: 124500 },
           retrievalSnapshot: {
             sourcesUsed: [{ index: 1, kind: "model" }],
             modelCitations: [{ index: 1, kind: "model", cellReference: "BS!D42" }],
@@ -77,7 +77,8 @@ describe("askAiSessionToMessages", () => {
         answer: "Cash is missing [1].",
         sessionId: "chat-1",
         warnings: ["citation_limited"],
-        usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64 },
+        usage: { totalTokens: 192, inputTokens: 128, outputTokens: 64, elapsedMs: 124500 },
+        elapsedMs: 124500,
         modelCitations: [{ index: 1, kind: "model", cellReference: "BS!D42" }],
         forecastAnalysis: {
           metric: "revenue",

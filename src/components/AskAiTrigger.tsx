@@ -1,5 +1,14 @@
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import {
   Sparkles,
@@ -79,6 +88,10 @@ import {
   normalizeForecastVisuals,
 } from "@/lib/ask-ai-forecast";
 import { formatAskAiElapsedTime } from "@/lib/ask-ai-duration";
+import {
+  requestAskAiNotificationPermission,
+  showAskAiCompletionNotification,
+} from "@/lib/ask-ai-browser-notifications";
 import { askAiRouteModeForPath } from "@/lib/ask-ai-route-mode";
 import { askAiSessionToMessages } from "@/lib/ask-ai-threads";
 import { markAskAiStreamStopped } from "@/lib/ask-ai-stop";
@@ -115,6 +128,14 @@ type PendingModelSelection = {
   candidates: AskAiModelCandidate[];
 };
 
+type StreamMessageUpdate =
+  | { type: "status"; event: AskAiStatusEvent }
+  | { type: "source"; event: AskAiSourceEvent }
+  | { type: "approach"; summary: string }
+  | { type: "token"; delta: string }
+  | { type: "final"; final: AskAiFinalResponse }
+  | { type: "error"; message: string };
+
 export function AskAiTrigger() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -132,6 +153,9 @@ export function AskAiTrigger() {
   const [historyDialogError, setHistoryDialogError] = useState<string | null>(null);
   const [buttonY, setButtonY] = useState<number | null>(null);
   const [activeSession, setActiveSession] = useState<AskAiChatSessionSummary | null>(null);
+  const [localHistorySession, setLocalHistorySession] = useState<AskAiChatSessionSummary | null>(
+    null,
+  );
   const [modelProjectContext, setModelProjectContext] = useState<AskAiModelCandidate | null>(null);
   const [pendingModelSelection, setPendingModelSelection] = useState<PendingModelSelection | null>(
     null,
@@ -160,7 +184,11 @@ export function AskAiTrigger() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeStreamIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pendingTokenDeltasRef = useRef(new Map<string, string>());
+  const tokenFlushTimerRef = useRef<number | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const chatSessionIdRef = useRef(`chat-${Date.now()}`);
+  const panelOpenRef = useRef(false);
   const dragStateRef = useRef({ dragging: false, startY: 0, startButtonY: 0 });
   const wasForecastRouteRef = useRef(routeMode.isForecastRoute);
 
@@ -168,10 +196,24 @@ export function AskAiTrigger() {
   const panelOpen = routeMode.forceOpen || open;
   const panelExpanded = routeMode.forceExpanded || expanded;
   const suggestions = askAiSuggestionsForRoute(routePath);
+  const lastMessage = messages[messages.length - 1];
+  const activeMessageTextLength =
+    lastMessage?.role === "ai" && lastMessage.kind === "stream" ? lastMessage.text.length : 0;
+  const messageVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 170,
+    overscan: 6,
+  });
 
   const clearActiveStream = () => {
     abortControllerRef.current = null;
     activeStreamIdRef.current = null;
+    pendingTokenDeltasRef.current.clear();
+    if (tokenFlushTimerRef.current !== null) {
+      window.clearTimeout(tokenFlushTimerRef.current);
+      tokenFlushTimerRef.current = null;
+    }
     setAsking(false);
   };
 
@@ -181,17 +223,13 @@ export function AskAiTrigger() {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     activeStreamIdRef.current = null;
+    pendingTokenDeltasRef.current.delete(streamId);
     setMessages((messages) => markAskAiStreamStopped(messages, streamId));
     setAsking(false);
   };
 
   const closeAskAiPanel = () => {
     if (routeMode.isForecastRoute) return;
-    if (activeStreamIdRef.current) {
-      stopActiveStream();
-    } else {
-      clearActiveStream();
-    }
     setPreviewSource(null);
     setExternalPreviewSource(null);
     setShowHistory(false);
@@ -199,8 +237,18 @@ export function AskAiTrigger() {
   };
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, panelOpen]);
+    if (!panelOpen || !shouldAutoScrollRef.current) return;
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) return;
+    const frame = window.requestAnimationFrame(() => {
+      scrollElement.scrollTop = scrollElement.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, activeMessageTextLength, panelOpen]);
+
+  useEffect(() => {
+    panelOpenRef.current = panelOpen;
+  }, [panelOpen]);
 
   useEffect(() => {
     const textarea = inputRef.current;
@@ -253,12 +301,17 @@ export function AskAiTrigger() {
       ? SIDEBAR_COLLAPSED_WIDTH
       : 0
     : SIDEBAR_WIDTH;
+  const activeHistorySession = localHistorySession ?? activeSession;
+  const historySessions = mergeActiveHistorySession(sessionsApi.sessions, activeHistorySession);
+  const activeHistorySessionId = activeHistorySession?.id ?? null;
 
   const startNewChat = () => {
+    if (activeStreamIdRef.current) return;
     setMessages([]);
     setInput("");
     setShowHistory(false);
     setActiveSession(null);
+    setLocalHistorySession(null);
     setModelProjectContext(null);
     setPendingModelSelection(null);
     chatSessionIdRef.current = `chat-${Date.now()}`;
@@ -269,10 +322,9 @@ export function AskAiTrigger() {
     wasForecastRouteRef.current = routeMode.isForecastRoute;
     if (!wasForecastRoute || routeMode.isForecastRoute) return;
 
-    if (activeStreamIdRef.current) {
-      stopActiveStream();
-    } else {
+    if (!activeStreamIdRef.current) {
       clearActiveStream();
+      startNewChat();
     }
     setPreviewSource(null);
     setExternalPreviewSource(null);
@@ -280,7 +332,6 @@ export function AskAiTrigger() {
     setHistoryDialogError(null);
     setOpen(false);
     setExpanded(false);
-    startNewChat();
   }, [routeMode.isForecastRoute]);
 
   const loadChat = async (chat: AskAiChatSessionSummary) => {
@@ -288,6 +339,7 @@ export function AskAiTrigger() {
     setMessages(askAiSessionToMessages(session));
     chatSessionIdRef.current = session.id;
     setActiveSession(session);
+    setLocalHistorySession(null);
     setModelProjectContext(null);
     setPendingModelSelection(null);
     setShowHistory(false);
@@ -363,7 +415,7 @@ export function AskAiTrigger() {
 
   // Draggable button handlers
   const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     const currentY = buttonY ?? window.innerHeight / 2;
     dragStateRef.current = { dragging: false, startY: e.clientY, startButtonY: currentY };
   };
@@ -409,6 +461,7 @@ export function AskAiTrigger() {
     if (!text.trim()) return;
     if (asking) return;
     clearActiveStream();
+    void requestAskAiNotificationPermission();
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -545,6 +598,29 @@ export function AskAiTrigger() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     activeStreamIdRef.current = aiId;
+    setLocalHistorySession(
+      buildLocalHistorySession({
+        id: chatSessionIdRef.current,
+        title: text,
+        routeModeKind: routeMode.isForecastRoute ? "forecast" : "project",
+        projectId: effectiveProjectId,
+        companyName: routeMode.isForecastRoute
+          ? null
+          : (modelOverride?.companyName ??
+            projectScopedActiveSession?.companyName ??
+            workspace.data?.project.companyName ??
+            null),
+        projectLabel: routeMode.isForecastRoute
+          ? null
+          : (modelOverride?.projectLabel ??
+            projectScopedActiveSession?.projectLabel ??
+            workspace.data?.project.projectLabel ??
+            workspace.data?.project.fiscalYear ??
+            null),
+        routePath: activeRoutePath,
+        screenName: activeScreenName,
+      }),
+    );
     setMessages((m) => [
       ...m,
       { id: aiId, role: "ai", kind: "stream", text: "", activity: [], approaches: [], done: false },
@@ -587,7 +663,21 @@ export function AskAiTrigger() {
           onToken: (event) => updateStreamMessage(aiId, { type: "token", delta: event.delta }),
           onFinal: (event) => {
             if (event.sessionId) chatSessionIdRef.current = event.sessionId;
+            if (event.sessionId) {
+              setLocalHistorySession((session) =>
+                session ? { ...session, id: event.sessionId ?? session.id } : session,
+              );
+            }
             updateStreamMessage(aiId, { type: "final", final: event });
+            showAskAiCompletionNotification({
+              threadTitle: activeSession?.title || text,
+              question: text,
+              panelOpen: panelOpenRef.current,
+              onClick: () => {
+                setOpen(true);
+                setShowHistory(false);
+              },
+            });
           },
           onError: (event) => {
             streamError = true;
@@ -614,16 +704,7 @@ export function AskAiTrigger() {
     }
   };
 
-  const updateStreamMessage = (
-    id: string,
-    update:
-      | { type: "status"; event: AskAiStatusEvent }
-      | { type: "source"; event: AskAiSourceEvent }
-      | { type: "approach"; summary: string }
-      | { type: "token"; delta: string }
-      | { type: "final"; final: AskAiFinalResponse }
-      | { type: "error"; message: string },
-  ) => {
+  const applyStreamMessageUpdate = useCallback((id: string, update: StreamMessageUpdate) => {
     setMessages((messages) =>
       messages.map((message) => {
         if (message.id !== id || message.role !== "ai" || message.kind !== "stream") {
@@ -674,7 +755,61 @@ export function AskAiTrigger() {
         return { ...message, text: update.final.answer, final: update.final, done: true };
       }),
     );
-  };
+  }, []);
+
+  const flushPendingTokenDeltas = useCallback(() => {
+    const pendingTokenDeltas = pendingTokenDeltasRef.current;
+    if (pendingTokenDeltas.size === 0) return;
+    const deltas = new Map(pendingTokenDeltas);
+    pendingTokenDeltas.clear();
+
+    setMessages((messages) =>
+      messages.map((message) => {
+        if (message.role !== "ai" || message.kind !== "stream") return message;
+        const delta = deltas.get(message.id);
+        if (!delta) return message;
+        if (activeStreamIdRef.current !== message.id && !message.done) return message;
+        return { ...message, text: `${message.text}${delta}` };
+      }),
+    );
+  }, []);
+
+  const scheduleTokenFlush = useCallback(() => {
+    if (tokenFlushTimerRef.current !== null) return;
+    tokenFlushTimerRef.current = window.setTimeout(() => {
+      tokenFlushTimerRef.current = null;
+      flushPendingTokenDeltas();
+    }, 50);
+  }, [flushPendingTokenDeltas]);
+
+  const updateStreamMessage = useCallback(
+    (id: string, update: StreamMessageUpdate) => {
+      if (update.type === "token") {
+        pendingTokenDeltasRef.current.set(
+          id,
+          `${pendingTokenDeltasRef.current.get(id) ?? ""}${update.delta}`,
+        );
+        scheduleTokenFlush();
+        return;
+      }
+
+      if (update.type === "final") {
+        pendingTokenDeltasRef.current.delete(id);
+      } else if (update.type === "error") {
+        flushPendingTokenDeltas();
+      }
+      applyStreamMessageUpdate(id, update);
+    },
+    [applyStreamMessageUpdate, flushPendingTokenDeltas, scheduleTokenFlush],
+  );
+
+  const handleConversationScroll = useCallback(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) return;
+    const distanceFromBottom =
+      scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 96;
+  }, []);
 
   return (
     <>
@@ -706,6 +841,12 @@ export function AskAiTrigger() {
               touchAction: "none",
             }}
           >
+            {asking && (
+              <span
+                className="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full border border-white bg-[var(--color-success)]"
+                aria-label="Ask AI response in progress"
+              />
+            )}
             <Sparkles className="ask-ai-tab-icon h-5 w-5" />
             <span
               className="text-[11px] font-bold tracking-widest"
@@ -764,13 +905,14 @@ export function AskAiTrigger() {
                 </button>
               </div>
               <HistoryChatList
-                sessions={sessionsApi.sessions}
+                sessions={historySessions}
                 loading={sessionsApi.loading}
                 error={sessionsApi.error}
                 onRetry={() => void sessionsApi.refreshSessions()}
                 onLoadChat={(chat) => void loadChat(chat)}
                 onRenameChat={openRenameChatDialog}
                 onDeleteChat={openDeleteChatDialog}
+                activeChatId={activeHistorySessionId}
               />
             </div>
           )}
@@ -930,19 +1072,21 @@ export function AskAiTrigger() {
                   </span>
                 </div>
                 <HistoryChatList
-                  sessions={sessionsApi.sessions}
+                  sessions={historySessions}
                   loading={sessionsApi.loading}
                   error={sessionsApi.error}
                   onRetry={() => void sessionsApi.refreshSessions()}
                   onLoadChat={(chat) => void loadChat(chat)}
                   onRenameChat={openRenameChatDialog}
                   onDeleteChat={openDeleteChatDialog}
+                  activeChatId={activeHistorySessionId}
                 />
               </>
             ) : (
               <>
                 <div
                   ref={scrollRef}
+                  onScroll={handleConversationScroll}
                   className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
                 >
                   {messages.length === 0 && (
@@ -983,69 +1127,34 @@ export function AskAiTrigger() {
                     </div>
                   )}
 
-                  {messages.map((m) => {
-                    if (m.role === "user") {
-                      return (
-                        <div key={m.id} className="mx-auto flex w-full max-w-[1180px] justify-end">
+                  {messages.length > 0 && (
+                    <div
+                      className="relative w-full"
+                      style={{ height: `${messageVirtualizer.getTotalSize()}px` }}
+                    >
+                      {messageVirtualizer.getVirtualItems().map((virtualItem) => {
+                        const message = messages[virtualItem.index];
+                        if (!message) return null;
+                        return (
                           <div
-                            className={`group flex flex-col items-end gap-1 ${
-                              panelExpanded ? "max-w-[72%]" : "max-w-[86%]"
-                            }`}
+                            key={message.id}
+                            ref={messageVirtualizer.measureElement}
+                            data-index={virtualItem.index}
+                            className="absolute left-0 top-0 w-full pb-3"
+                            style={{ transform: `translateY(${virtualItem.start}px)` }}
                           >
-                            <div
-                              className="rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed text-white shadow-[0_12px_28px_-18px_rgba(123,104,238,0.9)]"
-                              style={{
-                                background: "var(--color-brand)",
-                                borderRadius: "16px 16px 4px 16px",
-                              }}
-                            >
-                              {m.attachment && (
-                                <div
-                                  className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
-                                  style={{ background: "rgba(255,255,255,0.18)" }}
-                                >
-                                  <FileIcon className="h-3.5 w-3.5" />
-                                  <span className="font-semibold">{m.attachment.name}</span>
-                                  <span className="opacity-70">· {m.attachment.size}</span>
-                                </div>
-                              )}
-                              {m.text}
-                            </div>
-                            <CopyButton
-                              text={m.text}
-                              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                            <ChatMessageRow
+                              message={message}
+                              expanded={panelExpanded}
+                              projectId={activeProjectId}
+                              onPreviewSource={setPreviewSource}
+                              onPreviewExternalSource={setExternalPreviewSource}
                             />
                           </div>
-                        </div>
-                      );
-                    }
-                    if (m.kind === "text") {
-                      return (
-                        <AiBubble key={m.id} copyText={m.text} expanded={panelExpanded}>
-                          <MarkdownContent
-                            markdown={m.text}
-                            size={panelExpanded ? "expanded" : "default"}
-                          />
-                        </AiBubble>
-                      );
-                    }
-                    if (m.kind === "stream") {
-                      return (
-                        <StreamingAiBubble
-                          key={m.id}
-                          message={m}
-                          expanded={panelExpanded}
-                          projectId={activeProjectId}
-                          onPreviewSource={setPreviewSource}
-                          onPreviewExternalSource={setExternalPreviewSource}
-                        />
-                      );
-                    }
-                    if (m.kind === "status") {
-                      return <StatusStream key={m.id} steps={m.steps} />;
-                    }
-                    return null;
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div
@@ -1161,6 +1270,92 @@ export function AskAiTrigger() {
     </>
   );
 }
+
+const MemoMarkdownContent = memo(MarkdownContent);
+
+function renderNoCitation() {
+  return null;
+}
+
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  expanded,
+  projectId,
+  onPreviewSource,
+  onPreviewExternalSource,
+}: {
+  message: Msg;
+  expanded: boolean;
+  projectId: string | null;
+  onPreviewSource: (source: DiagnosisSourcePreview) => void;
+  onPreviewExternalSource: (source: ExternalSourcePreview) => void;
+}) {
+  if (message.role === "user") {
+    return <UserMessageBubble message={message} expanded={expanded} />;
+  }
+
+  if (message.kind === "text") {
+    return (
+      <AiBubble copyText={message.text} expanded={expanded}>
+        <MemoMarkdownContent markdown={message.text} size={expanded ? "expanded" : "default"} />
+      </AiBubble>
+    );
+  }
+
+  if (message.kind === "stream") {
+    return (
+      <StreamingAiBubble
+        message={message}
+        expanded={expanded}
+        projectId={projectId}
+        onPreviewSource={onPreviewSource}
+        onPreviewExternalSource={onPreviewExternalSource}
+      />
+    );
+  }
+
+  return <StatusStream steps={message.steps} />;
+});
+
+const UserMessageBubble = memo(function UserMessageBubble({
+  message,
+  expanded,
+}: {
+  message: Extract<Msg, { role: "user" }>;
+  expanded: boolean;
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-[1180px] justify-end">
+      <div
+        className={`group flex flex-col items-end gap-1 ${expanded ? "max-w-[72%]" : "max-w-[86%]"}`}
+      >
+        <div
+          className="rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed text-white shadow-[0_12px_28px_-18px_rgba(123,104,238,0.9)]"
+          style={{
+            background: "var(--color-brand)",
+            borderRadius: "16px 16px 4px 16px",
+          }}
+        >
+          {message.attachment && (
+            <div
+              className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px]"
+              style={{ background: "rgba(255,255,255,0.18)" }}
+            >
+              <FileIcon className="h-3.5 w-3.5" />
+              <span className="font-semibold">{message.attachment.name}</span>
+              <span className="opacity-70">· {message.attachment.size}</span>
+            </div>
+          )}
+          {message.text}
+        </div>
+        <CopyButton
+          text={message.text}
+          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+        />
+      </div>
+    </div>
+  );
+});
 
 function HistoryThreadDialog({
   dialog,
@@ -1449,7 +1644,7 @@ function ContextSummary({ context, isDiagnosis }: { context: string; isDiagnosis
   );
 }
 
-function useStreamMeta(done: boolean) {
+function useStreamMeta(done: boolean, persistedElapsedMs?: number) {
   const startRef = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
 
@@ -1461,7 +1656,12 @@ function useStreamMeta(done: boolean) {
     return () => window.clearInterval(id);
   }, [done]);
 
-  const finalElapsed = done ? elapsed || Date.now() - startRef.current : elapsed;
+  const finalElapsed =
+    done && typeof persistedElapsedMs === "number"
+      ? persistedElapsedMs
+      : done
+        ? elapsed || Date.now() - startRef.current
+        : elapsed;
   return { elapsed: finalElapsed };
 }
 
@@ -1492,7 +1692,7 @@ function StreamingAiBubble({
     done: message.done,
     final: message.final,
   });
-  const { elapsed } = useStreamMeta(message.done);
+  const { elapsed } = useStreamMeta(message.done, message.final?.elapsedMs);
   // Estimate from live streaming text so it increments token-by-token
   const liveText = message.final?.answer ?? message.text;
   const estTokens = Math.round(liveText.length / 3.8);
@@ -1540,11 +1740,15 @@ function StreamingAiBubble({
 
         {answer ? (
           <div className="min-w-0 overflow-visible break-words">
-            <MarkdownContent
-              markdown={answer}
-              renderCitation={() => null}
-              size={expanded ? "expanded" : "default"}
-            />
+            {message.done ? (
+              <MemoMarkdownContent
+                markdown={answer}
+                renderCitation={renderNoCitation}
+                size={expanded ? "expanded" : "default"}
+              />
+            ) : (
+              <LiveStreamingText text={answer} expanded={expanded} />
+            )}
           </div>
         ) : !message.error ? (
           <div className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
@@ -1574,6 +1778,25 @@ function StreamingAiBubble({
     </AiBubble>
   );
 }
+
+const LiveStreamingText = memo(function LiveStreamingText({
+  text,
+  expanded,
+}: {
+  text: string;
+  expanded: boolean;
+}) {
+  return (
+    <p
+      className={`whitespace-pre-wrap break-words leading-relaxed ${
+        expanded ? "text-[14px]" : "text-[13px]"
+      }`}
+      style={{ color: "var(--color-text-primary)" }}
+    >
+      {text}
+    </p>
+  );
+});
 
 // ─── Bottom Citations ────────────────────────────────────────────────────────
 
@@ -2678,6 +2901,50 @@ function screenNameForPath(path: string): string {
     .join(" ");
 }
 
+function buildLocalHistorySession({
+  id,
+  title,
+  routeModeKind,
+  projectId,
+  companyName,
+  projectLabel,
+  routePath,
+  screenName,
+}: {
+  id: string;
+  title: string;
+  routeModeKind: "project" | "forecast";
+  projectId: string | null;
+  companyName: string | null;
+  projectLabel: string | null;
+  routePath: string | null;
+  screenName: string | null;
+}): AskAiChatSessionSummary {
+  const now = new Date().toISOString();
+  return {
+    kind: routeModeKind,
+    id,
+    projectId,
+    projectLabel,
+    companyName,
+    title,
+    routePath,
+    screenName,
+    messageCount: 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function mergeActiveHistorySession(
+  sessions: AskAiChatSessionSummary[],
+  activeSession: AskAiChatSessionSummary | null,
+) {
+  if (!activeSession) return sessions;
+  const remaining = sessions.filter((session) => session.id !== activeSession.id);
+  return [activeSession, ...remaining];
+}
+
 function HistoryChatList({
   sessions,
   loading,
@@ -2686,6 +2953,7 @@ function HistoryChatList({
   onLoadChat,
   onRenameChat,
   onDeleteChat,
+  activeChatId,
 }: {
   sessions: AskAiChatSessionSummary[];
   loading: boolean;
@@ -2694,9 +2962,10 @@ function HistoryChatList({
   onLoadChat: (chat: AskAiChatSessionSummary) => void;
   onRenameChat: (chat: AskAiChatSessionSummary) => void;
   onDeleteChat: (chat: AskAiChatSessionSummary) => void;
+  activeChatId: string | null;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+    <div className="min-h-0 w-full flex-1 overflow-y-auto px-2 pb-4">
       {loading ? (
         <div
           className="px-2 py-4"
@@ -2769,40 +3038,53 @@ function HistoryChatList({
             {group.chats.map((chat) => (
               <div
                 key={chat.id}
-                className="group flex w-full items-center gap-1 rounded-lg px-2 py-1.5 transition hover:bg-[var(--color-tag-bg)]"
+                className={`group relative w-full rounded-lg transition hover:bg-[var(--color-tag-bg)] ${
+                  activeChatId === chat.id ? "bg-[var(--color-tag-bg)]" : ""
+                }`}
               >
                 <button
                   type="button"
                   onClick={() => onLoadChat(chat)}
-                  className="min-w-0 flex-1 text-left"
+                  aria-current={activeChatId === chat.id ? "true" : undefined}
+                  className="flex w-full min-w-0 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 pr-2 text-left transition group-hover:pr-14 group-focus-within:pr-14"
                 >
-                  <span className="block truncate text-[13px] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
-                    {chat.title || "Untitled Ask AI thread"}
-                  </span>
-                  <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
-                    {[chat.companyName, chat.screenName].filter(Boolean).join(" · ")}
+                  <span
+                    className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                      activeChatId === chat.id ? "bg-[var(--color-brand)]" : "bg-transparent"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
+                      {chat.title || "Untitled Ask AI thread"}
+                    </span>
+                    <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
+                      {[chat.companyName, chat.screenName].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
                 </button>
-                <IconTooltip label="Rename thread">
-                  <button
-                    type="button"
-                    onClick={() => onRenameChat(chat)}
-                    className="rounded-md p-1 opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100"
-                    aria-label="Rename thread"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                  </button>
-                </IconTooltip>
-                <IconTooltip label="Delete thread">
-                  <button
-                    type="button"
-                    onClick={() => onDeleteChat(chat)}
-                    className="rounded-md p-1 opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100"
-                    aria-label="Delete thread"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-[var(--color-danger-fg)]" />
-                  </button>
-                </IconTooltip>
+                <div className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                  <IconTooltip label="Rename thread">
+                    <button
+                      type="button"
+                      onClick={() => onRenameChat(chat)}
+                      className="rounded-md bg-white p-1 transition hover:bg-white focus:opacity-100"
+                      aria-label="Rename thread"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                    </button>
+                  </IconTooltip>
+                  <IconTooltip label="Delete thread">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteChat(chat)}
+                      className="rounded-md bg-white p-1 transition hover:bg-white focus:opacity-100"
+                      aria-label="Delete thread"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-[var(--color-danger-fg)]" />
+                    </button>
+                  </IconTooltip>
+                </div>
               </div>
             ))}
           </div>

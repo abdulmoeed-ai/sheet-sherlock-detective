@@ -49,7 +49,7 @@ describe("parseSseEvents", () => {
       modelCitations: [{ index: 1, kind: "model", cellReference: "PL7!F14" }],
       sourceCitations: [{ index: 2, kind: "source", sourceName: "Pakistan Stock Exchange" }],
       warnings: ["prompt_guardrail_exceeded"],
-      usage: { provider: "gemini" },
+      usage: { provider: "gemini", elapsedMs: 7250 },
       activityLog: [],
       forecastVisuals: {
         confidence: "Medium",
@@ -97,6 +97,7 @@ describe("parseSseEvents", () => {
     expect(statuses).toEqual(["llm", "finalizing"]);
     expect(finalEvents).toEqual([finalPayload]);
     expect(result).toEqual(finalPayload);
+    expect(result?.usage.elapsedMs).toBe(7250);
   });
 
   it("rejects non-streaming JSON Ask AI responses", async () => {

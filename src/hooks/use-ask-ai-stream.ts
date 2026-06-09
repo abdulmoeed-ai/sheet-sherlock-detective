@@ -33,10 +33,9 @@ export function useAskAiStream(projectId: string | null) {
         const response = useForecastRoute
           ? await askAiForecast(input, requestOptions)
           : await askAi(effectiveProjectId as string, input, requestOptions);
-        return await readAskAiSseStream(response, {
+        const final = await readAskAiSseStream(response, {
           ...options,
           onChunk: (nextAnswer) => {
-            setAnswer(nextAnswer);
             options.onChunk?.(nextAnswer);
           },
           onError: (event) => {
@@ -44,6 +43,8 @@ export function useAskAiStream(projectId: string | null) {
             options.onError?.(event);
           },
         });
+        setAnswer(final?.answer ?? "");
+        return final;
       } catch (err) {
         if (requestOptions.signal?.aborted) {
           return null;

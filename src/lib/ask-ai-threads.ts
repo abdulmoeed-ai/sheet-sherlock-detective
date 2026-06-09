@@ -22,6 +22,7 @@ export function askAiSessionToMessages(session: AskAiChatSessionResponse): AskAi
           final: {
             answer: message.content,
             sessionId: session.id,
+            elapsedMs: elapsedMsFromUsage(message.usage),
             sourcesUsed: arrayValue(snapshot.sourcesUsed),
             modelCitations: arrayValue(snapshot.modelCitations),
             sourceCitations: arrayValue(snapshot.sourceCitations),
@@ -46,9 +47,15 @@ export function askAiSessionToMessages(session: AskAiChatSessionResponse): AskAi
     .filter((message): message is AskAiMsg => message !== null);
 }
 
+function elapsedMsFromUsage(usage: Record<string, unknown>): number | undefined {
+  const value = usage.elapsedMs ?? usage.elapsed_ms;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return value;
+}
+
 function activityFromSnapshot(snapshot: Record<string, unknown>): StreamActivityEvent[] {
   const activity = arrayValue(snapshot.activityLog);
-  return activity.flatMap((entry) => {
+  return activity.flatMap((entry): StreamActivityEvent[] => {
     const type = entry.type;
     const payload = recordOrNull(entry.payload);
     if (!payload) return [];
