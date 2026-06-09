@@ -4,6 +4,7 @@ import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { Pencil, Check, X, Download } from "lucide-react";
 import { IconTooltip } from "@/components/IconTooltip";
+import { sidebarContentOffset, useSidebarCollapsed } from "@/lib/sidebar-store";
 
 export const Route = createFileRoute("/assumptions")({
   head: () => ({
@@ -38,6 +39,7 @@ const ROWS: Row[] = [
 function Assumptions() {
   const navigate = useNavigate();
   const cycle = useCycle();
+  const sidebarCollapsed = useSidebarCollapsed();
   const [rows, setRows] = useState<Row[]>(ROWS);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
@@ -181,8 +183,11 @@ function Assumptions() {
       </div>
 
       <div
-        className="fixed bottom-0 left-[240px] right-0 z-20 flex h-16 items-center justify-between border-t bg-white px-8"
-        style={{ borderColor: "var(--color-border-default)" }}
+        className="fixed right-0 bottom-0 z-20 flex h-16 items-center justify-between border-t bg-white px-8 transition-[left] duration-200 ease-out"
+        style={{
+          left: sidebarContentOffset(sidebarCollapsed),
+          borderColor: "var(--color-border-default)",
+        }}
       >
         <span className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
           Version: {cycle.period}-v1 · will be locked on submission

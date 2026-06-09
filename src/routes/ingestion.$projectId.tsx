@@ -9,6 +9,7 @@ import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-acti
 import { cancelExtractionJob, readActiveExtractionJob, readExtractionEvents, readExtractionJob, readWorkspace } from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 import { filesFromDrop, ingestionPageTitle } from "@/lib/ingestion-page";
+import { sidebarContentOffset, useSidebarCollapsed } from "@/lib/sidebar-store";
 import type {
   DocumentResponse,
   ExtractionJobResponse,
@@ -923,10 +924,16 @@ function StickyFooter({
   onStart: () => void;
   onCancel?: () => void;
 }) {
+  const sidebarCollapsed = useSidebarCollapsed();
+  const leftOffset = sidebarContentOffset(sidebarCollapsed);
+
   return (
     <div
-      className="fixed bottom-0 left-[240px] right-0 z-20 border-t bg-white px-8 shadow-[0_-12px_30px_rgba(15,23,42,0.06)]"
-      style={{ borderColor: "var(--color-border-default)" }}
+      className="fixed right-0 bottom-0 z-20 border-t bg-white px-8 shadow-[0_-12px_30px_rgba(15,23,42,0.06)] transition-[left] duration-200 ease-out"
+      style={{
+        left: leftOffset,
+        borderColor: "var(--color-border-default)",
+      }}
     >
       {/* Stall warning banner */}
       {stalled && uploadPending && (

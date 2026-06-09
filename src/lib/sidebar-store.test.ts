@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { sidebarStore } from "./sidebar-store";
+import { sidebarContentOffset, sidebarStore } from "./sidebar-store";
 
 describe("sidebar-store", () => {
   afterEach(() => {
@@ -24,5 +24,10 @@ describe("sidebar-store", () => {
 
     expect(calls).toBe(0);
     unsubscribe();
+  });
+
+  it("returns the content offset for expanded and collapsed sidebar states", () => {
+    expect(sidebarContentOffset(false)).toBe(240);
+    expect(sidebarContentOffset(true)).toBe(72);
   });
 });

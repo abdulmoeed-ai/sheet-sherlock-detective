@@ -32,3 +32,7 @@ export function useSidebarCollapsed(): boolean {
 
 export const SIDEBAR_WIDTH = 240;
 export const SIDEBAR_COLLAPSED_WIDTH = 72;
+
+export function sidebarContentOffset(isCollapsed: boolean): number {
+  return isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+}
