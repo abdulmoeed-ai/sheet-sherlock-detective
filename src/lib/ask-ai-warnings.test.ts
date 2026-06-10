@@ -25,12 +25,8 @@ describe("userFacingAskAiWarnings", () => {
     ).toEqual([]);
   });
 
-  it("maps Tavily transport failures to a generic web-search warning", () => {
-    expect(userFacingAskAiWarnings(["tavily_request_failed:ReadTimeout"])).toEqual([
-      "Approved web search is temporarily unavailable. Try again in a moment.",
-    ]);
-    expect(userFacingAskAiWarnings(["external_search_unavailable"])).toEqual([
-      "Approved web search is temporarily unavailable. Try again in a moment.",
-    ]);
+  it("hides Tavily transport failures from the analyst", () => {
+    expect(userFacingAskAiWarnings(["tavily_request_failed:ReadTimeout"])).toEqual([]);
+    expect(userFacingAskAiWarnings(["external_search_unavailable"])).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@ export type WorkbookCellMeta = {
 
 export type WorkbookCellPayload = {
   v?: unknown;
+  cachedV?: unknown;
   f?: string;
   formulaValueStatus?: string;
   diagnosis?: WorkbookCellMeta;
@@ -34,6 +35,7 @@ export type WorkbookSheetPayload = {
   name: string;
   rowCount?: number;
   columnCount?: number;
+  showGridlines?: number;
   defaultColumnWidth?: number;
   defaultRowHeight?: number;
   rowData?: Record<string, { h?: number; hd?: number; [key: string]: unknown }>;

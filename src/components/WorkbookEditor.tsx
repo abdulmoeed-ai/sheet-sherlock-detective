@@ -132,7 +132,7 @@ export function WorkbookEditor({
             UniverSheetsCorePreset({
               container: containerRef.current,
               formula: {
-                initialFormulaComputing: CalculationMode.FORCED,
+                initialFormulaComputing: CalculationMode.NO_CALCULATION,
               },
             }),
           ],
@@ -156,7 +156,7 @@ export function WorkbookEditor({
           };
           addEvent?: (event: unknown, callback: (params: Record<string, unknown>) => void) => void;
         };
-        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.FORCED);
+        eventApi.getFormula?.().setInitialFormulaComputing?.(CalculationMode.NO_CALCULATION);
         eventApi.createWorkbook(preparedWorkbook, { makeCurrent: true });
         if (activeSheetId) {
           eventApi.getActiveWorkbook?.().setActiveSheet?.(activeSheetId);
@@ -245,7 +245,8 @@ export function WorkbookEditor({
         setUniverState("ready");
         paintTimer = window.setTimeout(() => {
           if (disposed || !containerRef.current) return;
-          setPaintState(containerRef.current.querySelector("canvas") ? "painted" : "blank");
+          const nextPaintState = containerRef.current.querySelector("canvas") ? "painted" : "blank";
+          setPaintState(nextPaintState);
         }, 1600);
       } catch {
         if (!disposed) setUniverState("fallback");
