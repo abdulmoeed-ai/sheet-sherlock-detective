@@ -22,7 +22,7 @@ import type { ProjectResponse } from "@/lib/api/types";
 
 const FISCAL_YEARS = ["FY2020", "FY2021", "FY2022", "FY2023", "FY2024", "FY2025", "FY2026"];
 const WORKBOOK_TABLE_COLUMNS =
-  "minmax(190px,1.4fr) minmax(190px,1.5fr) 88px 76px 150px minmax(150px,1fr) 76px";
+  "minmax(190px,1.4fr) minmax(190px,1.5fr) 88px 76px 150px minmax(150px,1fr) 120px";
 
 export const Route = createFileRoute("/registry")({
   head: () => ({
@@ -162,7 +162,10 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? selectedFY,
     });
-    const target = projectOpenTarget({ role: user?.role ?? "finance_analyst", status: project.status });
+    const target = projectOpenTarget({
+      role: user?.role ?? "finance_analyst",
+      status: project.status,
+    });
     if (target === "review") {
       cycleStore.setStatus("review");
       navigate({ to: "/review" });
@@ -223,7 +226,10 @@ function Registry() {
       company: project.companyName,
       period: project.fiscalYear ?? "",
     });
-    const target = projectOpenTarget({ role: user?.role ?? "finance_analyst", status: project.status });
+    const target = projectOpenTarget({
+      role: user?.role ?? "finance_analyst",
+      status: project.status,
+    });
     if (target === "review") {
       cycleStore.setStatus("review");
       navigate({ to: "/review" });
@@ -586,14 +592,15 @@ function Registry() {
                       {/* Action button */}
                       <div className="justify-self-end">
                         <button
-                          className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold"
+                          className="inline-flex h-8 min-w-[108px] items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-[11px] font-semibold shadow-sm transition-colors hover:bg-[var(--color-tag-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-brand)]"
                           style={{
                             borderColor: "var(--color-brand)",
                             color: "var(--color-brand)",
+                            background: "#fff",
                           }}
                         >
                           {workbookActionLabel(project.status)}
-                          <ArrowRight className="h-3 w-3" />
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                         </button>
                       </div>
                     </div>

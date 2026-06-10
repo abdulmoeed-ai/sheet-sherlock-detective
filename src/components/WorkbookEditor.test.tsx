@@ -157,7 +157,7 @@ describe("WorkbookEditor bridge", () => {
     expect(sheet?.columnData?.["1"]?.w).toBeGreaterThanOrEqual(112);
   });
 
-  it("configures Univer to force formula recomputation when loading the workbook", async () => {
+  it("configures Univer to render backend formula values on initial load", async () => {
     vi.resetModules();
     const presetSpy = vi.fn((config: unknown) => ({ config }));
     const setInitialFormulaComputing = vi.fn();
@@ -202,10 +202,10 @@ describe("WorkbookEditor bridge", () => {
     await waitFor(() => expect(createWorkbook).toHaveBeenCalled());
     expect(presetSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        formula: { initialFormulaComputing: CalculationMode.FORCED },
+        formula: { initialFormulaComputing: CalculationMode.NO_CALCULATION },
       }),
     );
-    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.FORCED);
+    expect(setInitialFormulaComputing).toHaveBeenCalledWith(CalculationMode.NO_CALCULATION);
   });
 
   it("adds purple Univer markers to both top corners for cells with comment indicators", () => {

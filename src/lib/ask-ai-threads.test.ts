@@ -96,6 +96,53 @@ describe("askAiSessionToMessages", () => {
     });
   });
 
+  it("derives restored assistant elapsed time from adjacent message timestamps", () => {
+    const session: AskAiChatSessionResponse = {
+      kind: "project",
+      id: "chat-1",
+      projectId: "project-1",
+      projectLabel: "Millat FY2025",
+      companyName: "Millat",
+      title: "Balance sheet",
+      routePath: "/diagnosis/project-1",
+      screenName: "Diagnosis",
+      messageCount: 2,
+      createdAt: "2026-06-06T10:00:00Z",
+      updatedAt: "2026-06-06T10:00:07.250Z",
+      messages: [
+        {
+          id: "msg-user",
+          role: "user",
+          content: "What is the trade discount?",
+          routePath: "/diagnosis/project-1",
+          screenName: "Diagnosis",
+          citations: [],
+          warnings: [],
+          usage: {},
+          retrievalSnapshot: {},
+          createdAt: "2026-06-06T10:00:00Z",
+        },
+        {
+          id: "msg-ai",
+          role: "assistant",
+          content: "Trade discount is in PL1-Revenue-4!D13.",
+          routePath: "/diagnosis/project-1",
+          screenName: "Diagnosis",
+          citations: [],
+          warnings: [],
+          usage: { totalTokens: 25 },
+          retrievalSnapshot: {},
+          createdAt: "2026-06-06T10:00:07.250Z",
+        },
+      ],
+    };
+
+    expect(askAiSessionToMessages(session)[1]).toMatchObject({
+      role: "ai",
+      final: { elapsedMs: 7250, usage: { totalTokens: 25 } },
+    });
+  });
+
   it("ignores unsupported persisted roles", () => {
     const session: AskAiChatSessionResponse = {
       kind: "project",

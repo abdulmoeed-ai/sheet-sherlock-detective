@@ -4,13 +4,19 @@ import type { AskAiMsg } from "@/lib/ask-ai-message-types";
 import type { StreamActivityEvent } from "@/lib/ask-ai-reasoning";
 
 export function askAiSessionToMessages(session: AskAiChatSessionResponse): AskAiMsg[] {
+  let latestUserCreatedAt: string | null = null;
+
   return session.messages
     .map((message): AskAiMsg | null => {
       if (message.role === "user") {
+        latestUserCreatedAt = message.createdAt;
         return { id: message.id, role: "user", text: message.content };
       }
       if (message.role === "assistant") {
         const snapshot = message.retrievalSnapshot ?? {};
+        const elapsedMs =
+          elapsedMsFromUsage(message.usage) ??
+          elapsedMsBetween(latestUserCreatedAt, message.createdAt);
         return {
           id: message.id,
           role: "ai",
@@ -22,7 +28,7 @@ export function askAiSessionToMessages(session: AskAiChatSessionResponse): AskAi
           final: {
             answer: message.content,
             sessionId: session.id,
-            elapsedMs: elapsedMsFromUsage(message.usage),
+            elapsedMs,
             sourcesUsed: arrayValue(snapshot.sourcesUsed),
             modelCitations: arrayValue(snapshot.modelCitations),
             sourceCitations: arrayValue(snapshot.sourceCitations),
@@ -51,6 +57,14 @@ function elapsedMsFromUsage(usage: Record<string, unknown>): number | undefined 
   const value = usage.elapsedMs ?? usage.elapsed_ms;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
   return value;
+}
+
+function elapsedMsBetween(startedAt: string | null, completedAt: string): number | undefined {
+  if (!startedAt) return undefined;
+  const start = Date.parse(startedAt);
+  const end = Date.parse(completedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return undefined;
+  return end - start;
 }
 
 function activityFromSnapshot(snapshot: Record<string, unknown>): StreamActivityEvent[] {

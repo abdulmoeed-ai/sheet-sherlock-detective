@@ -15,7 +15,8 @@ import { Toaster, toast } from "sonner";
 import { AskAiTrigger } from "@/components/AskAiTrigger";
 import { ProductWordmark } from "@/components/ProductWordmark";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { getAccessToken } from "@/lib/auth-store";
+import { clearAuthTokens, getAccessToken } from "@/lib/auth-store";
+import { ApiError } from "@/lib/api/errors";
 import { canSeeRoute, defaultRouteForRole } from "@/lib/role-access";
 
 import appCss from "../styles.css?url";
@@ -177,10 +178,22 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const token = getAccessToken();
   const isLogin = pathname === "/login";
-  const { data: user, isLoading, isError } = useCurrentUser();
+  const { data: user, error, isLoading, isError } = useCurrentUser();
 
   useEffect(() => {
-    if (isLogin) return;
+    if (error instanceof ApiError && error.status === 401) {
+      clearAuthTokens();
+      if (!isLogin) {
+        navigate({ to: "/login" });
+      }
+      return;
+    }
+    if (isLogin) {
+      if (user) {
+        navigate({ to: defaultRouteForRole(user.role) as never });
+      }
+      return;
+    }
     if (!token || isError) {
       navigate({ to: "/login" });
       return;
@@ -188,7 +201,7 @@ function AuthenticatedApp() {
     if (user && !canSeeRoute(user.role, pathname)) {
       navigate({ to: defaultRouteForRole(user.role) as never });
     }
-  }, [isLogin, isError, navigate, pathname, token, user]);
+  }, [error, isLogin, isError, navigate, pathname, token, user]);
 
   if (isLogin) return <Outlet />;
   if (!token || isLoading || !user) {

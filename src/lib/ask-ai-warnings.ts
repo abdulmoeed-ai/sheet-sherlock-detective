@@ -12,8 +12,7 @@ const WARNING_LABELS: Record<string, string> = {
   rag_index_stale: "PDF search is updating after recent project changes.",
   calculation_not_supported:
     "Calculations over retrieved PDF chunks are not supported yet. Ask AI can retrieve the relevant source lines.",
-  external_search_unavailable:
-    "Approved web search is temporarily unavailable. Try again in a moment.",
+  external_search_unavailable: "",
 };
 
 const PDF_READINESS_WARNINGS = new Set([
@@ -35,7 +34,7 @@ export function userFacingAskAiWarnings(
 
 function warningLabel(warning: string): string {
   if (warning.startsWith("tavily_request_failed:")) {
-    return WARNING_LABELS.external_search_unavailable;
+    return "";
   }
   return WARNING_LABELS[warning] ?? warning;
 }
