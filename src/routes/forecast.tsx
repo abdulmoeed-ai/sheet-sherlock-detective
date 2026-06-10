@@ -6,7 +6,7 @@ import { sidebarStore } from "@/lib/sidebar-store";
 export const Route = createFileRoute("/forecast")({
   head: () => ({
     meta: [
-      { title: "Forecast" },
+      { title: "Ask AI" },
       {
         name: "description",
         content: "Expanded Ask AI forecasting chat for analyst forecasts and scenario assumptions.",
@@ -23,13 +23,13 @@ function ForecastRoute() {
 
   return (
     <PageShell
-      title="Forecast"
+      title="Ask AI"
       subtitle="Expanded Ask AI forecasting chat for analyst forecasts and scenario assumptions."
       hideProgress
     >
       <div
         className="min-h-[calc(100vh-8rem)] bg-[var(--color-page)]"
-        aria-label="Forecast Ask AI workspace"
+        aria-label="Ask AI workspace"
       />
     </PageShell>
   );

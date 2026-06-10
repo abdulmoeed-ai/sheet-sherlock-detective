@@ -175,6 +175,7 @@ export function AskAiTrigger() {
   const activeScreenName = routeMode.isForecastRoute
     ? screenNameForPath(routePath)
     : (projectScopedActiveSession?.screenName ?? screenNameForPath(routePath));
+  const headerScreenName = "Ask AI";
   const sidebarCollapsed = useSidebarCollapsed();
   const askAi = useAskAiStream(activeProjectId);
   const sessionsApi = useAskAiSessions(routeMode.isForecastRoute ? "forecast" : "project");
@@ -291,7 +292,7 @@ export function AskAiTrigger() {
     company: routeMode.isForecastRoute
       ? null
       : (projectScopedActiveSession?.companyName ?? workspace.data?.project.companyName),
-    screenName: activeScreenName,
+    screenName: headerScreenName,
     period: routeMode.isForecastRoute
       ? null
       : (projectScopedActiveSession?.projectLabel ?? workspace.data?.project.fiscalYear),

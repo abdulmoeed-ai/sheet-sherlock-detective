@@ -41,7 +41,7 @@ const nav = [
     icon: FileSpreadsheet,
     roles: ["finance_analyst", "finance_manager", "cfo", "admin"],
   },
-  { to: "/forecast", label: "Forecast", icon: TrendingUp, roles: ["finance_analyst"] },
+  { to: "/forecast", label: "Ask AI", icon: TrendingUp, roles: ["finance_analyst"] },
   { to: "/review", label: "Review Queue", icon: ClipboardCheck, roles: ["finance_manager"] },
   { to: "/protection", label: "Protection", icon: ShieldCheck, roles: ["admin"] },
   {
