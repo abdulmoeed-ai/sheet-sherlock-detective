@@ -430,7 +430,7 @@ export function buildApprovedModelGraphPack({
   if (cards.length === 0) {
     return {
       status: "empty",
-      reason: "Approved model found, but dashboard metrics were not returned by the workspace API.",
+      reason: "Approved model found, but graph-ready financial metrics are not available from the workbook yet.",
       cards: [],
     };
   }

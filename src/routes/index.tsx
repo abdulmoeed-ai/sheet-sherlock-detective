@@ -14,6 +14,7 @@ import {
   FileText,
   FolderOpen,
   Globe2,
+  GripVertical,
   Info,
   Loader2,
   Lock,
@@ -264,6 +265,23 @@ function moveWidget(widgets: DashboardWidgetState[], widgetId: string, direction
   return next.map((widget, order) => ({ ...widget, order }));
 }
 
+function reorderWidget(
+  widgets: DashboardWidgetState[],
+  draggedWidgetId: string,
+  targetWidgetId: string,
+) {
+  if (draggedWidgetId === targetWidgetId) return widgets;
+  const visibleWidgets = widgets.filter((widget) => widget.visible);
+  const hiddenWidgets = widgets.filter((widget) => !widget.visible);
+  const draggedIndex = visibleWidgets.findIndex((widget) => widget.id === draggedWidgetId);
+  const targetIndex = visibleWidgets.findIndex((widget) => widget.id === targetWidgetId);
+  if (draggedIndex < 0 || targetIndex < 0) return widgets;
+  const nextVisible = [...visibleWidgets];
+  const [dragged] = nextVisible.splice(draggedIndex, 1);
+  nextVisible.splice(targetIndex, 0, dragged);
+  return [...nextVisible, ...hiddenWidgets].map((widget, order) => ({ ...widget, order }));
+}
+
 function setWidgetVisibility(
   widgets: DashboardWidgetState[],
   widgetId: string,
@@ -283,6 +301,7 @@ function ArrangeWidgetsPanel({
   onSave,
   onReset,
   onMove,
+  onReorder,
   onToggle,
 }: {
   widgets: DashboardWidgetState[];
@@ -293,8 +312,10 @@ function ArrangeWidgetsPanel({
   onSave: () => void;
   onReset: () => void;
   onMove: (widgetId: string, direction: -1 | 1) => void;
+  onReorder: (draggedWidgetId: string, targetWidgetId: string) => void;
   onToggle: (widgetId: string, visible: boolean) => void;
 }) {
+  const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
   if (!canEdit || !editing) return null;
   const hiddenWidgets = widgets.filter((widget) => !widget.visible);
   return (
@@ -325,13 +346,42 @@ function ArrangeWidgetsPanel({
           {widgets.filter((widget) => widget.visible).map((widget, index, visibleWidgets) => (
             <div
               key={widget.id}
-              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-              style={{ borderColor: "var(--color-border-default)" }}
+              draggable
+              onDragStart={(event) => {
+                setDraggedWidgetId(widget.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", widget.id);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const draggedId = event.dataTransfer.getData("text/plain") || draggedWidgetId;
+                if (draggedId) onReorder(draggedId, widget.id);
+                setDraggedWidgetId(null);
+              }}
+              onDragEnd={() => setDraggedWidgetId(null)}
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 transition"
+              style={{
+                borderColor:
+                  draggedWidgetId === widget.id
+                    ? "var(--color-brand)"
+                    : "var(--color-border-default)",
+                background:
+                  draggedWidgetId === widget.id
+                    ? "var(--color-tag-bg)"
+                    : "var(--color-bg-card)",
+              }}
             >
-              <div>
-                <div className="text-[13px] font-semibold">{widget.label}</div>
-                <div className="text-[11px] text-[var(--color-text-muted)]">
-                  Visible widget
+              <div className="flex min-w-0 items-center gap-2">
+                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[var(--color-text-muted)]" />
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-semibold">{widget.label}</div>
+                  <div className="text-[11px] text-[var(--color-text-muted)]">
+                    Drag to reorder
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-1">
@@ -433,6 +483,25 @@ function MarketPulseSection({
               <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
               <h2 className="text-[16px] font-semibold">Market Pulse</h2>
               <Badge tone={error ? "danger" : "info"}>{error ? "Source issue" : "Live sources"}</Badge>
+              {pulse?.warnings.length ? (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[var(--color-text-muted)]"
+                        style={{ borderColor: "var(--color-border-default)" }}
+                        aria-label="Market source status"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[320px] text-[12px]">
+                      Some live sources are temporarily unavailable. The dashboard is showing
+                      available PSX data and local fallback market context where needed.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
             </div>
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
               PSX ticker movement, active names, news, and research for the latest market context.
@@ -473,11 +542,6 @@ function MarketPulseSection({
           )}
         </div>
 
-        {pulse?.warnings.length ? (
-          <div className="mt-3 rounded-md bg-[var(--color-warning-bg)] px-3 py-2 text-[12px] text-[var(--color-warning-fg)]">
-            {pulse.warnings.join(" ")}
-          </div>
-        ) : null}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -1043,6 +1107,11 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                     onReset={resetMainWidgetLayout}
                     onMove={(widgetId, direction) =>
                       setMainWidgets((widgets) => moveWidget(widgets, widgetId, direction))
+                    }
+                    onReorder={(draggedWidgetId, targetWidgetId) =>
+                      setMainWidgets((widgets) =>
+                        reorderWidget(widgets, draggedWidgetId, targetWidgetId),
+                      )
                     }
                     onToggle={(widgetId, visible) =>
                       setMainWidgets((widgets) => setWidgetVisibility(widgets, widgetId, visible))
@@ -2166,6 +2235,11 @@ function PortfolioDashboardDetail({
         onMove={(widgetId, direction) =>
           setPortfolioWidgets((widgets) => moveWidget(widgets, widgetId, direction))
         }
+        onReorder={(draggedWidgetId, targetWidgetId) =>
+          setPortfolioWidgets((widgets) =>
+            reorderWidget(widgets, draggedWidgetId, targetWidgetId),
+          )
+        }
         onToggle={(widgetId, visible) =>
           setPortfolioWidgets((widgets) => setWidgetVisibility(widgets, widgetId, visible))
         }
@@ -2338,7 +2412,7 @@ function PortfolioDashboardReport({
     ),
     approved_model_graphs: (
       <Card className="portfolio-print-section">
-        <h3 className="text-[15px] font-semibold">Approved Model Financial Graphs</h3>
+        <h3 className="text-[15px] font-semibold">Approved Model Insights</h3>
         <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
           Workbook-backed metrics are displayed company by company. Values are not accumulated
           across the portfolio.
@@ -2998,6 +3072,21 @@ function dashboardValuationPayload({
         publicationDate: brokerSummary.date,
       }]
     : [];
+  const chartSeries: Array<Record<string, unknown>> = buildValuationDashboardChartSeries({
+    metrics,
+    sourceSyncSummary,
+    modelGraphPack,
+  }).map((series) => ({
+    title: series.title,
+    kind: series.kind,
+    source: series.source,
+    unit: series.unit,
+    points: series.points.map((point) => ({
+      label: point.label,
+      value: point.value,
+      displayValue: point.displayValue,
+    })),
+  }));
   return {
     companyName: company.name,
     ticker: company.symbol,
@@ -3005,11 +3094,7 @@ function dashboardValuationPayload({
     fiscalYear: intelligence.identifiers.fiscalYear,
     currencyUnit: intelligence.identifiers.currency,
     dashboardMetrics,
-    chartSeries: buildValuationDashboardChartSeries({
-      metrics,
-      sourceSyncSummary,
-      modelGraphPack,
-    }),
+    chartSeries,
     researchNotes,
     citations,
   };
@@ -3181,7 +3266,7 @@ function FinancialDashboardTab({
       }
     : null;
 
-  // ── Valuation PPT conditions ──────────────────────────────────────────────
+  // ── Valuation Deck conditions ─────────────────────────────────────────────
   const modelApproved = sourcePlan?.modelGraphAvailability.available === true && !!approvedProjectId;
   const hasResearch =
     (brokerReports.length > 0) ||
@@ -3220,7 +3305,7 @@ function FinancialDashboardTab({
         ? await createValuationExport.mutateAsync(valuationPayload)
         : await createDashboardValuationExport.mutateAsync(valuationPayload);
       if (created.generatedBy === "deterministic") {
-        toast.info("Presentation generated using deterministic fallback (LLM unavailable).");
+        toast.info("Valuation Deck generated from available dashboard and model sources.");
       }
       const blob = created.projectId
         ? await downloadValuationExport.mutateAsync(created.id)
@@ -3233,9 +3318,9 @@ function FinancialDashboardTab({
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("Valuation presentation downloaded.");
+      toast.success("Valuation Deck downloaded.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "PPT generation failed.");
+      toast.error(err instanceof Error ? err.message : "Valuation Deck generation failed.");
     }
   };
 
@@ -3282,7 +3367,7 @@ function FinancialDashboardTab({
         </Card>
       ) : (
         <>
-          {/* Valuation PPT header bar */}
+          {/* Valuation Deck header bar */}
           <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
             style={{ borderColor: "var(--color-border-default)", background: "var(--color-bg-subtle)" }}>
             <div>
@@ -3318,7 +3403,7 @@ function FinancialDashboardTab({
                           ? "Generating…"
                           : downloadValuationExport.isPending || downloadDashboardValuationExport.isPending
                             ? "Downloading…"
-                            : "Valuation PPT"}
+                            : "Valuation Deck"}
                         {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
                       </button>
                     </span>
@@ -3691,12 +3776,11 @@ function ModelGraphPack({
   graphPack: ApprovedModelGraphPack;
 }) {
   const availability = sourcePlan.modelGraphAvailability;
-  const locked = graphPack.status === "locked";
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
-        <h3 className="text-[16px] font-semibold">Approved Model Financial Graphs</h3>
+        <h3 className="text-[16px] font-semibold">Approved Model Insights</h3>
         <Badge tone={availability.available ? "success" : "warning"}>
           {availability.available ? "Approved Model" : "Requires Model"}
         </Badge>
@@ -3711,7 +3795,16 @@ function ModelGraphPack({
       ) : null}
       {graphPack.status === "empty" ? (
         <Card>
-          <div className="text-[13px] text-[var(--color-text-secondary)]">{graphPack.reason}</div>
+          <div className="flex items-start gap-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-brand)]" />
+            <div>
+              <div className="text-[14px] font-semibold">Approved model needs graph-ready values</div>
+              <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                {graphPack.reason} Open the approved workbook or refresh extraction if you expect
+                revenue, margin, cash flow, and balance sheet metrics to appear here.
+              </p>
+            </div>
+          </div>
         </Card>
       ) : null}
       {graphPack.status === "available" || graphPack.status === "locked" ? (
@@ -3721,10 +3814,9 @@ function ModelGraphPack({
                 <ApprovedModelMetricCard key={card.title} card={card} />
               ))
             : sourcePlan.modelSections.map((section, index) => (
-                <TemplateChartCard
+                <ModelReadinessCard
                   key={section.id}
                   title={section.title}
-                  locked={locked}
                   reason={graphPack.reason}
                   variant={index}
                 />
@@ -3765,31 +3857,41 @@ function ApprovedModelMetricCard({ card }: { card: ApprovedModelGraphPack["cards
   );
 }
 
-function TemplateChartCard({
+function ModelReadinessCard({
   title,
-  locked,
   reason,
   variant,
 }: {
   title: string;
-  locked: boolean;
   reason?: string;
   variant: number;
 }) {
+  const messages = [
+    "Manager-approved workbook required before this model insight can be shown.",
+    "This section will populate from reviewed workbook values, not market fallback data.",
+    "Use Excel Workbooks to create or approve the model for this company.",
+    "Once available, this card will show model-backed financial trends.",
+  ];
   return (
     <Card className="min-h-[220px]">
       <div className="flex items-start justify-between gap-2">
         <h4 className="text-[15px] font-semibold">{title}</h4>
-        <Badge tone={locked ? "warning" : "success"}>{locked ? "Locked" : "Ready"}</Badge>
+        <Badge tone="warning">Model Required</Badge>
       </div>
-      <div className="mt-4">
-        {variant % 4 === 0 ? <TemplateAreaChart /> : null}
-        {variant % 4 === 1 ? <TemplateBarLineChart /> : null}
-        {variant % 4 === 2 ? <TemplateStackedBars /> : null}
-        {variant % 4 === 3 ? <TemplateDonut /> : null}
+      <div
+        className="mt-5 rounded-md border px-3 py-3"
+        style={{ borderColor: "var(--color-border-default)", background: "var(--color-bg-subtle)" }}
+      >
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-[var(--color-text-primary)]">
+          <Lock className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+          Awaiting approved model data
+        </div>
+        <p className="mt-2 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+          {messages[variant % messages.length]}
+        </p>
       </div>
       <p className="mt-3 text-[12px] leading-snug text-[var(--color-text-muted)]">
-        {locked ? reason : "Source: approved financial model."}
+        {reason ?? "No manager-approved workbook is available for this company yet."}
       </p>
     </Card>
   );
