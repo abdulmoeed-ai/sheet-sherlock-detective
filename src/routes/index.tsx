@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -53,9 +54,15 @@ import type {
   PortfolioDashboardVisibility,
   ProjectResponse,
   ValuationPresentationInput,
+  WidgetLayoutItem,
 } from "@/lib/api/types";
 import type { AnalysisRequestCreateInput } from "@/lib/api/analysis-requests";
 import { useCurrentUser } from "@/hooks/use-auth";
+import {
+  useDashboardLayout,
+  useResetDashboardLayout,
+  useSaveDashboardLayout,
+} from "@/hooks/use-dashboard-layouts";
 import {
   useAnalysisRequests,
   useCreateAnalysisRequest,
@@ -210,6 +217,202 @@ function DirectionIcon({ direction }: { direction: "up" | "down" | "flat" }) {
   if (direction === "up") return <ArrowUp className="h-4 w-4" />;
   if (direction === "down") return <ArrowDown className="h-4 w-4" />;
   return <span className="h-4 w-4 text-center text-[14px] leading-4">-</span>;
+}
+
+interface DashboardWidgetDefinition {
+  id: string;
+  label: string;
+  canHide?: boolean;
+}
+
+interface DashboardWidgetState extends DashboardWidgetDefinition {
+  visible: boolean;
+  order: number;
+}
+
+function applyWidgetLayout(
+  widgets: DashboardWidgetDefinition[],
+  savedLayout: WidgetLayoutItem[] | undefined | null,
+): DashboardWidgetState[] {
+  const savedById = new Map((savedLayout ?? []).map((item) => [item.widgetId, item]));
+  return widgets
+    .map((widget, index) => {
+      const saved = savedById.get(widget.id);
+      return {
+        ...widget,
+        visible: saved?.visible ?? true,
+        order: saved?.order ?? index,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+function normalizeWidgetLayout(widgets: DashboardWidgetState[]): WidgetLayoutItem[] {
+  return widgets.map((widget, index) => ({
+    widgetId: widget.id,
+    visible: widget.visible,
+    order: index,
+  }));
+}
+
+function moveWidget(widgets: DashboardWidgetState[], widgetId: string, direction: -1 | 1) {
+  const next = [...widgets];
+  const index = next.findIndex((widget) => widget.id === widgetId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= next.length) return widgets;
+  [next[index], next[target]] = [next[target], next[index]];
+  return next.map((widget, order) => ({ ...widget, order }));
+}
+
+function setWidgetVisibility(
+  widgets: DashboardWidgetState[],
+  widgetId: string,
+  visible: boolean,
+) {
+  return widgets.map((widget) =>
+    widget.id === widgetId ? { ...widget, visible } : widget,
+  );
+}
+
+function ArrangeWidgetsPanel({
+  widgets,
+  editing,
+  saving,
+  canEdit = true,
+  onCancel,
+  onSave,
+  onReset,
+  onMove,
+  onToggle,
+}: {
+  widgets: DashboardWidgetState[];
+  editing: boolean;
+  saving: boolean;
+  canEdit?: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+  onReset: () => void;
+  onMove: (widgetId: string, direction: -1 | 1) => void;
+  onToggle: (widgetId: string, visible: boolean) => void;
+}) {
+  if (!canEdit || !editing) return null;
+  const hiddenWidgets = widgets.filter((widget) => !widget.visible);
+  return (
+    <Card className="portfolio-print-hide">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-[15px] font-semibold">Arrange Widgets</h3>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+            Reorder or hide widgets to personalize this view.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onReset} disabled={saving}>
+            Reset Default
+          </Button>
+          <Button variant="secondary" onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={onSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save View
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
+        <div className="space-y-2">
+          {widgets.filter((widget) => widget.visible).map((widget, index, visibleWidgets) => (
+            <div
+              key={widget.id}
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
+              <div>
+                <div className="text-[13px] font-semibold">{widget.label}</div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">
+                  Visible widget
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-1">
+                <Button
+                  variant="secondary"
+                  onClick={() => onMove(widget.id, -1)}
+                  disabled={index === 0}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => onMove(widget.id, 1)}
+                  disabled={index === visibleWidgets.length - 1}
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+                {widget.canHide !== false ? (
+                  <Button variant="secondary" onClick={() => onToggle(widget.id, false)}>
+                    Hide
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div
+          className="rounded-md border px-3 py-3"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          <div className="text-[13px] font-semibold">Hidden Widgets</div>
+          <div className="mt-2 space-y-2">
+            {hiddenWidgets.length === 0 ? (
+              <div className="text-[12px] text-[var(--color-text-muted)]">
+                No hidden widgets.
+              </div>
+            ) : (
+              hiddenWidgets.map((widget) => (
+                <div key={widget.id} className="flex items-center justify-between gap-2">
+                  <span className="text-[12px]">{widget.label}</span>
+                  <Button variant="secondary" onClick={() => onToggle(widget.id, true)}>
+                    Show
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ArrangeWidgetsButton({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label="Arrange widgets"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border bg-white text-[var(--color-brand)] transition hover:bg-[var(--color-brand-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: "var(--color-border-strong)" }}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-[12px]">
+          Arrange widgets
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function MarketPulseSection({
@@ -616,10 +819,31 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
   const marketPulse = useMarketPulse();
+  const dashboardLayoutKey = `main_dashboard_${role}`;
+  const dashboardLayout = useDashboardLayout(dashboardLayoutKey);
+  const saveDashboardLayout = useSaveDashboardLayout(dashboardLayoutKey);
+  const resetDashboardLayout = useResetDashboardLayout(dashboardLayoutKey);
   const [startError, setStartError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
   const [projectPage, setProjectPage] = useState(1);
+  const mainWidgetDefinitions = useMemo<DashboardWidgetDefinition[]>(() => {
+    const widgets: DashboardWidgetDefinition[] = [];
+    if (role === "finance_manager") {
+      widgets.push({ id: "manager_summary", label: "Manager Summary" });
+    }
+    if (role === "finance_analyst" || role === "finance_manager") {
+      widgets.push({ id: "market_pulse", label: "Market Pulse" });
+      widgets.push({ id: "dashboard_tabs", label: "Financial / Portfolio Dashboard", canHide: false });
+    }
+    return widgets;
+  }, [role]);
+  const defaultMainWidgets = useMemo(
+    () => applyWidgetLayout(mainWidgetDefinitions, dashboardLayout.data?.layout),
+    [mainWidgetDefinitions, dashboardLayout.data?.layout],
+  );
+  const [mainWidgets, setMainWidgets] = useState<DashboardWidgetState[]>(defaultMainWidgets);
+  const [arrangingMainWidgets, setArrangingMainWidgets] = useState(false);
 
   const pendingRequests = (requests.data ?? []).filter((r) => r.status === "pending");
   const projectList = useMemo(() => projects.data ?? [], [projects.data]);
@@ -650,6 +874,11 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   useEffect(() => {
     setProjectPage(1);
   }, [projectSearch]);
+  useEffect(() => {
+    if (!arrangingMainWidgets) {
+      setMainWidgets(defaultMainWidgets);
+    }
+  }, [arrangingMainWidgets, defaultMainWidgets]);
   // Show skeleton until ALL key data is ready — prevents old-dashboard flash on re-navigation
   const allDataReady =
     projects.data !== undefined && requests.data !== undefined && psxCompanies.data !== undefined;
@@ -709,10 +938,23 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
         ]
       : null;
 
-  return (
-    <div className="space-y-4">
-      {role === "finance_manager" && (
-        <Card>
+  const saveMainWidgetLayout = async () => {
+    await saveDashboardLayout.mutateAsync(normalizeWidgetLayout(mainWidgets));
+    setArrangingMainWidgets(false);
+    toast.success("Dashboard view saved.");
+  };
+
+  const resetMainWidgetLayout = async () => {
+    await resetDashboardLayout.mutateAsync();
+    setMainWidgets(applyWidgetLayout(mainWidgetDefinitions, []));
+    setArrangingMainWidgets(false);
+    toast.success("Dashboard view reset.");
+  };
+
+  const renderMainWidget = (widgetId: string) => {
+    if (widgetId === "manager_summary" && role === "finance_manager") {
+      return (
+        <Card key={widgetId}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="grid flex-1 grid-cols-3 gap-4">
               <ManagerDashboardMetric
@@ -733,52 +975,94 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
             </Button>
           </div>
         </Card>
-      )}
+      );
+    }
 
-      {(role === "finance_analyst" || role === "finance_manager") && (
+    if (widgetId === "market_pulse" && (role === "finance_analyst" || role === "finance_manager")) {
+      return (
         <MarketPulseSection
+          key={widgetId}
           pulse={marketPulse.data ?? null}
           loading={marketPulse.isLoading}
           error={marketPulse.error instanceof Error ? marketPulse.error.message : null}
         />
-      )}
+      );
+    }
 
-      {/* Sub-tabs */}
-      {tabs && (
-        <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="px-4 py-2.5 text-[13px] font-medium transition"
-              style={{
-                color: activeTab === tab.id ? "var(--color-brand)" : "var(--color-text-muted)",
-                borderBottom:
-                  activeTab === tab.id ? "2px solid var(--color-brand)" : "2px solid transparent",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+    if (widgetId === "dashboard_tabs") {
+      return (
+        <div key={widgetId} className="space-y-4">
+          {tabs && (
+            <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="px-4 py-2.5 text-[13px] font-medium transition"
+                  style={{
+                    color: activeTab === tab.id ? "var(--color-brand)" : "var(--color-text-muted)",
+                    borderBottom:
+                      activeTab === tab.id ? "2px solid var(--color-brand)" : "2px solid transparent",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeTab === "financial" &&
+            (role === "finance_analyst" || role === "finance_manager") &&
+            (!allDataReady ? (
+              <AnalystDashboardLoading />
+            ) : (
+              <FinancialDashboardTab
+                psxCompanies={psxCompanies.data ?? []}
+                projects={projects.data ?? []}
+                startPending={startPending}
+                startError={startError}
+                onStartModel={startModel}
+                arrangeTrigger={
+                  !arrangingMainWidgets ? (
+                    <ArrangeWidgetsButton
+                      onClick={() => setArrangingMainWidgets(true)}
+                      disabled={saveDashboardLayout.isPending || resetDashboardLayout.isPending}
+                    />
+                  ) : null
+                }
+                arrangeEditor={
+                  <ArrangeWidgetsPanel
+                    widgets={mainWidgets}
+                    editing={arrangingMainWidgets}
+                    saving={saveDashboardLayout.isPending || resetDashboardLayout.isPending}
+                    onCancel={() => {
+                      setMainWidgets(defaultMainWidgets);
+                      setArrangingMainWidgets(false);
+                    }}
+                    onSave={saveMainWidgetLayout}
+                    onReset={resetMainWidgetLayout}
+                    onMove={(widgetId, direction) =>
+                      setMainWidgets((widgets) => moveWidget(widgets, widgetId, direction))
+                    }
+                    onToggle={(widgetId, visible) =>
+                      setMainWidgets((widgets) => setWidgetVisibility(widgets, widgetId, visible))
+                    }
+                  />
+                }
+              />
+            ))}
+
+          {activeTab === "portfolio" && <PortfolioDashboardsTab role={role} />}
         </div>
-      )}
+      );
+    }
 
-      {/* Financial Dashboard tab */}
-      {activeTab === "financial" &&
-        (role === "finance_analyst" || role === "finance_manager") &&
-        (!allDataReady ? (
-          <AnalystDashboardLoading />
-        ) : (
-          <FinancialDashboardTab
-            psxCompanies={psxCompanies.data ?? []}
-            projects={projects.data ?? []}
-            startPending={startPending}
-            startError={startError}
-            onStartModel={startModel}
-          />
-        ))}
+    return null;
+  };
 
-      {activeTab === "portfolio" && <PortfolioDashboardsTab role={role} />}
+  return (
+    <div className="space-y-4">
+      {mainWidgets.filter((widget) => widget.visible).map((widget) => renderMainWidget(widget.id))}
 
       {(role === "cfo" || role === "admin") && (
         <div className="space-y-5">
@@ -943,6 +1227,23 @@ interface PortfolioDashboardDraft {
   companySelections: PortfolioCompanySelection[];
 }
 
+const PORTFOLIO_WIDGETS: DashboardWidgetDefinition[] = [
+  { id: "summary_stats", label: "Portfolio Summary" },
+  { id: "analytics_summary", label: "Portfolio Analytics" },
+  { id: "live_market_matrix", label: "Live Market Matrix" },
+  { id: "share_price_trends", label: "Share Price Trends" },
+  { id: "valuation_ranges", label: "Valuation Ranges" },
+  { id: "company_snapshots", label: "Company Snapshots" },
+  { id: "broker_research", label: "Broker Research" },
+  { id: "sector_allocation", label: "Sector Allocation And Comparison" },
+  { id: "valuation_matrix", label: "Valuation Matrix" },
+  { id: "price_performance", label: "Price Performance" },
+  { id: "approved_model_graphs", label: "Approved Model Graphs" },
+  { id: "metric_groups", label: "Metric Groups" },
+  { id: "companies", label: "Companies In Portfolio" },
+  { id: "source_coverage", label: "Source Coverage And Caveats" },
+];
+
 const emptyPortfolioDashboardDraft: PortfolioDashboardDraft = {
   name: "",
   description: "",
@@ -992,6 +1293,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
       description: dashboard.description,
       visibility: "private",
       companySelections: dashboard.companySelections,
+      widgetLayout: dashboard.widgetLayout,
     });
     setSelectedDashboardId(duplicated.id);
     setView("detail");
@@ -1003,6 +1305,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
       description: dashboard.description,
       visibility: dashboard.visibility,
       companySelections: dashboard.companySelections,
+      widgetLayout: dashboard.widgetLayout,
     });
     setSelectedDashboardId(versioned.id);
     setView("detail");
@@ -1025,6 +1328,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
       description: draft.description || null,
       visibility: draft.visibility,
       companySelections: draft.companySelections,
+      widgetLayout: [],
     });
     setSelectedDashboardId(created.id);
     setView("detail");
@@ -1039,6 +1343,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
         description: draft.description || null,
         visibility: draft.visibility,
         companySelections: draft.companySelections,
+        widgetLayout: selectedDashboard.widgetLayout,
       },
     });
     setSelectedDashboardId(updated.id);
@@ -1061,6 +1366,18 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
       window.print();
       window.setTimeout(cleanup, 1200);
     }, 300);
+  };
+
+  const savePortfolioWidgetLayout = async (
+    dashboard: PortfolioDashboardResponse,
+    widgetLayout: WidgetLayoutItem[],
+  ) => {
+    const updated = await updatePortfolio.mutateAsync({
+      dashboardId: dashboard.id,
+      payload: { widgetLayout },
+    });
+    setSelectedDashboardId(updated.id);
+    toast.success("Portfolio dashboard view saved.");
   };
 
   if (view === "create") {
@@ -1111,6 +1428,9 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
         onDuplicate={() => duplicateDashboard(selectedDashboard)}
         onSaveVersion={() => saveDashboardVersion(selectedDashboard)}
         onExport={() => exportDashboard(selectedDashboard)}
+        onSaveLayout={(widgetLayout) =>
+          savePortfolioWidgetLayout(selectedDashboard, widgetLayout)
+        }
       />
     );
   }
@@ -1689,6 +2009,7 @@ function PortfolioDashboardDetail({
   onDuplicate,
   onSaveVersion,
   onExport,
+  onSaveLayout,
 }: {
   dashboard: PortfolioDashboardResponse;
   canEdit: boolean;
@@ -1705,8 +2026,50 @@ function PortfolioDashboardDetail({
   onDuplicate: () => void;
   onSaveVersion: () => void;
   onExport: () => void;
+  onSaveLayout: (widgetLayout: WidgetLayoutItem[]) => Promise<void>;
 }) {
   const summary = portfolioCompanySummary(dashboard.companySelections);
+  const defaultPortfolioWidgets = useMemo(
+    () => applyWidgetLayout(PORTFOLIO_WIDGETS, dashboard.widgetLayout),
+    [dashboard.widgetLayout],
+  );
+  const [portfolioWidgets, setPortfolioWidgets] = useState<DashboardWidgetState[]>(
+    defaultPortfolioWidgets,
+  );
+  const [arrangingPortfolioWidgets, setArrangingPortfolioWidgets] = useState(false);
+  const [savingPortfolioLayout, setSavingPortfolioLayout] = useState(false);
+  useEffect(() => {
+    if (!arrangingPortfolioWidgets) {
+      setPortfolioWidgets(defaultPortfolioWidgets);
+    }
+  }, [arrangingPortfolioWidgets, defaultPortfolioWidgets]);
+  const visibleWidgetIds = portfolioWidgets
+    .filter((widget) => widget.visible)
+    .map((widget) => widget.id);
+
+  const savePortfolioLayout = async () => {
+    setSavingPortfolioLayout(true);
+    try {
+      await onSaveLayout(normalizeWidgetLayout(portfolioWidgets));
+      setArrangingPortfolioWidgets(false);
+    } finally {
+      setSavingPortfolioLayout(false);
+    }
+  };
+
+  const resetPortfolioLayout = async () => {
+    setSavingPortfolioLayout(true);
+    try {
+      const resetWidgets = applyWidgetLayout(PORTFOLIO_WIDGETS, []);
+      setPortfolioWidgets(resetWidgets);
+      await onSaveLayout(normalizeWidgetLayout(resetWidgets));
+      setArrangingPortfolioWidgets(false);
+      toast.success("Portfolio dashboard view reset.");
+    } finally {
+      setSavingPortfolioLayout(false);
+    }
+  };
+
   return (
     <div className="portfolio-print-root space-y-4">
       <Card className="portfolio-print-header">
@@ -1732,6 +2095,12 @@ function PortfolioDashboardDetail({
             </div>
           </div>
           <div className="portfolio-print-hide flex flex-wrap gap-2">
+            {canEdit && !arrangingPortfolioWidgets ? (
+              <ArrangeWidgetsButton
+                onClick={() => setArrangingPortfolioWidgets(true)}
+                disabled={savingPortfolioLayout}
+              />
+            ) : null}
             <Button variant="secondary" onClick={onExport} disabled={exporting}>
               {exporting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1783,41 +2152,31 @@ function PortfolioDashboardDetail({
         ) : null}
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <StatCard label="Companies" value={summary.companyCount} />
-        <StatCard label="Sectors" value={summary.sectors.length} />
-        <StatCard label="Visibility" value={portfolioVisibilityLabel(dashboard.visibility)} />
-      </div>
+      <ArrangeWidgetsPanel
+        widgets={portfolioWidgets}
+        editing={arrangingPortfolioWidgets}
+        saving={savingPortfolioLayout}
+        canEdit={canEdit}
+        onCancel={() => {
+          setPortfolioWidgets(defaultPortfolioWidgets);
+          setArrangingPortfolioWidgets(false);
+        }}
+        onSave={savePortfolioLayout}
+        onReset={resetPortfolioLayout}
+        onMove={(widgetId, direction) =>
+          setPortfolioWidgets((widgets) => moveWidget(widgets, widgetId, direction))
+        }
+        onToggle={(widgetId, visible) =>
+          setPortfolioWidgets((widgets) => setWidgetVisibility(widgets, widgetId, visible))
+        }
+      />
 
-      <PortfolioDashboardReport dashboard={dashboard} projects={projects} />
-
-      <Card className="portfolio-print-section">
-        <h3 className="mb-3 text-[15px] font-semibold">Companies In Portfolio</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
-            <thead>
-              <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
-                <th className="py-2 pr-3 font-semibold">Company</th>
-                <th className="py-2 pr-3 font-semibold">Ticker</th>
-                <th className="py-2 pr-3 font-semibold">Sector</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboard.companySelections.map((company) => (
-                <tr
-                  key={company.symbol}
-                  className="border-b last:border-0"
-                  style={{ borderColor: "var(--color-border-default)" }}
-                >
-                  <td className="py-2 pr-3 font-semibold">{company.name}</td>
-                  <td className="py-2 pr-3 tnum">{company.symbol}</td>
-                  <td className="py-2 pr-3">{company.sector}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <PortfolioDashboardReport
+        dashboard={dashboard}
+        projects={projects}
+        widgetIds={visibleWidgetIds}
+        summary={summary}
+      />
       <div className="portfolio-print-footer hidden text-[10px] text-[var(--color-text-muted)]">
         Exported from FINaiNCE portfolio dashboards. Market data, valuation fields, and model
         coverage are estimates and source-backed views, not investment advice.
@@ -1829,9 +2188,13 @@ function PortfolioDashboardDetail({
 function PortfolioDashboardReport({
   dashboard,
   projects,
+  widgetIds,
+  summary,
 }: {
   dashboard: PortfolioDashboardResponse;
   projects: ProjectResponse[];
+  widgetIds: string[];
+  summary: ReturnType<typeof portfolioCompanySummary>;
 }) {
   const askAnalystResults = useQueries({
     queries: dashboard.companySelections.map((company) => ({
@@ -1931,8 +2294,15 @@ function PortfolioDashboardReport({
     1,
   );
 
-  return (
-    <div className="space-y-4">
+  const reportWidgets: Record<string, ReactNode> = {
+    summary_stats: (
+      <div className="grid gap-4 xl:grid-cols-3">
+        <StatCard label="Companies" value={summary.companyCount} />
+        <StatCard label="Sectors" value={summary.sectors.length} />
+        <StatCard label="Visibility" value={portfolioVisibilityLabel(dashboard.visibility)} />
+      </div>
+    ),
+    analytics_summary: (
       <Card className="portfolio-print-section">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1950,142 +2320,23 @@ function PortfolioDashboardReport({
           <StatCard label="Models Available" value={modelCoverage.availableCount} />
         </div>
       </Card>
-
-      <PortfolioLiveMarketMatrix rows={analyticsRows} />
-      <PortfolioSharePriceTrendGrid rows={analyticsRows} />
-      <PortfolioValuationRangeGrid rows={analyticsRows} />
-      <PortfolioCompanySnapshotGrid rows={analyticsRows} />
-      <PortfolioBrokerResearchMatrix rows={analyticsRows} />
-
+    ),
+    live_market_matrix: <PortfolioLiveMarketMatrix rows={analyticsRows} />,
+    share_price_trends: <PortfolioSharePriceTrendGrid rows={analyticsRows} />,
+    valuation_ranges: <PortfolioValuationRangeGrid rows={analyticsRows} />,
+    company_snapshots: <PortfolioCompanySnapshotGrid rows={analyticsRows} />,
+    broker_research: <PortfolioBrokerResearchMatrix rows={analyticsRows} />,
+    sector_allocation: (
       <div className="grid gap-4 xl:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]">
-        <Card className="portfolio-print-section">
-          <h3 className="text-[15px] font-semibold">Sector Allocation</h3>
-          <div className="mt-4 space-y-3">
-            {sectorAllocation.map((allocation) => (
-              <div key={allocation.sector}>
-                <div className="flex items-center justify-between gap-3 text-[12px]">
-                  <span className="font-semibold">{allocation.sector}</span>
-                  <span className="tnum text-[var(--color-text-muted)]">
-                    {allocation.count} · {(allocation.share * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div className="mt-2 h-2 rounded-full bg-[var(--color-border-default)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--color-brand)]"
-                    style={{ width: `${Math.max(8, allocation.share * 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="portfolio-print-section">
-          <h3 className="text-[15px] font-semibold">Company Comparison</h3>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
-              <thead>
-                <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
-                  <th className="py-2 pr-3 font-semibold">Company</th>
-                  <th className="py-2 pr-3 font-semibold">Source</th>
-                  <th className="py-2 pr-3 font-semibold">Last Price</th>
-                  <th className="py-2 pr-3 font-semibold">Change</th>
-                  <th className="py-2 pr-3 font-semibold">Last Synced</th>
-                  <th className="py-2 pr-3 font-semibold">Model Availability</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analyticsRows.map((row) => (
-                  <tr
-                    key={row.company.symbol}
-                    className="border-b last:border-0"
-                    style={{ borderColor: "var(--color-border-default)" }}
-                  >
-                    <td className="py-2 pr-3">
-                      <div className="font-semibold">{row.company.name}</div>
-                      <div className="text-[11px] text-[var(--color-text-muted)]">
-                        {row.company.symbol} · {row.company.sector}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3">{row.loading ? "Loading" : row.liveSource}</td>
-                    <td className="py-2 pr-3 tnum">
-                      PKR {row.intelligence.marketSignals.lastPrice.toFixed(2)}
-                    </td>
-                    <td
-                      className="py-2 pr-3 tnum"
-                      style={{
-                        color:
-                          row.intelligence.marketSignals.changePct30d >= 0
-                            ? "var(--color-success-fg)"
-                            : "var(--color-danger-fg)",
-                      }}
-                    >
-                      {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
-                      {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
-                    </td>
-                    <td className="py-2 pr-3">{row.intelligence.marketSignals.updatedAt}</td>
-                    <td className="py-2 pr-3">{row.modelCoverage.statusLabel}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <PortfolioSectorAllocationCard sectorAllocation={sectorAllocation} />
+        <PortfolioCompanyComparisonCard rows={analyticsRows} />
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="portfolio-print-section">
-          <h3 className="text-[15px] font-semibold">Valuation Matrix</h3>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {analyticsRows.map((row) => (
-              <div
-                key={row.company.symbol}
-                className="rounded-md border px-3 py-3"
-                style={{ borderColor: "var(--color-border-default)" }}
-              >
-                <div className="mb-2 text-[12px] font-semibold">{row.company.symbol}</div>
-                {valuationMetrics(row.intelligence).map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="flex items-center justify-between gap-2 py-1 text-[12px]"
-                  >
-                    <span className="text-[var(--color-text-muted)]">{metric.label}</span>
-                    <span className="font-semibold tnum">{metric.value}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="portfolio-print-section">
-          <h3 className="text-[15px] font-semibold">Price Performance Comparison</h3>
-          <div className="mt-4 space-y-4">
-            {analyticsRows.map((row) => (
-              <div key={row.company.symbol}>
-                <div className="mb-2 flex items-center justify-between gap-3 text-[12px]">
-                  <span className="font-semibold">{row.company.symbol}</span>
-                  <span className="tnum text-[var(--color-text-muted)]">
-                    {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
-                    {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex h-14 items-end gap-1 rounded-md bg-[var(--color-tag-bg)] px-2 py-2">
-                  {row.intelligence.marketSignals.sharePriceTrend.slice(-14).map((point, index) => (
-                    <div
-                      key={`${row.company.symbol}-${point.label}-${index}`}
-                      className="flex-1 rounded-sm bg-[var(--color-brand)]"
-                      style={{ height: `${Math.max(10, (point.price / maxTrendPrice) * 100)}%` }}
-                      title={`${point.label}: PKR ${point.price.toFixed(2)}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
+    ),
+    valuation_matrix: <PortfolioValuationMatrix rows={analyticsRows} />,
+    price_performance: (
+      <PortfolioPricePerformanceCard rows={analyticsRows} maxTrendPrice={maxTrendPrice} />
+    ),
+    approved_model_graphs: (
       <Card className="portfolio-print-section">
         <h3 className="text-[15px] font-semibold">Approved Model Financial Graphs</h3>
         <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
@@ -2142,9 +2393,10 @@ function PortfolioDashboardReport({
           })}
         </div>
       </Card>
-
-      <PortfolioMetricGroups rows={analyticsRows} />
-
+    ),
+    metric_groups: <PortfolioMetricGroups rows={analyticsRows} />,
+    companies: <PortfolioCompaniesCard dashboard={dashboard} />,
+    source_coverage: (
       <Card className="portfolio-print-section">
         <h3 className="text-[15px] font-semibold">Source Coverage And Caveats</h3>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -2170,7 +2422,198 @@ function PortfolioDashboardReport({
           />
         </div>
       </Card>
+    ),
+  };
+
+  return (
+    <div className="space-y-4">
+      {widgetIds.map((widgetId) =>
+        reportWidgets[widgetId] ? <div key={widgetId}>{reportWidgets[widgetId]}</div> : null,
+      )}
     </div>
+  );
+}
+
+function PortfolioSectorAllocationCard({
+  sectorAllocation,
+}: {
+  sectorAllocation: ReturnType<typeof buildPortfolioSectorAllocation>;
+}) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Sector Allocation</h3>
+      <div className="mt-4 space-y-3">
+        {sectorAllocation.map((allocation) => (
+          <div key={allocation.sector}>
+            <div className="flex items-center justify-between gap-3 text-[12px]">
+              <span className="font-semibold">{allocation.sector}</span>
+              <span className="tnum text-[var(--color-text-muted)]">
+                {allocation.count} · {(allocation.share * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-[var(--color-border-default)]">
+              <div
+                className="h-full rounded-full bg-[var(--color-brand)]"
+                style={{ width: `${Math.max(8, allocation.share * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioCompanyComparisonCard({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Company Comparison</h3>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
+          <thead>
+            <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+              <th className="py-2 pr-3 font-semibold">Company</th>
+              <th className="py-2 pr-3 font-semibold">Source</th>
+              <th className="py-2 pr-3 font-semibold">Last Price</th>
+              <th className="py-2 pr-3 font-semibold">Change</th>
+              <th className="py-2 pr-3 font-semibold">Last Synced</th>
+              <th className="py-2 pr-3 font-semibold">Model Availability</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.company.symbol}
+                className="border-b last:border-0"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <td className="py-2 pr-3">
+                  <div className="font-semibold">{row.company.name}</div>
+                  <div className="text-[11px] text-[var(--color-text-muted)]">
+                    {row.company.symbol} · {row.company.sector}
+                  </div>
+                </td>
+                <td className="py-2 pr-3">{row.loading ? "Loading" : row.liveSource}</td>
+                <td className="py-2 pr-3 tnum">
+                  PKR {row.intelligence.marketSignals.lastPrice.toFixed(2)}
+                </td>
+                <td
+                  className="py-2 pr-3 tnum"
+                  style={{
+                    color:
+                      row.intelligence.marketSignals.changePct30d >= 0
+                        ? "var(--color-success-fg)"
+                        : "var(--color-danger-fg)",
+                  }}
+                >
+                  {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
+                  {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
+                </td>
+                <td className="py-2 pr-3">{row.intelligence.marketSignals.updatedAt}</td>
+                <td className="py-2 pr-3">{row.modelCoverage.statusLabel}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioValuationMatrix({ rows }: { rows: PortfolioAnalyticsRow[] }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Valuation Matrix</h3>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {rows.map((row) => (
+          <div
+            key={row.company.symbol}
+            className="rounded-md border px-3 py-3"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            <div className="mb-2 text-[12px] font-semibold">{row.company.symbol}</div>
+            {valuationMetrics(row.intelligence).map((metric) => (
+              <div
+                key={metric.label}
+                className="flex items-center justify-between gap-2 py-1 text-[12px]"
+              >
+                <span className="text-[var(--color-text-muted)]">{metric.label}</span>
+                <span className="font-semibold tnum">{metric.value}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioPricePerformanceCard({
+  rows,
+  maxTrendPrice,
+}: {
+  rows: PortfolioAnalyticsRow[];
+  maxTrendPrice: number;
+}) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="text-[15px] font-semibold">Price Performance Comparison</h3>
+      <div className="mt-4 space-y-4">
+        {rows.map((row) => (
+          <div key={row.company.symbol}>
+            <div className="mb-2 flex items-center justify-between gap-3 text-[12px]">
+              <span className="font-semibold">{row.company.symbol}</span>
+              <span className="tnum text-[var(--color-text-muted)]">
+                {row.intelligence.marketSignals.changePct30d >= 0 ? "+" : ""}
+                {row.intelligence.marketSignals.changePct30d.toFixed(1)}%
+              </span>
+            </div>
+            <div className="flex h-14 items-end gap-1 rounded-md bg-[var(--color-tag-bg)] px-2 py-2">
+              {row.intelligence.marketSignals.sharePriceTrend.slice(-14).map((point, index) => (
+                <div
+                  key={`${row.company.symbol}-${point.label}-${index}`}
+                  className="flex-1 rounded-sm bg-[var(--color-brand)]"
+                  style={{ height: `${Math.max(10, (point.price / maxTrendPrice) * 100)}%` }}
+                  title={`${point.label}: PKR ${point.price.toFixed(2)}`}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioCompaniesCard({ dashboard }: { dashboard: PortfolioDashboardResponse }) {
+  return (
+    <Card className="portfolio-print-section">
+      <h3 className="mb-3 text-[15px] font-semibold">Companies In Portfolio</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
+          <thead>
+            <tr className="border-b" style={{ borderColor: "var(--color-border-default)" }}>
+              <th className="py-2 pr-3 font-semibold">Company</th>
+              <th className="py-2 pr-3 font-semibold">Ticker</th>
+              <th className="py-2 pr-3 font-semibold">Sector</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dashboard.companySelections.map((company) => (
+              <tr
+                key={company.symbol}
+                className="border-b last:border-0"
+                style={{ borderColor: "var(--color-border-default)" }}
+              >
+                <td className="py-2 pr-3 font-semibold">{company.name}</td>
+                <td className="py-2 pr-3 tnum">{company.symbol}</td>
+                <td className="py-2 pr-3">{company.sector}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -2611,12 +3054,16 @@ function FinancialDashboardTab({
   startPending,
   startError,
   onStartModel,
+  arrangeTrigger,
+  arrangeEditor,
 }: {
   psxCompanies: PsxCompany[];
   projects: ProjectResponse[];
   startPending: boolean;
   startError: string | null;
   onStartModel: (company: DashboardCompanySelection) => void;
+  arrangeTrigger?: ReactNode;
+  arrangeEditor?: ReactNode;
 }) {
   const [selectedSector, setSelectedSector] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState("");
@@ -2836,7 +3283,7 @@ function FinancialDashboardTab({
       ) : (
         <>
           {/* Valuation PPT header bar */}
-          <div className="flex items-center justify-between rounded-lg border px-4 py-2.5"
+          <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
             style={{ borderColor: "var(--color-border-default)", background: "var(--color-bg-subtle)" }}>
             <div>
               <p className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
@@ -2846,52 +3293,57 @@ function FinancialDashboardTab({
                 {selectedCompany?.sector} · {selectedCompany?.symbol}
               </p>
             </div>
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      onClick={handleValuationPPT}
-                      disabled={!valuationPptEnabled || !valuationPayload || valuationExportPending}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{
-                        borderColor: valuationPptEnabled ? "var(--color-brand)" : "var(--color-border-default)",
-                        color: valuationPptEnabled ? "var(--color-brand)" : "var(--color-text-muted)",
-                        background: "var(--color-bg-card)",
-                      }}
-                    >
-                      {valuationExportPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Presentation className="h-3.5 w-3.5" />
-                      )}
-                      {createValuationExport.isPending || createDashboardValuationExport.isPending
-                        ? "Generating…"
-                        : downloadValuationExport.isPending || downloadDashboardValuationExport.isPending
-                          ? "Downloading…"
-                          : "Valuation PPT"}
-                      {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                {!valuationPptEnabled && (
-                  <TooltipContent side="bottom" className="max-w-[300px] text-[12px]">
-                    <p className="font-semibold mb-1">Cannot generate presentation:</p>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {disabledReasons.map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
-                  </TooltipContent>
-                )}
-                {valuationPptEnabled && (
-                  <TooltipContent side="bottom" className="text-[12px]">
-                    Generate an investment-banking quality valuation deck using dashboard intelligence, broker context, and approved model data when available.
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
+            <div className="flex items-center gap-2">
+              {arrangeTrigger}
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        onClick={handleValuationPPT}
+                        disabled={!valuationPptEnabled || !valuationPayload || valuationExportPending}
+                        className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{
+                          borderColor: valuationPptEnabled ? "var(--color-brand)" : "var(--color-border-default)",
+                          color: valuationPptEnabled ? "var(--color-brand)" : "var(--color-text-muted)",
+                          background: "var(--color-bg-card)",
+                        }}
+                      >
+                        {valuationExportPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Presentation className="h-3.5 w-3.5" />
+                        )}
+                        {createValuationExport.isPending || createDashboardValuationExport.isPending
+                          ? "Generating…"
+                          : downloadValuationExport.isPending || downloadDashboardValuationExport.isPending
+                            ? "Downloading…"
+                            : "Valuation PPT"}
+                        {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  {!valuationPptEnabled && (
+                    <TooltipContent side="bottom" className="max-w-[300px] text-[12px]">
+                      <p className="font-semibold mb-1">Cannot generate presentation:</p>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {disabledReasons.map((r) => (
+                          <li key={r}>{r}</li>
+                        ))}
+                      </ul>
+                    </TooltipContent>
+                  )}
+                  {valuationPptEnabled && (
+                    <TooltipContent side="bottom" className="text-[12px]">
+                      Generate an investment-banking quality valuation deck using dashboard intelligence, broker context, and approved model data when available.
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
+
+          {arrangeEditor}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
             <StartModelCard

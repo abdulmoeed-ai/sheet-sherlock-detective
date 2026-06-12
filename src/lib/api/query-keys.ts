@@ -4,6 +4,7 @@ export const queryKeys = {
   projects: ["projects"] as const,
   portfolioDashboards: (scope: "my" | "public" | "all") => ["portfolio-dashboards", scope] as const,
   portfolioDashboard: (id: string) => ["portfolio-dashboards", id] as const,
+  dashboardLayout: (dashboardKey: string) => ["dashboard-layouts", dashboardKey] as const,
   workspace: (projectId: string) => ["projects", projectId, "workspace"] as const,
   workbookCellHistory: (projectId: string, sheetId: string, cellAddress: string) =>
     ["projects", projectId, "workbook", "cells", sheetId, cellAddress, "history"] as const,
