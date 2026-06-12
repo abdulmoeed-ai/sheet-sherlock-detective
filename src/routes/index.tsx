@@ -1,19 +1,23 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   BarChart3,
   ClipboardList,
   CloudUpload,
   Copy,
   Download,
   Eye,
+  FileText,
   FolderOpen,
   Globe2,
   Info,
   Loader2,
   Lock,
+  Newspaper,
   Pencil,
   Presentation,
   Plus,
@@ -66,6 +70,7 @@ import {
   useUpdatePortfolioDashboard,
 } from "@/hooks/use-portfolio-dashboards";
 import { useAnalysts, usePsxCompanies } from "@/hooks/use-users";
+import { useMarketPulse } from "@/hooks/use-users";
 import { clearSelectedProjectId, setSelectedProjectId } from "@/lib/project-store";
 import { paginateItems } from "@/lib/pagination";
 import { SECTOR_PACKS } from "@/lib/sector-packs";
@@ -88,6 +93,12 @@ import {
 } from "@/lib/company-intelligence";
 import { fetchAskAnalystOverview } from "@/lib/ask-analyst";
 import type { PsxCompany } from "@/lib/api/users";
+import type {
+  MarketPulseActiveStock,
+  MarketPulseContentItem,
+  MarketPulseResponse,
+  MarketPulseTickerItem,
+} from "@/lib/api/users";
 import { type DashboardCompanySelection } from "@/lib/dashboard-state";
 import {
   buildApprovedModelGraphPack,
@@ -149,6 +160,287 @@ function formatProjectDate(value: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatMarketDate(value?: string | null): string {
+  if (!value) return "Not synced yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatMarketNumber(value: number | null | undefined, fractionDigits = 2): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+function formatMarketVolume(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "N/A";
+  return Math.round(value).toLocaleString();
+}
+
+function formatMarketChange(
+  change: number | null | undefined,
+  changePercent: number | null | undefined,
+): string {
+  const amount = change === null || change === undefined || Number.isNaN(change)
+    ? "N/A"
+    : `${change >= 0 ? "+" : ""}${formatMarketNumber(change)}`;
+  const percent = changePercent === null || changePercent === undefined || Number.isNaN(changePercent)
+    ? null
+    : `${changePercent >= 0 ? "+" : ""}${formatMarketNumber(changePercent, 1)}%`;
+  return percent ? `${amount} (${percent})` : amount;
+}
+
+function marketToneColor(direction: "up" | "down" | "flat" | undefined): string {
+  if (direction === "up") return "var(--color-success-fg)";
+  if (direction === "down") return "var(--color-danger-fg)";
+  return "var(--color-text-secondary)";
+}
+
+function DirectionIcon({ direction }: { direction: "up" | "down" | "flat" }) {
+  if (direction === "up") return <ArrowUp className="h-4 w-4" />;
+  if (direction === "down") return <ArrowDown className="h-4 w-4" />;
+  return <span className="h-4 w-4 text-center text-[14px] leading-4">-</span>;
+}
+
+function MarketPulseSection({
+  pulse,
+  loading,
+  error,
+}: {
+  pulse: MarketPulseResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
+              <h2 className="text-[16px] font-semibold">Market Pulse</h2>
+              <Badge tone={error ? "danger" : "info"}>{error ? "Source issue" : "Live sources"}</Badge>
+            </div>
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">
+              PSX ticker movement, active names, news, and research for the latest market context.
+            </p>
+          </div>
+          <div className="text-right text-[11px] text-[var(--color-text-muted)]">
+            Last synced {formatMarketDate(pulse?.ticker.lastSyncedAt)}
+          </div>
+        </div>
+
+        <div
+          className="mt-4 flex items-center gap-5 overflow-hidden rounded-md border px-3 py-3"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
+          <div
+            className="shrink-0 rounded-md border bg-white px-3 py-2 text-[12px] font-semibold"
+            style={{ borderColor: "var(--color-border-default)" }}
+          >
+            {pulse?.ticker.label ?? "KSE 100"}
+          </div>
+          {loading ? (
+            <div className="flex min-h-[36px] flex-1 items-center gap-2 text-[13px] text-[var(--color-text-muted)]">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading PSX ticker...
+            </div>
+          ) : pulse?.ticker.items.length ? (
+            <div className="market-pulse-ticker-viewport min-w-0 flex-1">
+              <div className="market-pulse-ticker-track">
+                {[...pulse.ticker.items, ...pulse.ticker.items].map((item, index) => (
+                  <TickerChip key={`${item.symbol}-${item.price}-${index}`} item={item} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[13px] text-[var(--color-text-muted)]">
+              Ticker data is temporarily unavailable.
+            </div>
+          )}
+        </div>
+
+        {pulse?.warnings.length ? (
+          <div className="mt-3 rounded-md bg-[var(--color-warning-bg)] px-3 py-2 text-[12px] text-[var(--color-warning-fg)]">
+            {pulse.warnings.join(" ")}
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <TopActiveStocksWidget
+          stocks={pulse?.topActiveStocks.items ?? []}
+          source={pulse?.topActiveStocks.source ?? "AskAnalyst"}
+          loading={loading}
+        />
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <MarketFeedWidget
+            title="Latest News"
+            icon={<Newspaper className="h-4 w-4 text-[var(--color-brand)]" />}
+            items={pulse?.latestNews.items ?? []}
+            source={pulse?.latestNews.source ?? "AskAnalyst / PSX"}
+            loading={loading}
+            emptyLabel="Latest news is temporarily unavailable."
+          />
+          <MarketFeedWidget
+            title="Research Reports"
+            icon={<FileText className="h-4 w-4 text-[var(--color-brand)]" />}
+            items={pulse?.researchReports.items ?? []}
+            source={pulse?.researchReports.source ?? "AskAnalyst / PSX"}
+            loading={loading}
+            emptyLabel="Research reports are temporarily unavailable."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TickerChip({ item }: { item: MarketPulseTickerItem }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 text-[13px]">
+      <span className="text-[20px] font-semibold text-[var(--color-text-muted)]">{item.symbol}</span>
+      <span className="text-[22px] font-bold tnum">{formatMarketNumber(item.price)}</span>
+      <span className="flex items-center gap-1 font-bold tnum" style={{ color: marketToneColor(item.direction) }}>
+        <DirectionIcon direction={item.direction} />
+        {item.change === null || item.change === undefined ? "N/A" : formatMarketNumber(Math.abs(item.change), 2)}
+      </span>
+    </div>
+  );
+}
+
+function TopActiveStocksWidget({
+  stocks,
+  source,
+  loading,
+}: {
+  stocks: MarketPulseActiveStock[];
+  source: string;
+  loading: boolean;
+}) {
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
+          <h3 className="text-[15px] font-semibold">Top Active Stocks</h3>
+        </div>
+        <Badge tone="info">{source}</Badge>
+      </div>
+      {loading ? (
+        <div className="flex min-h-[220px] items-center justify-center gap-2 text-[13px] text-[var(--color-text-muted)]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading active stocks...
+        </div>
+      ) : stocks.length === 0 ? (
+        <div className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]" style={{ borderColor: "var(--color-border-default)" }}>
+          Active stocks are temporarily unavailable.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] border-collapse text-left text-[13px]">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "var(--color-brand)" }}>
+                <th className="py-2 pr-3 font-semibold">Symbol</th>
+                <th className="py-2 pr-3 text-right font-semibold">Price</th>
+                <th className="py-2 pr-3 text-right font-semibold">Change</th>
+                <th className="py-2 text-right font-semibold">Volume</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocks.slice(0, 7).map((stock) => (
+                <tr key={stock.symbol} className="border-b last:border-0" style={{ borderColor: "var(--color-border-default)" }}>
+                  <td className="py-2.5 pr-3 text-[15px] font-semibold">{stock.symbol}</td>
+                  <td className="py-2.5 pr-3 text-right font-semibold tnum">{formatMarketNumber(stock.price)}</td>
+                  <td className="py-2.5 pr-3 text-right">
+                    <span className="inline-flex items-center justify-end gap-1 font-semibold tnum" style={{ color: marketToneColor(stock.direction) }}>
+                      <DirectionIcon direction={stock.direction} />
+                      {formatMarketChange(stock.change, stock.changePercent)}
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-right font-semibold tnum">{formatMarketVolume(stock.volume)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function MarketFeedWidget({
+  title,
+  icon,
+  items,
+  source,
+  loading,
+  emptyLabel,
+}: {
+  title: string;
+  icon: ReactNode;
+  items: MarketPulseContentItem[];
+  source: string;
+  loading: boolean;
+  emptyLabel: string;
+}) {
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-[15px] font-semibold">{title}</h3>
+        </div>
+        <Badge tone="info">{source}</Badge>
+      </div>
+      {loading ? (
+        <div className="flex min-h-[180px] items-center justify-center gap-2 text-[13px] text-[var(--color-text-muted)]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading...
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]" style={{ borderColor: "var(--color-border-default)" }}>
+          {emptyLabel}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.slice(0, 3).map((item) => (
+            <article key={`${item.title}-${item.date}`} className="border-b pb-3 last:border-0 last:pb-0" style={{ borderColor: "var(--color-border-default)" }}>
+              <h4 className="text-[13px] font-semibold leading-snug">{item.title}</h4>
+              {item.summary ? (
+                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
+                  {item.summary}
+                </p>
+              ) : null}
+              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-[var(--color-text-muted)]">
+                <span>{formatProjectDate(item.date ?? "")}</span>
+                {item.url ? (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-[var(--color-brand)] hover:underline"
+                  >
+                    {item.actionLabel ?? "View More"}
+                  </a>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function Dashboard() {
@@ -319,6 +611,7 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
   const acknowledge = useAcknowledgeAnalysisRequest();
   const createProject = useCreateProject();
   const psxCompanies = usePsxCompanies();
+  const marketPulse = useMarketPulse();
   const [startError, setStartError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"financial" | "portfolio">("financial");
   const [projectSearch, setProjectSearch] = useState("");
@@ -436,6 +729,14 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
             </Button>
           </div>
         </Card>
+      )}
+
+      {(role === "finance_analyst" || role === "finance_manager") && (
+        <MarketPulseSection
+          pulse={marketPulse.data ?? null}
+          loading={marketPulse.isLoading}
+          error={marketPulse.error instanceof Error ? marketPulse.error.message : null}
+        />
       )}
 
       {/* Sub-tabs */}
