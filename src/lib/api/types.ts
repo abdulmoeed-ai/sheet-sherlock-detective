@@ -56,6 +56,17 @@ export interface ProjectResponse {
 export type PortfolioDashboardVisibility = "private" | "public";
 export type PortfolioDashboardScope = "my" | "public" | "all";
 
+export interface WidgetLayoutItem {
+  widgetId: string;
+  visible: boolean;
+  order: number;
+}
+
+export interface DashboardLayoutResponse {
+  dashboardKey: string;
+  layout: WidgetLayoutItem[];
+}
+
 export interface PortfolioCompanySelection {
   symbol: string;
   name: string;
@@ -71,6 +82,7 @@ export interface PortfolioDashboardResponse {
   createdByName: string;
   createdByRole: BackendRole | string;
   companySelections: PortfolioCompanySelection[];
+  widgetLayout: WidgetLayoutItem[];
   createdAt: string;
   updatedAt: string;
   lastExportedAt: string | null;
@@ -81,6 +93,7 @@ export interface PortfolioDashboardInput {
   description?: string | null;
   visibility?: PortfolioDashboardVisibility;
   companySelections: PortfolioCompanySelection[];
+  widgetLayout?: WidgetLayoutItem[];
 }
 
 export interface PortfolioDashboardUpdateInput {
@@ -88,6 +101,7 @@ export interface PortfolioDashboardUpdateInput {
   description?: string | null;
   visibility?: PortfolioDashboardVisibility;
   companySelections?: PortfolioCompanySelection[];
+  widgetLayout?: WidgetLayoutItem[];
 }
 
 export interface WorkspaceResponse {
