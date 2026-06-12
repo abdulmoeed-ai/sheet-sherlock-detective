@@ -277,30 +277,28 @@ function MarketPulseSection({
         ) : null}
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4 xl:grid-cols-3">
         <TopActiveStocksWidget
           stocks={pulse?.topActiveStocks.items ?? []}
           source={pulse?.topActiveStocks.source ?? "AskAnalyst"}
           loading={loading}
         />
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-          <MarketFeedWidget
-            title="Latest News"
-            icon={<Newspaper className="h-4 w-4 text-[var(--color-brand)]" />}
-            items={pulse?.latestNews.items ?? []}
-            source={pulse?.latestNews.source ?? "AskAnalyst / PSX"}
-            loading={loading}
-            emptyLabel="Latest news is temporarily unavailable."
-          />
-          <MarketFeedWidget
-            title="Research Reports"
-            icon={<FileText className="h-4 w-4 text-[var(--color-brand)]" />}
-            items={pulse?.researchReports.items ?? []}
-            source={pulse?.researchReports.source ?? "AskAnalyst / PSX"}
-            loading={loading}
-            emptyLabel="Research reports are temporarily unavailable."
-          />
-        </div>
+        <MarketFeedWidget
+          title="Latest News"
+          icon={<Newspaper className="h-4 w-4 text-[var(--color-brand)]" />}
+          items={pulse?.latestNews.items ?? []}
+          source={pulse?.latestNews.source ?? "AskAnalyst / PSX"}
+          loading={loading}
+          emptyLabel="Latest news is temporarily unavailable."
+        />
+        <MarketFeedWidget
+          title="Research Reports"
+          icon={<FileText className="h-4 w-4 text-[var(--color-brand)]" />}
+          items={pulse?.researchReports.items ?? []}
+          source={pulse?.researchReports.source ?? "AskAnalyst / PSX"}
+          loading={loading}
+          emptyLabel="Research reports are temporarily unavailable."
+        />
       </div>
     </div>
   );
