@@ -346,27 +346,33 @@ function TopActiveStocksWidget({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-left text-[13px]">
+          <table className="w-full table-fixed border-collapse text-left text-[12px]">
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[19%]" />
+              <col className="w-[31%]" />
+              <col className="w-[30%]" />
+            </colgroup>
             <thead>
               <tr className="border-b" style={{ borderColor: "var(--color-brand)" }}>
-                <th className="py-2 pr-3 font-semibold">Symbol</th>
-                <th className="py-2 pr-3 text-right font-semibold">Price</th>
-                <th className="py-2 pr-3 text-right font-semibold">Change</th>
-                <th className="py-2 text-right font-semibold">Volume</th>
+                <th className="py-2 pr-2 font-semibold">Symbol</th>
+                <th className="py-2 px-1 text-right font-semibold">Price</th>
+                <th className="py-2 px-1 text-right font-semibold">Change</th>
+                <th className="py-2 pl-2 text-right font-semibold">Volume</th>
               </tr>
             </thead>
             <tbody>
               {stocks.slice(0, 7).map((stock) => (
                 <tr key={stock.symbol} className="border-b last:border-0" style={{ borderColor: "var(--color-border-default)" }}>
-                  <td className="py-2.5 pr-3 text-[15px] font-semibold">{stock.symbol}</td>
-                  <td className="py-2.5 pr-3 text-right font-semibold tnum">{formatMarketNumber(stock.price)}</td>
-                  <td className="py-2.5 pr-3 text-right">
+                  <td className="py-2 pr-2 text-[13px] font-semibold">{stock.symbol}</td>
+                  <td className="py-2 px-1 text-right font-semibold tnum">{formatMarketNumber(stock.price)}</td>
+                  <td className="py-2 px-1 text-right">
                     <span className="inline-flex items-center justify-end gap-1 font-semibold tnum" style={{ color: marketToneColor(stock.direction) }}>
                       <DirectionIcon direction={stock.direction} />
                       {formatMarketChange(stock.change, stock.changePercent)}
                     </span>
                   </td>
-                  <td className="py-2.5 text-right font-semibold tnum">{formatMarketVolume(stock.volume)}</td>
+                  <td className="py-2 pl-2 text-right font-semibold tnum">{formatMarketVolume(stock.volume)}</td>
                 </tr>
               ))}
             </tbody>
