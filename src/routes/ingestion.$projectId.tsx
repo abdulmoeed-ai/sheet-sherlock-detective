@@ -6,7 +6,13 @@ import { PageShell } from "@/components/PageShell";
 import { cycleStore, useCycle } from "@/lib/cycle-store";
 import { IconTooltip } from "@/components/IconTooltip";
 import { useStartExtraction, useUploadDocuments } from "@/hooks/use-project-actions";
-import { cancelExtractionJob, readActiveExtractionJob, readExtractionEvents, readExtractionJob, readWorkspace } from "@/lib/api/projects";
+import {
+  cancelExtractionJob,
+  readActiveExtractionJob,
+  readExtractionEvents,
+  readExtractionJob,
+  readWorkspace,
+} from "@/lib/api/projects";
 import { queryKeys } from "@/lib/api/query-keys";
 import { filesFromDrop, ingestionPageTitle } from "@/lib/ingestion-page";
 import { sidebarContentOffset, useSidebarCollapsed } from "@/lib/sidebar-store";
@@ -96,39 +102,45 @@ function Ingestion() {
   // On mount: reconnect to any active extraction job so a page reload doesn't lose progress.
   useEffect(() => {
     let cancelled = false;
-    readActiveExtractionJob(projectId).then((job) => {
-      if (cancelled || !job) return;
-      setExtractionPending(true);
-      setExtractionStalled(false);
-      setExtractionProgress(job);
-      syncExtractionEvents(job.id);
-      waitForExtractionCompletion({
-        projectId,
-        initialJob: job,
-        readJob: readExtractionJob,
-        onProgress: (progress) => {
-          if (cancelled) return;
-          setExtractionProgress(progress);
-          syncExtractionEvents(progress.id);
-        },
-        onStall: () => { if (!cancelled) setExtractionStalled(true); },
+    readActiveExtractionJob(projectId)
+      .then((job) => {
+        if (cancelled || !job) return;
+        setExtractionPending(true);
+        setExtractionStalled(false);
+        setExtractionProgress(job);
+        syncExtractionEvents(job.id);
+        waitForExtractionCompletion({
+          projectId,
+          initialJob: job,
+          readJob: readExtractionJob,
+          onProgress: (progress) => {
+            if (cancelled) return;
+            setExtractionProgress(progress);
+            syncExtractionEvents(progress.id);
+          },
+          onStall: () => {
+            if (!cancelled) setExtractionStalled(true);
+          },
+        })
+          .then(async () => {
+            if (cancelled) return;
+            await refreshExtractedProject(projectId);
+            openDiagnosis(projectId);
+          })
+          .catch(() => {
+            if (!cancelled) setExtractionPending(false);
+          })
+          .finally(() => {
+            if (!cancelled) setExtractionPending(false);
+          });
       })
-        .then(async () => {
-          if (cancelled) return;
-          await refreshExtractedProject(projectId);
-          openDiagnosis(projectId);
-        })
-        .catch(() => {
-          if (!cancelled) setExtractionPending(false);
-        })
-        .finally(() => {
-          if (!cancelled) setExtractionPending(false);
-        });
-    }).catch(() => {
-      // 404 = no active job, nothing to reconnect
-    });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => {
+        // 404 = no active job, nothing to reconnect
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const openDiagnosis = (id: string) => {
@@ -319,11 +331,7 @@ function Ingestion() {
   };
 
   return (
-    <PageShell
-      title={pageTitle}
-      subtitle="Upload source PDFs and trigger extraction"
-      hideProgress
-    >
+    <PageShell title={pageTitle} subtitle="Upload source PDFs and trigger extraction" hideProgress>
       <div className="pb-24">
         {uploadPending && !showProgressWorkbench ? (
           <div
@@ -373,7 +381,10 @@ function Ingestion() {
                   </span>{" "}
                   <span style={{ color: "var(--color-text-secondary)" }}>or drag and drop</span>
                 </div>
-                <div className="mx-auto mt-2 max-w-md text-[14px] leading-6" style={{ color: "var(--color-text-muted)" }}>
+                <div
+                  className="mx-auto mt-2 max-w-md text-[14px] leading-6"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   Select one or more PDF annual reports (max. 50MB each)
                 </div>
                 <input
@@ -478,7 +489,11 @@ function Ingestion() {
         ) : null}
 
         {showProgressWorkbench ? (
-          <IngestionProgressWorkbench model={progressModel} events={visibleEvents} job={extractionProgress} />
+          <IngestionProgressWorkbench
+            model={progressModel}
+            events={visibleEvents}
+            job={extractionProgress}
+          />
         ) : null}
       </div>
 
@@ -493,22 +508,32 @@ function Ingestion() {
       <StickyFooter
         fileCount={selectedUploads.length}
         uploadPending={uploadPending}
-        statusMessage={uploadPending ? statusMessage : uploadSummary.failed ? `Upload failed: ${uploadSummary.failed}` : ""}
+        statusMessage={
+          uploadPending
+            ? statusMessage
+            : uploadSummary.failed
+              ? `Upload failed: ${uploadSummary.failed}`
+              : ""
+        }
         hasProject={true}
         stalled={extractionStalled}
         onStart={startIngestion}
-        onCancel={extractionProgress ? async () => {
-          try {
-            await cancelExtractionJob(projectId, extractionProgress.id);
-            setExtractionPending(false);
-            setExtractionProgress(null);
-            setExtractionStalled(false);
-            setExtractionEvents([]);
-            setExtractionError("Extraction cancelled.");
-          } catch {
-            toast.error("Could not cancel the extraction job.");
-          }
-        } : undefined}
+        onCancel={
+          extractionProgress
+            ? async () => {
+                try {
+                  await cancelExtractionJob(projectId, extractionProgress.id);
+                  setExtractionPending(false);
+                  setExtractionProgress(null);
+                  setExtractionStalled(false);
+                  setExtractionEvents([]);
+                  setExtractionError("Extraction cancelled.");
+                } catch {
+                  toast.error("Could not cancel the extraction job.");
+                }
+              }
+            : undefined
+        }
       />
     </PageShell>
   );
@@ -534,10 +559,7 @@ function ExcelProcessingPanel({ message }: { message: string }) {
           <FileSpreadsheet className="h-10 w-10" style={{ color: "#1d6f42" }} />
         </div>
       </div>
-      <div
-        className="text-[15px] font-semibold"
-        style={{ color: "var(--color-text-primary)" }}
-      >
+      <div className="text-[15px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
         {message}
       </div>
       <div className="mt-1 text-[13px]" style={{ color: "var(--color-text-muted)" }}>
@@ -939,7 +961,11 @@ function StickyFooter({
       {stalled && uploadPending && (
         <div
           className="flex items-center justify-between gap-3 border-b px-0 py-2 text-[12px]"
-          style={{ borderColor: "var(--color-warning-border)", color: "var(--color-warning-fg)", background: "var(--color-warning-bg)" }}
+          style={{
+            borderColor: "var(--color-warning-border)",
+            color: "var(--color-warning-fg)",
+            background: "var(--color-warning-bg)",
+          }}
         >
           <span className="flex items-center gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -949,7 +975,10 @@ function StickyFooter({
             <button
               onClick={onCancel}
               className="shrink-0 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition hover:opacity-80"
-              style={{ borderColor: "var(--color-warning-border)", color: "var(--color-warning-fg)" }}
+              style={{
+                borderColor: "var(--color-warning-border)",
+                color: "var(--color-warning-fg)",
+              }}
             >
               Cancel job
             </button>
@@ -957,40 +986,43 @@ function StickyFooter({
         </div>
       )}
       <div className="flex min-h-16 items-center justify-end gap-3">
-      {!hasProject ? (
-        <div className="flex-1 text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
-          Select or create a project before uploading reports.
-        </div>
-      ) : statusMessage ? (
-        <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
-          {uploadPending && (
-            <Loader2
-              className="h-3.5 w-3.5 shrink-0 animate-spin"
-              style={{ color: "var(--color-brand)" }}
-            />
-          )}
-          <span className="truncate" style={{ color: "var(--color-text-primary)" }}>
-            {statusMessage}
-          </span>
-        </div>
-      ) : null}
-      {uploadPending && onCancel && !stalled && (
+        {!hasProject ? (
+          <div className="flex-1 text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
+            Select or create a project before uploading reports.
+          </div>
+        ) : statusMessage ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
+            {uploadPending && (
+              <Loader2
+                className="h-3.5 w-3.5 shrink-0 animate-spin"
+                style={{ color: "var(--color-brand)" }}
+              />
+            )}
+            <span className="truncate" style={{ color: "var(--color-text-primary)" }}>
+              {statusMessage}
+            </span>
+          </div>
+        ) : null}
+        {uploadPending && onCancel && !stalled && (
+          <button
+            onClick={onCancel}
+            className="h-9 rounded-lg border px-4 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
+            style={{
+              borderColor: "var(--color-border-default)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Cancel
+          </button>
+        )}
         <button
-          onClick={onCancel}
-          className="h-9 rounded-lg border px-4 text-[13px] font-medium transition hover:bg-[var(--color-tag-bg)]"
-          style={{ borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+          onClick={onStart}
+          disabled={!hasProject || !fileCount || uploadPending}
+          className="h-10 cursor-pointer rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "var(--color-brand)" }}
         >
-          Cancel
+          {uploadPending ? "Extracting reports..." : "Upload and start extraction ->"}
         </button>
-      )}
-      <button
-        onClick={onStart}
-        disabled={!hasProject || !fileCount || uploadPending}
-        className="h-10 cursor-pointer rounded-lg px-5 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-        style={{ background: "var(--color-brand)" }}
-      >
-        {uploadPending ? "Extracting reports..." : "Upload and start extraction ->"}
-      </button>
       </div>
     </div>
   );

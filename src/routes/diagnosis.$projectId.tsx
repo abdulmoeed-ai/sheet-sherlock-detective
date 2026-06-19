@@ -328,7 +328,8 @@ function Diagnosis() {
   const projectStatus = workspace.data?.project.status;
   const isManagerUser = currentUser.data?.role === "finance_manager";
   const managerApprovalMode =
-    isManagerUser && (projectStatus === "manager_review" || workspace.isLoading || workspace.isError);
+    isManagerUser &&
+    (projectStatus === "manager_review" || workspace.isLoading || workspace.isError);
 
   useEffect(() => {
     draftWorkbookRef.current = null;
@@ -461,7 +462,9 @@ function Diagnosis() {
         "Draft saved and ready for Manager review.",
       );
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(reviewTarget.projectId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace(reviewTarget.projectId),
+      });
       cycleStore.setStatus("review");
       toast.success(response.message || draftManagerReviewSuccessMessage(reviewTarget));
       navigate({ to: "/review" });
@@ -681,14 +684,19 @@ function Diagnosis() {
       setRerunEvents([]);
       setRerunError(null);
       setBaselineSummary(null);
-      const filesToUpload = filesPendingDiagnosisUpload(additionalDocuments, additionalUploadStatuses);
+      const filesToUpload = filesPendingDiagnosisUpload(
+        additionalDocuments,
+        additionalUploadStatuses,
+      );
       if (filesToUpload.length) {
         const uploadResult = await uploadDocuments.mutateAsync({
           files: filesToUpload,
           onStatus: updateAdditionalUploadStatus,
         });
         if (uploadResult.failed) {
-          throw new Error(`Upload failed for ${uploadResult.failed.file.name}: ${uploadResult.failed.message}`);
+          throw new Error(
+            `Upload failed for ${uploadResult.failed.file.name}: ${uploadResult.failed.message}`,
+          );
         }
       }
       const job = await startExtraction.mutateAsync(true);
@@ -710,7 +718,8 @@ function Diagnosis() {
       setAdditionalUploadStatuses({});
       toast.success("Diagnosis baseline refreshed from all uploaded PDFs");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to refresh diagnosis baseline.";
+      const message =
+        error instanceof Error ? error.message : "Unable to refresh diagnosis baseline.";
       setRerunError(message);
       toast.error(message);
     } finally {
@@ -1010,7 +1019,10 @@ function fileKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-function auditPayloadNumber(event: Record<string, unknown> | undefined, key: string): number | null {
+function auditPayloadNumber(
+  event: Record<string, unknown> | undefined,
+  key: string,
+): number | null {
   const payload = event?.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const value = (payload as Record<string, unknown>)[key];
@@ -1070,12 +1082,20 @@ function AdditionalDocumentsModal({
     failureMessage ??
     latestEvent?.message ??
     progress?.message ??
-    (pending ? "Uploading PDFs and refreshing the diagnosis baseline." : ADD_DOCUMENTS_RERUN_DISCLOSURE);
+    (pending
+      ? "Uploading PDFs and refreshing the diagnosis baseline."
+      : ADD_DOCUMENTS_RERUN_DISCLOSURE);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-      <div className="w-full max-w-[720px] rounded-lg border bg-white shadow-xl" style={{ borderColor: "#E3E6EA" }}>
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "#E3E6EA" }}>
+      <div
+        className="w-full max-w-[720px] rounded-lg border bg-white shadow-xl"
+        style={{ borderColor: "#E3E6EA" }}
+      >
+        <div
+          className="flex items-center justify-between border-b px-5 py-4"
+          style={{ borderColor: "#E3E6EA" }}
+        >
           <div>
             <h2 className="text-[16px] font-semibold" style={{ color: "#292D34" }}>
               Add Source PDFs
@@ -1147,7 +1167,10 @@ function AdditionalDocumentsModal({
                 >
                   <FileText className="h-7 w-7 rounded-md bg-red-50 p-1.5 text-red-600" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-semibold" style={{ color: "#292D34" }}>
+                    <div
+                      className="truncate text-[13px] font-semibold"
+                      style={{ color: "#292D34" }}
+                    >
                       {file.name}
                     </div>
                     <div className="text-[11px]" style={{ color: "#818EA0" }}>
@@ -1169,17 +1192,25 @@ function AdditionalDocumentsModal({
             </div>
           ) : null}
 
-          {(pending || progress || failureMessage) ? (
+          {pending || progress || failureMessage ? (
             <div className="rounded-md border px-3 py-3" style={{ borderColor: "#E3E6EA" }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[13px] font-semibold" style={{ color: "#292D34" }}>
-                  {failureMessage ? "Baseline refresh needs attention" : "Refreshing diagnosis baseline"}
+                  {failureMessage
+                    ? "Baseline refresh needs attention"
+                    : "Refreshing diagnosis baseline"}
                 </div>
-                <div className="tnum text-[13px] font-semibold" style={{ color: "var(--color-brand)" }}>
+                <div
+                  className="tnum text-[13px] font-semibold"
+                  style={{ color: "var(--color-brand)" }}
+                >
                   {progressPercent}%
                 </div>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full" style={{ background: "#E8EDF5" }}>
+              <div
+                className="mt-2 h-2 overflow-hidden rounded-full"
+                style={{ background: "#E8EDF5" }}
+              >
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
@@ -1188,7 +1219,10 @@ function AdditionalDocumentsModal({
                   }}
                 />
               </div>
-              <div className="mt-2 text-[12px]" style={{ color: failureMessage ? "var(--color-danger)" : "#818EA0" }}>
+              <div
+                className="mt-2 text-[12px]"
+                style={{ color: failureMessage ? "var(--color-danger)" : "#818EA0" }}
+              >
                 {progressMessage}
               </div>
             </div>
@@ -1205,7 +1239,10 @@ function AdditionalDocumentsModal({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "#E3E6EA" }}>
+        <div
+          className="flex items-center justify-end gap-2 border-t px-5 py-4"
+          style={{ borderColor: "#E3E6EA" }}
+        >
           <button
             type="button"
             onClick={onClose}
@@ -1238,17 +1275,26 @@ function BaselineRefreshBanner({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed bottom-5 right-5 z-40 w-[420px] max-w-[calc(100vw-40px)] rounded-lg border bg-white p-4 shadow-xl" style={{ borderColor: "#D1FAE5" }}>
+    <div
+      className="fixed bottom-5 right-5 z-40 w-[420px] max-w-[calc(100vw-40px)] rounded-lg border bg-white p-4 shadow-xl"
+      style={{ borderColor: "#D1FAE5" }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-[14px] font-semibold" style={{ color: "#14532D" }}>
             Diagnosis baseline refreshed
           </h3>
           <p className="mt-1 text-[12px] leading-5" style={{ color: "#4F546B" }}>
-            {summary.addedFileCount} PDF{summary.addedFileCount === 1 ? "" : "s"} added. Extraction reran across {summary.documentCount} total PDF{summary.documentCount === 1 ? "" : "s"}.
+            {summary.addedFileCount} PDF{summary.addedFileCount === 1 ? "" : "s"} added. Extraction
+            reran across {summary.documentCount} total PDF{summary.documentCount === 1 ? "" : "s"}.
           </p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-[#F7F8FA]" aria-label="Dismiss baseline refresh summary">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1 hover:bg-[#F7F8FA]"
+          aria-label="Dismiss baseline refresh summary"
+        >
           <X className="h-4 w-4 text-[#818EA0]" />
         </button>
       </div>
@@ -1459,14 +1505,23 @@ function DiagnosisPanel({
                 className="rounded-lg border p-2"
                 style={{ borderColor: "#FCD34D", background: "var(--color-warning-bg)" }}
               >
-                <div className="text-[11px] font-semibold uppercase" style={{ color: "var(--color-warning-fg)" }}>
+                <div
+                  className="text-[11px] font-semibold uppercase"
+                  style={{ color: "var(--color-warning-fg)" }}
+                >
                   Mapping rule cautions
                 </div>
                 <div className="mt-2 space-y-1.5">
                   {termStandardization.mappingRules
-                    .filter((rule) => termStandardization.mappingRuleCautionIds.includes(rule.ruleCode))
+                    .filter((rule) =>
+                      termStandardization.mappingRuleCautionIds.includes(rule.ruleCode),
+                    )
                     .map((rule) => (
-                      <div key={`${rule.ruleCode}-${rule.status}`} className="text-[11px] leading-relaxed" style={{ color: "#4F546B" }}>
+                      <div
+                        key={`${rule.ruleCode}-${rule.status}`}
+                        className="text-[11px] leading-relaxed"
+                        style={{ color: "#4F546B" }}
+                      >
                         <span className="font-semibold">{rule.ruleCode}</span>
                         {" · "}
                         {rule.message}
@@ -1475,12 +1530,16 @@ function DiagnosisPanel({
                 </div>
                 {termStandardization.competingSourceValues.length ? (
                   <div className="mt-2 space-y-1 border-t pt-2" style={{ borderColor: "#FCD34D" }}>
-                    <div className="text-[11px] font-semibold" style={{ color: "var(--color-warning-fg)" }}>
+                    <div
+                      className="text-[11px] font-semibold"
+                      style={{ color: "var(--color-warning-fg)" }}
+                    >
                       Alternate source values
                     </div>
                     {termStandardization.competingSourceValues.slice(0, 3).map((source, index) => (
                       <div key={index} className="text-[11px]" style={{ color: "#4F546B" }}>
-                        {stringValue(source.sourceDocumentId, "Source file")} · {stringValue(source.value, "-")}
+                        {stringValue(source.sourceDocumentId, "Source file")} ·{" "}
+                        {stringValue(source.value, "-")}
                       </div>
                     ))}
                   </div>

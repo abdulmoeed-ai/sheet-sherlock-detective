@@ -14,8 +14,18 @@ interface Row {
 }
 
 const INITIAL_ROWS: Row[] = [
-  { label: "Balance Sheet — MTL · FY2025 (PKR M)", values: ["", "FY23", "FY24", "FY25", "Δ YoY", "Source"], bold: true, group: "header" },
-  { label: "Total Assets", values: ["", 152340, 168920, 184210, "+9.1%", "PSX AR p.72"], bold: true, group: "total" },
+  {
+    label: "Balance Sheet — MTL · FY2025 (PKR M)",
+    values: ["", "FY23", "FY24", "FY25", "Δ YoY", "Source"],
+    bold: true,
+    group: "header",
+  },
+  {
+    label: "Total Assets",
+    values: ["", 152340, 168920, 184210, "+9.1%", "PSX AR p.72"],
+    bold: true,
+    group: "total",
+  },
   { label: "Current Assets", values: ["", 38120, 40210, 41820, "+4.0%", "p.73"], group: "sub" },
   { label: "  Cash & equivalents", values: ["", 12400, 14100, 15240, "+8.1%", "p.73"] },
   { label: "  Receivables", values: ["", 4810, 4920, 5118, "+4.0%", "p.73"] },
@@ -25,10 +35,28 @@ const INITIAL_ROWS: Row[] = [
     meta: { 3: { editable: true, flagged: true, ai: true }, 4: { flagged: true } },
   },
   { label: "  Other current", values: ["", 15700, 15350, 15422, "+0.5%", "p.73"] },
-  { label: "Non-current Assets", values: ["", 114220, 128710, 142390, "+10.6%", "p.75"], group: "sub" },
-  { label: "  PP&E", values: ["", 98400, 110200, 122800, "+11.4%", "p.75"], meta: { 3: { editable: true } } },
-  { label: "  Intangibles", values: ["", 15820, 18510, 19590, "+5.8%", "p.76"], meta: { 3: { editable: true } } },
-  { label: "Total Equity + Liabilities", values: ["", 152340, 168920, 180010, "+6.6%", "p.78"], bold: true, group: "total", meta: { 3: { flagged: true, locked: true } } },
+  {
+    label: "Non-current Assets",
+    values: ["", 114220, 128710, 142390, "+10.6%", "p.75"],
+    group: "sub",
+  },
+  {
+    label: "  PP&E",
+    values: ["", 98400, 110200, 122800, "+11.4%", "p.75"],
+    meta: { 3: { editable: true } },
+  },
+  {
+    label: "  Intangibles",
+    values: ["", 15820, 18510, 19590, "+5.8%", "p.76"],
+    meta: { 3: { editable: true } },
+  },
+  {
+    label: "Total Equity + Liabilities",
+    values: ["", 152340, 168920, 180010, "+6.6%", "p.78"],
+    bold: true,
+    group: "total",
+    meta: { 3: { flagged: true, locked: true } },
+  },
   { label: "  Equity", values: ["", 94200, 103500, 112400, "+8.6%", "p.79"], group: "sub" },
   { label: "  Liabilities", values: ["", 58140, 65420, 67610, "+3.3%", "p.80"], group: "sub" },
 ];
@@ -53,18 +81,30 @@ export function ExcelAddIn() {
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: "var(--color-border-default)" }}>
+    <div
+      className="overflow-hidden rounded-xl border bg-white shadow-sm"
+      style={{ borderColor: "var(--color-border-default)" }}
+    >
       {/* Add-in header */}
       <div
         className="flex items-center justify-between border-b px-4 py-2.5"
-        style={{ borderColor: "var(--color-border-default)", background: "linear-gradient(180deg, #FAFAFD 0%, #F4F3FA 100%)" }}
+        style={{
+          borderColor: "var(--color-border-default)",
+          background: "linear-gradient(180deg, #FAFAFD 0%, #F4F3FA 100%)",
+        }}
       >
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md" style={{ background: "var(--color-brand)" }}>
+          <div
+            className="flex h-7 w-7 items-center justify-center rounded-md"
+            style={{ background: "var(--color-brand)" }}
+          >
             <span className="text-[11px] font-bold text-white">X</span>
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-[12px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            <span
+              className="text-[12px] font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               Sherlock Excel Add-in
             </span>
             <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
@@ -96,10 +136,17 @@ export function ExcelAddIn() {
       </div>
 
       {/* Formula bar */}
-      <div className="flex items-center gap-2 border-b px-3 py-1.5" style={{ borderColor: "var(--color-border-default)", background: "#fff" }}>
+      <div
+        className="flex items-center gap-2 border-b px-3 py-1.5"
+        style={{ borderColor: "var(--color-border-default)", background: "#fff" }}
+      >
         <span
           className="flex h-6 min-w-[60px] items-center justify-center rounded border px-2 font-mono text-[11px] font-semibold"
-          style={{ borderColor: "var(--color-border-strong)", background: "var(--color-tag-bg)", color: "var(--color-brand)" }}
+          style={{
+            borderColor: "var(--color-border-strong)",
+            background: "var(--color-tag-bg)",
+            color: "var(--color-brand)",
+          }}
         >
           {cellRef}
         </span>
@@ -121,11 +168,18 @@ export function ExcelAddIn() {
             <tr>
               <th
                 className="sticky left-0 z-10 w-10 border-b border-r"
-                style={{ background: "var(--color-table-header)", borderColor: "var(--color-border-default)" }}
+                style={{
+                  background: "var(--color-table-header)",
+                  borderColor: "var(--color-border-default)",
+                }}
               ></th>
               <th
                 className="sticky left-10 z-10 min-w-[220px] border-b border-r px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide"
-                style={{ background: "var(--color-table-header)", borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+                style={{
+                  background: "var(--color-table-header)",
+                  borderColor: "var(--color-border-default)",
+                  color: "var(--color-text-secondary)",
+                }}
               >
                 A — Line item
               </th>
@@ -133,7 +187,11 @@ export function ExcelAddIn() {
                 <th
                   key={c}
                   className="border-b border-r px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide"
-                  style={{ background: "var(--color-table-header)", borderColor: "var(--color-border-default)", color: "var(--color-text-secondary)" }}
+                  style={{
+                    background: "var(--color-table-header)",
+                    borderColor: "var(--color-border-default)",
+                    color: "var(--color-text-secondary)",
+                  }}
                 >
                   {c}
                 </th>
@@ -194,7 +252,10 @@ export function ExcelAddIn() {
                               ? "var(--color-tag-bg)"
                               : rowBg,
                           borderColor: "var(--color-border-default)",
-                          textAlign: isNum || typeof v === "string" && v.startsWith("+") ? "right" : "left",
+                          textAlign:
+                            isNum || (typeof v === "string" && v.startsWith("+"))
+                              ? "right"
+                              : "left",
                           fontVariantNumeric: "tabular-nums",
                           fontWeight: row.bold ? 700 : 500,
                           color: meta.flagged ? "var(--color-danger)" : "var(--color-text-primary)",
@@ -214,8 +275,18 @@ export function ExcelAddIn() {
                           />
                         ) : (
                           <span className="flex items-center justify-end gap-1.5">
-                            {meta.locked && <Lock className="h-3 w-3" style={{ color: "var(--color-text-muted)" }} />}
-                            {meta.flagged && <AlertTriangle className="h-3 w-3" style={{ color: "var(--color-danger)" }} />}
+                            {meta.locked && (
+                              <Lock
+                                className="h-3 w-3"
+                                style={{ color: "var(--color-text-muted)" }}
+                              />
+                            )}
+                            {meta.flagged && (
+                              <AlertTriangle
+                                className="h-3 w-3"
+                                style={{ color: "var(--color-danger)" }}
+                              />
+                            )}
                             {isNum ? v.toLocaleString() : v}
                           </span>
                         )}
@@ -234,7 +305,10 @@ export function ExcelAddIn() {
         className="flex items-start gap-3 border-t px-4 py-3"
         style={{ borderColor: "var(--color-border-default)", background: "var(--color-tag-bg)" }}
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style={{ background: "var(--color-brand)" }}>
+        <div
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+          style={{ background: "var(--color-brand)" }}
+        >
           <Sparkles className="h-3.5 w-3.5 text-white" />
         </div>
         <div className="flex-1 text-[12px]">
@@ -250,8 +324,12 @@ export function ExcelAddIn() {
             </span>
           </div>
           <p className="mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
-            OCR-extracted <span className="font-mono">6,040</span> (conf 71%) appears transposed. Source PDF p.74 shows{" "}
-            <span className="font-mono font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            OCR-extracted <span className="font-mono">6,040</span> (conf 71%) appears transposed.
+            Source PDF p.74 shows{" "}
+            <span
+              className="font-mono font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               1,840
             </span>
             . Apply to balance the sheet.
@@ -269,14 +347,20 @@ export function ExcelAddIn() {
         </button>
         <button
           className="flex h-7 items-center rounded-md border px-2.5 text-[11px] font-semibold"
-          style={{ borderColor: "var(--color-border-strong)", color: "var(--color-text-secondary)" }}
+          style={{
+            borderColor: "var(--color-border-strong)",
+            color: "var(--color-text-secondary)",
+          }}
         >
           Dismiss
         </button>
       </div>
 
       {/* Sheet tabs */}
-      <div className="flex items-center gap-0 border-t px-2 py-1 text-[11px]" style={{ borderColor: "var(--color-border-default)", background: "#FAFAFD" }}>
+      <div
+        className="flex items-center gap-0 border-t px-2 py-1 text-[11px]"
+        style={{ borderColor: "var(--color-border-default)", background: "#FAFAFD" }}
+      >
         {["Cover", "Assumptions", "BS", "IS", "CF", "Forecast"].map((t) => {
           const active = t === "BS";
           return (

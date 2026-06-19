@@ -18,7 +18,10 @@ export function ragIndexStatusLabel(status: RagIndexStatusResponse | null): stri
   return "Ask AI PDF search not ready";
 }
 
-export function ragIndexStatusDetail(status: RagIndexStatusResponse | null, loading?: boolean): string {
+export function ragIndexStatusDetail(
+  status: RagIndexStatusResponse | null,
+  loading?: boolean,
+): string {
   if (loading && !status) return "Checking Ask AI PDF search status.";
   if (!status) return "Ask AI remains available while PDF search status is unavailable.";
   if (status.readyForAskAi) return "Ask AI can search indexed PDF evidence for this project.";
@@ -49,10 +52,7 @@ export function RagIndexStatusIndicator({ status, loading = false }: RagIndexSta
             style={{ borderColor: tone.border, background: tone.background, color: tone.color }}
             aria-label={label}
           >
-            <Icon
-              className={`h-3.5 w-3.5 ${tone.spin ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
+            <Icon className={`h-3.5 w-3.5 ${tone.spin ? "animate-spin" : ""}`} aria-hidden="true" />
             <span className="whitespace-nowrap">{label}</span>
           </span>
         </TooltipTrigger>

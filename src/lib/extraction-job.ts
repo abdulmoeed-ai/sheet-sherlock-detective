@@ -3,8 +3,8 @@ import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./a
 const COMPLETE_STATUSES = new Set(["completed", "succeeded", "success"]);
 const FAILED_STATUSES = new Set(["failed", "error", "cancelled", "canceled"]);
 
-const STALL_THRESHOLD_MS = 3 * 60 * 1000;  // 3 min without percent change
-const MAX_WAIT_MS = 20 * 60 * 1000;         // 20 min hard timeout
+const STALL_THRESHOLD_MS = 3 * 60 * 1000; // 3 min without percent change
+const MAX_WAIT_MS = 20 * 60 * 1000; // 20 min hard timeout
 
 export async function waitForExtractionCompletion({
   projectId,
@@ -109,7 +109,9 @@ export function extractionElapsedLabel(
   const startedAt = parseTimestamp(job?.startedAt ?? events[0]?.createdAt ?? null);
   const completedAt = parseTimestamp(
     job?.completedAt ??
-      (job && (isCompletedExtractionJob(job) || isFailedExtractionJob(job)) ? job.updatedAt : null) ??
+      (job && (isCompletedExtractionJob(job) || isFailedExtractionJob(job))
+        ? job.updatedAt
+        : null) ??
       events.at(-1)?.createdAt ??
       (job ? now.toISOString() : null),
   );

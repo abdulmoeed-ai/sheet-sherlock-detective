@@ -16,7 +16,7 @@ function numberFromEvent(value: unknown, fallback: number) {
 }
 
 function stringFromEvent(value: unknown, fallback: string | null | undefined) {
-  return typeof value === "string" ? value : fallback ?? null;
+  return typeof value === "string" ? value : (fallback ?? null);
 }
 
 function recordFromEvent(value: unknown): Record<string, unknown> {
@@ -46,8 +46,11 @@ export function useRagIndexStatus(projectId: string | null) {
 
     return {
       projectId,
-      status: stringFromEvent(payload.status ?? event?.status, base?.status ?? "running") ?? "running",
-      readyForAskAi: Boolean(payload.readyForAskAi ?? event?.readyForAskAi ?? base?.readyForAskAi ?? false),
+      status:
+        stringFromEvent(payload.status ?? event?.status, base?.status ?? "running") ?? "running",
+      readyForAskAi: Boolean(
+        payload.readyForAskAi ?? event?.readyForAskAi ?? base?.readyForAskAi ?? false,
+      ),
       stale: Boolean(base?.stale ?? false),
       stage: stringFromEvent(payload.stage ?? event?.stage, base?.stage),
       percent: numberFromEvent(payload.percent ?? event?.percent, base?.percent ?? 0),

@@ -430,7 +430,8 @@ export function buildApprovedModelGraphPack({
   if (cards.length === 0) {
     return {
       status: "empty",
-      reason: "Approved model found, but graph-ready financial metrics are not available from the workbook yet.",
+      reason:
+        "Approved model found, but graph-ready financial metrics are not available from the workbook yet.",
       cards: [],
     };
   }
@@ -456,11 +457,15 @@ export function buildValuationDashboardChartSeries({
   );
   const low = numericFromDisplayValue(metrics.range.low);
   const high = numericFromDisplayValue(metrics.range.high);
-  const volume = numericFromDisplayValue(metrics.cards.find((metric) => metric.label === "Volume")?.value);
+  const volume = numericFromDisplayValue(
+    metrics.cards.find((metric) => metric.label === "Volume")?.value,
+  );
   const valueTraded = numericFromDisplayValue(
     metrics.cards.find((metric) => metric.label === "Value Traded")?.value,
   );
-  const marketCap = numericFromDisplayValue(metrics.cards.find((metric) => metric.label === "Market Cap")?.value);
+  const marketCap = numericFromDisplayValue(
+    metrics.cards.find((metric) => metric.label === "Market Cap")?.value,
+  );
   const valuationPoints = metrics.valuation
     .map((metric) => ({
       label: metric.label,
@@ -495,8 +500,12 @@ export function buildValuationDashboardChartSeries({
 
   const scalePoints = [
     volume === null ? null : { label: "Volume", value: volume, displayValue: "Volume" },
-    valueTraded === null ? null : { label: "Value Traded", value: valueTraded, displayValue: "Value traded" },
-    marketCap === null ? null : { label: "Market Cap", value: marketCap, displayValue: "Market cap" },
+    valueTraded === null
+      ? null
+      : { label: "Value Traded", value: valueTraded, displayValue: "Value traded" },
+    marketCap === null
+      ? null
+      : { label: "Market Cap", value: marketCap, displayValue: "Market cap" },
   ].filter((point): point is ValuationDashboardChartPoint => point !== null);
   if (scalePoints.length >= 2) {
     series.push({

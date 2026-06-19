@@ -12,7 +12,9 @@ describe("diagnosis draft helpers", () => {
   });
 
   it("keeps draft saving disabled when there are no text or workbook edits", () => {
-    expect(hasDiagnosisDraftChanges({ draftValue: "   ", pendingWorkbookEditCount: 0 })).toBe(false);
+    expect(hasDiagnosisDraftChanges({ draftValue: "   ", pendingWorkbookEditCount: 0 })).toBe(
+      false,
+    );
   });
 
   it("describes background draft save state without implying a workbook reload", () => {

@@ -15,7 +15,10 @@ export function CycleProgress() {
       style={{ borderColor: "var(--color-border-default)" }}
     >
       <div className="mb-2.5 flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--color-text-muted)" }}>
+        <div
+          className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           Active cycle · {cycle.period} · {cycle.company}
         </div>
         <div className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
@@ -29,17 +32,9 @@ export function CycleProgress() {
           const active = i === current;
           const upcoming = i > current;
 
-          const dotBg = done
-            ? "#22C55E"
-            : active
-              ? "#7B68EE"
-              : "#FFFFFF";
+          const dotBg = done ? "#22C55E" : active ? "#7B68EE" : "#FFFFFF";
           const dotColor = done || active ? "#FFFFFF" : "#818EA0";
-          const dotBorder = done
-            ? "#22C55E"
-            : active
-              ? "#7B68EE"
-              : "#E3E6EA";
+          const dotBorder = done ? "#22C55E" : active ? "#7B68EE" : "#E3E6EA";
           const lineColor = done ? "#22C55E" : "#E3E6EA";
 
           return (

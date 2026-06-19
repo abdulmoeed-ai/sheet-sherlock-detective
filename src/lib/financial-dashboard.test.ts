@@ -372,7 +372,11 @@ describe("financial dashboard helpers", () => {
       "Source Readiness",
       "Approved Model Snapshot",
     ]);
-    expect(series[0].points.map((point) => point.label)).toEqual(["52W Low", "Current", "52W High"]);
+    expect(series[0].points.map((point) => point.label)).toEqual([
+      "52W Low",
+      "Current",
+      "52W High",
+    ]);
     expect(series[3].points.map((point) => point.value)).toEqual([100, 50]);
     expect(series[4].points.map((point) => point.label)).toEqual(["Revenue", "Gross Margin"]);
   });

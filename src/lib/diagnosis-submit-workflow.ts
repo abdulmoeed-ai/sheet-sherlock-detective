@@ -19,11 +19,7 @@ export function diagnosisManagerSubmitButtonLabel({
   return dirty ? "Save & Submit to Manager" : "Submit to Manager";
 }
 
-export function diagnosisManagerSubmitBlockedReason({
-  projectId,
-}: {
-  projectId?: string | null;
-}) {
+export function diagnosisManagerSubmitBlockedReason({ projectId }: { projectId?: string | null }) {
   if (!projectId) return "Open a workbook version before submitting for Manager review.";
   return null;
 }

@@ -19,6 +19,7 @@ export function askAiTokenUsageLabel({
 
 function numberValue(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number.parseInt(value.trim(), 10);
+  if (typeof value === "string" && /^\d+$/.test(value.trim()))
+    return Number.parseInt(value.trim(), 10);
   return null;
 }

@@ -62,7 +62,12 @@ export function useUploadDocuments(projectId: string) {
     mutationFn: (input: {
       files: File[];
       onStatus?: Parameters<typeof uploadDocumentsSequential<DocumentResponse>>[2];
-    }) => uploadDocumentsSequential(input.files, (file) => uploadDocument(projectId, file), input.onStatus),
+    }) =>
+      uploadDocumentsSequential(
+        input.files,
+        (file) => uploadDocument(projectId, file),
+        input.onStatus,
+      ),
     onSuccess: () => invalidateProject(queryClient, projectId),
   });
 }
@@ -95,7 +100,8 @@ export function useDownloadExcelExport(projectId: string) {
 
 export function useCreateValuationPresentation(projectId: string) {
   return useMutation({
-    mutationFn: (input?: ValuationPresentationInput) => createValuationPresentation(projectId, input),
+    mutationFn: (input?: ValuationPresentationInput) =>
+      createValuationPresentation(projectId, input),
   });
 }
 
@@ -179,10 +185,7 @@ export function useDeleteComment(projectId: string) {
   });
 }
 
-export function useReviewCell(
-  projectId: string,
-  options: { invalidateOnSuccess?: boolean } = {},
-) {
+export function useReviewCell(projectId: string, options: { invalidateOnSuccess?: boolean } = {}) {
   const queryClient = useQueryClient();
   const invalidateOnSuccess = options.invalidateOnSuccess ?? true;
   return useMutation({
@@ -225,7 +228,11 @@ export function useRevertWorkbookCell(projectId: string) {
     onSuccess: (_data, variables) => {
       invalidateProject(queryClient, projectId);
       queryClient.invalidateQueries({
-        queryKey: queryKeys.workbookCellHistory(projectId, variables.sheetId, variables.cellAddress),
+        queryKey: queryKeys.workbookCellHistory(
+          projectId,
+          variables.sheetId,
+          variables.cellAddress,
+        ),
       });
     },
   });

@@ -47,10 +47,18 @@ describe("diagnosis add-document helpers", () => {
     expect(isDiagnosisBaselineRefreshLocked("cfo_review")).toBe(true);
     expect(isDiagnosisBaselineRefreshLocked("approved")).toBe(true);
     expect(isDiagnosisBaselineRefreshLocked("in_diagnosis")).toBe(false);
-    expect(canStartDiagnosisBaselineRefresh({ locked: false, dirty: false, projectId: "project-1" })).toBe(true);
-    expect(canStartDiagnosisBaselineRefresh({ locked: true, dirty: false, projectId: "project-1" })).toBe(false);
-    expect(canStartDiagnosisBaselineRefresh({ locked: false, dirty: true, projectId: "project-1" })).toBe(false);
-    expect(canStartDiagnosisBaselineRefresh({ locked: false, dirty: false, projectId: null })).toBe(false);
+    expect(
+      canStartDiagnosisBaselineRefresh({ locked: false, dirty: false, projectId: "project-1" }),
+    ).toBe(true);
+    expect(
+      canStartDiagnosisBaselineRefresh({ locked: true, dirty: false, projectId: "project-1" }),
+    ).toBe(false);
+    expect(
+      canStartDiagnosisBaselineRefresh({ locked: false, dirty: true, projectId: "project-1" }),
+    ).toBe(false);
+    expect(canStartDiagnosisBaselineRefresh({ locked: false, dirty: false, projectId: null })).toBe(
+      false,
+    );
   });
 
   it("explains that extraction reruns across all uploaded PDFs", () => {

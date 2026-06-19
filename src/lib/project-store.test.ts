@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearSelectedProjectId, getSelectedProjectId, setSelectedProjectId } from "./project-store";
+import {
+  clearSelectedProjectId,
+  getSelectedProjectId,
+  setSelectedProjectId,
+} from "./project-store";
 
 describe("project-store", () => {
   afterEach(() => {

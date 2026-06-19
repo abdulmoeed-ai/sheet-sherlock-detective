@@ -23,12 +23,7 @@ export function askAiSuggestionsForRoute(routePath: string): string[] {
 }
 
 const PROJECT_CONTEXT_ROUTE_PREFIXES = ["/diagnosis/", "/ingestion/"];
-const PROJECT_CONTEXT_ROUTES = new Set([
-  "/assumptions",
-  "/audit",
-  "/review",
-  "/sign-off",
-]);
+const PROJECT_CONTEXT_ROUTES = new Set(["/assumptions", "/audit", "/review", "/sign-off"]);
 
 export function shouldUseProjectContextForRoute(routePath: string): boolean {
   const normalized = normalizeRoutePath(routePath);

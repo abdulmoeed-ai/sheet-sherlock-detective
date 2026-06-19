@@ -66,7 +66,12 @@ export function diagnosisCellTone({
 }
 
 export function buildExportWarningSummary(
-  cells: Array<{ diagnosis?: { confidenceLevel?: BackendConfidenceLevel | null; warnings?: string[] | null } | null }>,
+  cells: Array<{
+    diagnosis?: {
+      confidenceLevel?: BackendConfidenceLevel | null;
+      warnings?: string[] | null;
+    } | null;
+  }>,
 ) {
   let lowConfidence = 0;
   let blocked = 0;
@@ -143,14 +148,16 @@ export function warningDetails(warning: string) {
   if (warning === "llm.accepted_after_validation") {
     return {
       label: "AI accepted after validation",
-      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      description:
+        "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
       actionable: false,
     };
   }
   if (warning === "llm.recommended_zero_dash") {
     return {
       label: "AI recommended zero",
-      description: "AI recommended zero from dash or nil source evidence and deterministic checks accepted it.",
+      description:
+        "AI recommended zero from dash or nil source evidence and deterministic checks accepted it.",
       actionable: false,
     };
   }
@@ -171,7 +178,8 @@ export function warningDetails(warning: string) {
   if (warning === "llm.term_standardized_after_validation") {
     return {
       label: "AI standardized term",
-      description: "AI standardized the financial term and deterministic checks accepted the mapping.",
+      description:
+        "AI standardized the financial term and deterministic checks accepted the mapping.",
       actionable: false,
     };
   }
@@ -206,7 +214,8 @@ export function warningDetails(warning: string) {
   if (warning === "comparative_year") {
     return {
       label: "Comparative-year source column",
-      description: "This value was extracted from the prior-year/comparative column in the PDF table. It is informational, not an error.",
+      description:
+        "This value was extracted from the prior-year/comparative column in the PDF table. It is informational, not an error.",
       actionable: false,
     };
   }
@@ -284,7 +293,8 @@ export function ruleTooltipDetails(
       title: "Rule metadata unavailable",
       category: "-",
       severity: "-",
-      description: "This rule code was attached to the cell, but the current mapping-rule manifest did not include details for it.",
+      description:
+        "This rule code was attached to the cell, but the current mapping-rule manifest did not include details for it.",
       missing: true,
     };
   }
@@ -344,7 +354,10 @@ type HistoryFormatContext = {
   currentUser?: { id?: string | null; name?: string | null } | null;
 };
 
-export function formatHistoryEntry(entry: Record<string, unknown>, context: HistoryFormatContext = {}) {
+export function formatHistoryEntry(
+  entry: Record<string, unknown>,
+  context: HistoryFormatContext = {},
+) {
   const action = stringValue(entry.action, "updated").toLowerCase();
   const actor = historyActorName(entry, context);
   const oldValue = readableHistoryValue(entry.oldValue);
@@ -353,7 +366,11 @@ export function formatHistoryEntry(entry: Record<string, unknown>, context: Hist
   const meta = formatHistoryTimestamp(entry.createdAt);
 
   if (action === "source") {
-    return { title: `Source extraction: ${readableHistoryValue(entry.value ?? entry.newValue)}`, meta, note };
+    return {
+      title: `Source extraction: ${readableHistoryValue(entry.value ?? entry.newValue)}`,
+      meta,
+      note,
+    };
   }
 
   if (action === "revert") {
@@ -422,7 +439,8 @@ function mappingRuleWarningDetails(warning: string) {
     B6: "The value may come from narrative text rather than a structured financial table.",
     C3: "A movement schedule component was mapped. Confirm whether this should feed the cell or only the closing balance should be used.",
     D2: "A subtotal or formula-derived row was detected. Confirm this is not duplicating a workbook formula.",
-    MULTI_SOURCE: "Multiple uploaded files produced values for the same cell. The selected source should be reviewed against alternatives.",
+    MULTI_SOURCE:
+      "Multiple uploaded files produced values for the same cell. The selected source should be reviewed against alternatives.",
   };
   return {
     label: labelByCode[code] ?? `Mapping rule ${code}`,

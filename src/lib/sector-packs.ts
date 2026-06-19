@@ -101,7 +101,12 @@ export const SECTOR_PACKS: Record<string, SectorPack> = {
     yearEnd: "June 30",
     currency: "PKR thousands",
     ruleCount: 38,
-    macroVariables: ["Gas well production (BCF)", "Brent crude (USD/bbl)", "Wellhead gas price", "PKR/USD"],
+    macroVariables: [
+      "Gas well production (BCF)",
+      "Brent crude (USD/bbl)",
+      "Wellhead gas price",
+      "PKR/USD",
+    ],
     regulatoryTags: ["OGRA petroleum policy", "PCA cost recovery", "Decommissioning provision"],
     sectorOverrides: [
       "Gas well production volumes",
@@ -122,7 +127,13 @@ export const SECTOR_PACKS: Record<string, SectorPack> = {
     yearEnd: "December 31",
     currency: "PKR thousands",
     ruleCount: 36,
-    macroVariables: ["Urea offtake (kt)", "DAP offtake (kt)", "Gas tariff", "GIDC", "Subsidy receivable"],
+    macroVariables: [
+      "Urea offtake (kt)",
+      "DAP offtake (kt)",
+      "Gas tariff",
+      "GIDC",
+      "Subsidy receivable",
+    ],
     regulatoryTags: ["GIDC adjustment", "Govt subsidy reconciliation"],
     sectorOverrides: [
       "Urea / DAP volume split",

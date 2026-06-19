@@ -35,9 +35,9 @@ describe("ragIndexStatusLabel", () => {
     expect(ragIndexStatusLabel({ ...baseStatus, status: "failed", percent: 0 })).toBe(
       "Ask AI PDF search failed",
     );
-    expect(ragIndexStatusLabel({ ...baseStatus, status: "ready", readyForAskAi: false, stale: true })).toBe(
-      "Ask AI PDF search updating",
-    );
+    expect(
+      ragIndexStatusLabel({ ...baseStatus, status: "ready", readyForAskAi: false, stale: true }),
+    ).toBe("Ask AI PDF search updating");
     expect(ragIndexStatusLabel(null)).toBe("Ask AI PDF search status unavailable");
   });
 });

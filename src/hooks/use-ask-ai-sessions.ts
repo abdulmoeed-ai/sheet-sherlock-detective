@@ -34,7 +34,8 @@ export function useAskAiSessions(scope: "project" | "forecast" = "project") {
     error: sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null,
     refreshSessions: sessionsQuery.refetch,
     loadSession: readAskAiSession,
-    renameSession: (sessionId: string, title: string) => renameMutation.mutateAsync({ sessionId, title }),
+    renameSession: (sessionId: string, title: string) =>
+      renameMutation.mutateAsync({ sessionId, title }),
     deleteSession: (sessionId: string) => deleteMutation.mutateAsync(sessionId),
   };
 }

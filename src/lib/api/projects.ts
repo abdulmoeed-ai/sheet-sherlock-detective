@@ -114,10 +114,9 @@ export function readActiveExtractionJob(projectId: string) {
 }
 
 export function cancelExtractionJob(projectId: string, jobId: string) {
-  return apiFetch<ExtractionJobResponse>(
-    `/api/projects/${projectId}/extractions/${jobId}/cancel`,
-    { method: "POST" },
-  );
+  return apiFetch<ExtractionJobResponse>(`/api/projects/${projectId}/extractions/${jobId}/cancel`, {
+    method: "POST",
+  });
 }
 
 export function readExtractionJob(projectId: string, jobId: string) {
@@ -375,7 +374,10 @@ export function downloadExcelExport(projectId: string, exportId: string) {
   return apiBlob(`/api/projects/${projectId}/exports/${exportId}/download`);
 }
 
-export function createValuationPresentation(projectId: string, input: ValuationPresentationInput = {}) {
+export function createValuationPresentation(
+  projectId: string,
+  input: ValuationPresentationInput = {},
+) {
   return apiFetch<ValuationPresentationResponse>(
     `/api/projects/${projectId}/exports/valuation-presentation`,
     { method: "POST", body: input },
@@ -383,16 +385,14 @@ export function createValuationPresentation(projectId: string, input: ValuationP
 }
 
 export function downloadValuationPresentation(projectId: string, exportId: string) {
-  return apiBlob(
-    `/api/projects/${projectId}/exports/valuation-presentation/${exportId}/download`,
-  );
+  return apiBlob(`/api/projects/${projectId}/exports/valuation-presentation/${exportId}/download`);
 }
 
 export function createDashboardValuationPresentation(input: ValuationPresentationInput) {
-  return apiFetch<ValuationPresentationResponse>(
-    "/api/projects/exports/valuation-presentation",
-    { method: "POST", body: input },
-  );
+  return apiFetch<ValuationPresentationResponse>("/api/projects/exports/valuation-presentation", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function downloadDashboardValuationPresentation(exportId: string) {

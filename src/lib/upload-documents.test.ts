@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";
-import { isExtractionResultsConflict, splitPdfFiles, uploadDocumentsSequential } from "./upload-documents";
+import {
+  isExtractionResultsConflict,
+  splitPdfFiles,
+  uploadDocumentsSequential,
+} from "./upload-documents";
 
 describe("multi-document upload helpers", () => {
   it("keeps selected PDFs and reports rejected non-PDF files", () => {
@@ -44,7 +48,13 @@ describe("multi-document upload helpers", () => {
     );
 
     expect(isExtractionResultsConflict(error)).toBe(true);
-    expect(isExtractionResultsConflict(new ApiError(409, "An extraction job is already queued or running.", null))).toBe(false);
-    expect(isExtractionResultsConflict(new Error("This project already has extraction results."))).toBe(false);
+    expect(
+      isExtractionResultsConflict(
+        new ApiError(409, "An extraction job is already queued or running.", null),
+      ),
+    ).toBe(false);
+    expect(
+      isExtractionResultsConflict(new Error("This project already has extraction results.")),
+    ).toBe(false);
   });
 });

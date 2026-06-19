@@ -9,7 +9,10 @@ import {
 } from "./extraction-job";
 import type { ExtractionJobResponse, ExtractionProgressEventResponse } from "./api/types";
 
-function job(status: string, overrides: Partial<ExtractionJobResponse> = {}): ExtractionJobResponse {
+function job(
+  status: string,
+  overrides: Partial<ExtractionJobResponse> = {},
+): ExtractionJobResponse {
   return {
     id: "job-1",
     projectId: "project-1",

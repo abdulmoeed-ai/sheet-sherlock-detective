@@ -230,7 +230,9 @@ export function buildConfirmedCellUpdate(
     ? response.history.filter((entry): entry is Record<string, unknown> => isRecord(entry))
     : fallback.history;
   const displayValue =
-    response.value === null || response.value === undefined ? fallback.displayValue : String(response.value);
+    response.value === null || response.value === undefined
+      ? fallback.displayValue
+      : String(response.value);
 
   return {
     fieldId,

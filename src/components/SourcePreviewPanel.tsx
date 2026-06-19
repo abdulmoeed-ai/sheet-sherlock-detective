@@ -120,7 +120,11 @@ export function SourcePreview({
           </IconTooltip>
           {onClose && (
             <IconTooltip label="Close preview">
-              <button onClick={onClose} className="rounded p-1 hover:bg-white" aria-label="Close preview">
+              <button
+                onClick={onClose}
+                className="rounded p-1 hover:bg-white"
+                aria-label="Close preview"
+              >
                 <X className="h-3.5 w-3.5" style={{ color: "var(--color-text-muted)" }} />
               </button>
             </IconTooltip>

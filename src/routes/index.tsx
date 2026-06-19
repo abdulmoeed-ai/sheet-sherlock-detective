@@ -28,12 +28,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useCreateDashboardValuationPresentation,
   useCreateValuationPresentation,
@@ -199,12 +194,14 @@ function formatMarketChange(
   change: number | null | undefined,
   changePercent: number | null | undefined,
 ): string {
-  const amount = change === null || change === undefined || Number.isNaN(change)
-    ? "N/A"
-    : `${change >= 0 ? "+" : ""}${formatMarketNumber(change)}`;
-  const percent = changePercent === null || changePercent === undefined || Number.isNaN(changePercent)
-    ? null
-    : `${changePercent >= 0 ? "+" : ""}${formatMarketNumber(changePercent, 1)}%`;
+  const amount =
+    change === null || change === undefined || Number.isNaN(change)
+      ? "N/A"
+      : `${change >= 0 ? "+" : ""}${formatMarketNumber(change)}`;
+  const percent =
+    changePercent === null || changePercent === undefined || Number.isNaN(changePercent)
+      ? null
+      : `${changePercent >= 0 ? "+" : ""}${formatMarketNumber(changePercent, 1)}%`;
   return percent ? `${amount} (${percent})` : amount;
 }
 
@@ -282,14 +279,8 @@ function reorderWidget(
   return [...nextVisible, ...hiddenWidgets].map((widget, order) => ({ ...widget, order }));
 }
 
-function setWidgetVisibility(
-  widgets: DashboardWidgetState[],
-  widgetId: string,
-  visible: boolean,
-) {
-  return widgets.map((widget) =>
-    widget.id === widgetId ? { ...widget, visible } : widget,
-  );
+function setWidgetVisibility(widgets: DashboardWidgetState[], widgetId: string, visible: boolean) {
+  return widgets.map((widget) => (widget.id === widgetId ? { ...widget, visible } : widget));
 }
 
 function ArrangeWidgetsPanel({
@@ -343,70 +334,70 @@ function ArrangeWidgetsPanel({
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
         <div className="space-y-2">
-          {widgets.filter((widget) => widget.visible).map((widget, index, visibleWidgets) => (
-            <div
-              key={widget.id}
-              draggable
-              onDragStart={(event) => {
-                setDraggedWidgetId(widget.id);
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", widget.id);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const draggedId = event.dataTransfer.getData("text/plain") || draggedWidgetId;
-                if (draggedId) onReorder(draggedId, widget.id);
-                setDraggedWidgetId(null);
-              }}
-              onDragEnd={() => setDraggedWidgetId(null)}
-              className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 transition"
-              style={{
-                borderColor:
-                  draggedWidgetId === widget.id
-                    ? "var(--color-brand)"
-                    : "var(--color-border-default)",
-                background:
-                  draggedWidgetId === widget.id
-                    ? "var(--color-tag-bg)"
-                    : "var(--color-bg-card)",
-              }}
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[var(--color-text-muted)]" />
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold">{widget.label}</div>
-                  <div className="text-[11px] text-[var(--color-text-muted)]">
-                    Drag to reorder
+          {widgets
+            .filter((widget) => widget.visible)
+            .map((widget, index, visibleWidgets) => (
+              <div
+                key={widget.id}
+                draggable
+                onDragStart={(event) => {
+                  setDraggedWidgetId(widget.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", widget.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId = event.dataTransfer.getData("text/plain") || draggedWidgetId;
+                  if (draggedId) onReorder(draggedId, widget.id);
+                  setDraggedWidgetId(null);
+                }}
+                onDragEnd={() => setDraggedWidgetId(null)}
+                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 transition"
+                style={{
+                  borderColor:
+                    draggedWidgetId === widget.id
+                      ? "var(--color-brand)"
+                      : "var(--color-border-default)",
+                  background:
+                    draggedWidgetId === widget.id ? "var(--color-tag-bg)" : "var(--color-bg-card)",
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[var(--color-text-muted)]" />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold">{widget.label}</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)]">
+                      Drag to reorder
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-1">
-                <Button
-                  variant="secondary"
-                  onClick={() => onMove(widget.id, -1)}
-                  disabled={index === 0}
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => onMove(widget.id, 1)}
-                  disabled={index === visibleWidgets.length - 1}
-                >
-                  <ArrowDown className="h-4 w-4" />
-                </Button>
-                {widget.canHide !== false ? (
-                  <Button variant="secondary" onClick={() => onToggle(widget.id, false)}>
-                    Hide
+                <div className="flex flex-wrap justify-end gap-1">
+                  <Button
+                    variant="secondary"
+                    onClick={() => onMove(widget.id, -1)}
+                    disabled={index === 0}
+                  >
+                    <ArrowUp className="h-4 w-4" />
                   </Button>
-                ) : null}
+                  <Button
+                    variant="secondary"
+                    onClick={() => onMove(widget.id, 1)}
+                    disabled={index === visibleWidgets.length - 1}
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  {widget.canHide !== false ? (
+                    <Button variant="secondary" onClick={() => onToggle(widget.id, false)}>
+                      Hide
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
         <div
           className="rounded-md border px-3 py-3"
@@ -415,9 +406,7 @@ function ArrangeWidgetsPanel({
           <div className="text-[13px] font-semibold">Hidden Widgets</div>
           <div className="mt-2 space-y-2">
             {hiddenWidgets.length === 0 ? (
-              <div className="text-[12px] text-[var(--color-text-muted)]">
-                No hidden widgets.
-              </div>
+              <div className="text-[12px] text-[var(--color-text-muted)]">No hidden widgets.</div>
             ) : (
               hiddenWidgets.map((widget) => (
                 <div key={widget.id} className="flex items-center justify-between gap-2">
@@ -482,7 +471,9 @@ function MarketPulseSection({
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-[var(--color-brand)]" />
               <h2 className="text-[16px] font-semibold">Market Pulse</h2>
-              <Badge tone={error ? "danger" : "info"}>{error ? "Source issue" : "Live sources"}</Badge>
+              <Badge tone={error ? "danger" : "info"}>
+                {error ? "Source issue" : "Live sources"}
+              </Badge>
               {pulse?.warnings.length ? (
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
@@ -541,7 +532,6 @@ function MarketPulseSection({
             </div>
           )}
         </div>
-
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -574,11 +564,18 @@ function MarketPulseSection({
 function TickerChip({ item }: { item: MarketPulseTickerItem }) {
   return (
     <div className="flex shrink-0 items-center gap-2 text-[13px]">
-      <span className="text-[20px] font-semibold text-[var(--color-text-muted)]">{item.symbol}</span>
+      <span className="text-[20px] font-semibold text-[var(--color-text-muted)]">
+        {item.symbol}
+      </span>
       <span className="text-[22px] font-bold tnum">{formatMarketNumber(item.price)}</span>
-      <span className="flex items-center gap-1 font-bold tnum" style={{ color: marketToneColor(item.direction) }}>
+      <span
+        className="flex items-center gap-1 font-bold tnum"
+        style={{ color: marketToneColor(item.direction) }}
+      >
         <DirectionIcon direction={item.direction} />
-        {item.change === null || item.change === undefined ? "N/A" : formatMarketNumber(Math.abs(item.change), 2)}
+        {item.change === null || item.change === undefined
+          ? "N/A"
+          : formatMarketNumber(Math.abs(item.change), 2)}
       </span>
     </div>
   );
@@ -608,7 +605,10 @@ function TopActiveStocksWidget({
           Loading active stocks...
         </div>
       ) : stocks.length === 0 ? (
-        <div className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]" style={{ borderColor: "var(--color-border-default)" }}>
+        <div
+          className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
           Active stocks are temporarily unavailable.
         </div>
       ) : (
@@ -630,16 +630,27 @@ function TopActiveStocksWidget({
             </thead>
             <tbody>
               {stocks.slice(0, 7).map((stock) => (
-                <tr key={stock.symbol} className="border-b last:border-0" style={{ borderColor: "var(--color-border-default)" }}>
+                <tr
+                  key={stock.symbol}
+                  className="border-b last:border-0"
+                  style={{ borderColor: "var(--color-border-default)" }}
+                >
                   <td className="py-2 pr-2 text-[13px] font-semibold">{stock.symbol}</td>
-                  <td className="py-2 px-1 text-right font-semibold tnum">{formatMarketNumber(stock.price)}</td>
+                  <td className="py-2 px-1 text-right font-semibold tnum">
+                    {formatMarketNumber(stock.price)}
+                  </td>
                   <td className="py-2 px-1 text-right">
-                    <span className="inline-flex items-center justify-end gap-1 font-semibold tnum" style={{ color: marketToneColor(stock.direction) }}>
+                    <span
+                      className="inline-flex items-center justify-end gap-1 font-semibold tnum"
+                      style={{ color: marketToneColor(stock.direction) }}
+                    >
                       <DirectionIcon direction={stock.direction} />
                       {formatMarketChange(stock.change, stock.changePercent)}
                     </span>
                   </td>
-                  <td className="py-2 pl-2 text-right font-semibold tnum">{formatMarketVolume(stock.volume)}</td>
+                  <td className="py-2 pl-2 text-right font-semibold tnum">
+                    {formatMarketVolume(stock.volume)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -680,13 +691,20 @@ function MarketFeedWidget({
           Loading...
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]" style={{ borderColor: "var(--color-border-default)" }}>
+        <div
+          className="rounded-md border px-4 py-5 text-[13px] text-[var(--color-text-muted)]"
+          style={{ borderColor: "var(--color-border-default)" }}
+        >
           {emptyLabel}
         </div>
       ) : (
         <div className="space-y-3">
           {items.slice(0, 3).map((item) => (
-            <article key={`${item.title}-${item.date}`} className="border-b pb-3 last:border-0 last:pb-0" style={{ borderColor: "var(--color-border-default)" }}>
+            <article
+              key={`${item.title}-${item.date}`}
+              className="border-b pb-3 last:border-0 last:pb-0"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
               <h4 className="text-[13px] font-semibold leading-snug">{item.title}</h4>
               {item.summary ? (
                 <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
@@ -898,7 +916,11 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
     }
     if (role === "finance_analyst" || role === "finance_manager") {
       widgets.push({ id: "market_pulse", label: "Market Pulse" });
-      widgets.push({ id: "dashboard_tabs", label: "Financial / Portfolio Dashboard", canHide: false });
+      widgets.push({
+        id: "dashboard_tabs",
+        label: "Financial / Portfolio Dashboard",
+        canHide: false,
+      });
     }
     return widgets;
   }, [role]);
@@ -1057,7 +1079,10 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
       return (
         <div key={widgetId} className="space-y-4">
           {tabs && (
-            <div className="flex gap-0 border-b" style={{ borderColor: "var(--color-border-default)" }}>
+            <div
+              className="flex gap-0 border-b"
+              style={{ borderColor: "var(--color-border-default)" }}
+            >
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -1066,7 +1091,9 @@ function ProjectDashboard({ role }: { role: BackendRole }) {
                   style={{
                     color: activeTab === tab.id ? "var(--color-brand)" : "var(--color-text-muted)",
                     borderBottom:
-                      activeTab === tab.id ? "2px solid var(--color-brand)" : "2px solid transparent",
+                      activeTab === tab.id
+                        ? "2px solid var(--color-brand)"
+                        : "2px solid transparent",
                   }}
                 >
                   {tab.label}
@@ -1497,9 +1524,7 @@ function PortfolioDashboardsTab({ role }: { role: BackendRole }) {
         onDuplicate={() => duplicateDashboard(selectedDashboard)}
         onSaveVersion={() => saveDashboardVersion(selectedDashboard)}
         onExport={() => exportDashboard(selectedDashboard)}
-        onSaveLayout={(widgetLayout) =>
-          savePortfolioWidgetLayout(selectedDashboard, widgetLayout)
-        }
+        onSaveLayout={(widgetLayout) => savePortfolioWidgetLayout(selectedDashboard, widgetLayout)}
       />
     );
   }
@@ -2102,9 +2127,8 @@ function PortfolioDashboardDetail({
     () => applyWidgetLayout(PORTFOLIO_WIDGETS, dashboard.widgetLayout),
     [dashboard.widgetLayout],
   );
-  const [portfolioWidgets, setPortfolioWidgets] = useState<DashboardWidgetState[]>(
-    defaultPortfolioWidgets,
-  );
+  const [portfolioWidgets, setPortfolioWidgets] =
+    useState<DashboardWidgetState[]>(defaultPortfolioWidgets);
   const [arrangingPortfolioWidgets, setArrangingPortfolioWidgets] = useState(false);
   const [savingPortfolioLayout, setSavingPortfolioLayout] = useState(false);
   useEffect(() => {
@@ -2236,9 +2260,7 @@ function PortfolioDashboardDetail({
           setPortfolioWidgets((widgets) => moveWidget(widgets, widgetId, direction))
         }
         onReorder={(draggedWidgetId, targetWidgetId) =>
-          setPortfolioWidgets((widgets) =>
-            reorderWidget(widgets, draggedWidgetId, targetWidgetId),
-          )
+          setPortfolioWidgets((widgets) => reorderWidget(widgets, draggedWidgetId, targetWidgetId))
         }
         onToggle={(widgetId, visible) =>
           setPortfolioWidgets((widgets) => setWidgetVisibility(widgets, widgetId, visible))
@@ -2952,7 +2974,10 @@ function PortfolioMetricGroups({ rows }: { rows: PortfolioAnalyticsRow[] }) {
             {rows.map((row) => {
               const group = row.intelligence.metricGroups.find((item) => item.title === title);
               return (
-                <div key={`${title}-${row.company.symbol}`} className="rounded-md bg-[var(--color-tag-bg)] px-3 py-2">
+                <div
+                  key={`${title}-${row.company.symbol}`}
+                  className="rounded-md bg-[var(--color-tag-bg)] px-3 py-2"
+                >
                   <div className="text-[12px] font-semibold">{row.company.symbol}</div>
                   <dl className="mt-2 grid grid-cols-2 gap-2">
                     {(group?.items ?? []).slice(0, 6).map((item) => (
@@ -3065,12 +3090,14 @@ function dashboardValuationPayload({
     },
   ];
   const citations = brokerSummary.sourceUrl
-    ? [{
-        url: brokerSummary.sourceUrl,
-        title: brokerSummary.title,
-        sourceName: brokerSummary.source,
-        publicationDate: brokerSummary.date,
-      }]
+    ? [
+        {
+          url: brokerSummary.sourceUrl,
+          title: brokerSummary.title,
+          sourceName: brokerSummary.source,
+          publicationDate: brokerSummary.date,
+        },
+      ]
     : [];
   const chartSeries: Array<Record<string, unknown>> = buildValuationDashboardChartSeries({
     metrics,
@@ -3267,15 +3294,17 @@ function FinancialDashboardTab({
     : null;
 
   // ── Valuation Deck conditions ─────────────────────────────────────────────
-  const modelApproved = sourcePlan?.modelGraphAvailability.available === true && !!approvedProjectId;
+  const modelApproved =
+    sourcePlan?.modelGraphAvailability.available === true && !!approvedProjectId;
   const hasResearch =
-    (brokerReports.length > 0) ||
-    ((intelligence?.sourceCoverage.coveragePercent ?? 0) > 0);
+    brokerReports.length > 0 || (intelligence?.sourceCoverage.coveragePercent ?? 0) > 0;
   const valuationPptEnabled = !!selectedCompany && !!intelligence && hasResearch;
 
   const disabledReasons: string[] = [];
   if (!hasResearch)
-    disabledReasons.push("No market research available (broker reports or AskAnalyst data required).");
+    disabledReasons.push(
+      "No market research available (broker reports or AskAnalyst data required).",
+    );
 
   const createValuationExport = useCreateValuationPresentation(approvedProjectId ?? "");
   const downloadValuationExport = useDownloadValuationPresentation(approvedProjectId ?? "");
@@ -3296,14 +3325,22 @@ function FinancialDashboardTab({
       sourceSyncSummary,
       modelGraphPack,
     });
-  }, [brokerSummary, intelligence, liveMarketMetrics, modelGraphPack, selectedCompany, sourceSyncSummary]);
+  }, [
+    brokerSummary,
+    intelligence,
+    liveMarketMetrics,
+    modelGraphPack,
+    selectedCompany,
+    sourceSyncSummary,
+  ]);
 
   const handleValuationPPT = async () => {
     if (!valuationPptEnabled || !valuationPayload) return;
     try {
-      const created = modelApproved && approvedProjectId
-        ? await createValuationExport.mutateAsync(valuationPayload)
-        : await createDashboardValuationExport.mutateAsync(valuationPayload);
+      const created =
+        modelApproved && approvedProjectId
+          ? await createValuationExport.mutateAsync(valuationPayload)
+          : await createDashboardValuationExport.mutateAsync(valuationPayload);
       if (created.generatedBy === "deterministic") {
         toast.info("Valuation Deck generated from available dashboard and model sources.");
       }
@@ -3368,10 +3405,18 @@ function FinancialDashboardTab({
       ) : (
         <>
           {/* Valuation Deck header bar */}
-          <div className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
-            style={{ borderColor: "var(--color-border-default)", background: "var(--color-bg-subtle)" }}>
+          <div
+            className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
+            style={{
+              borderColor: "var(--color-border-default)",
+              background: "var(--color-bg-subtle)",
+            }}
+          >
             <div>
-              <p className="text-[13px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              <p
+                className="text-[13px] font-semibold"
+                style={{ color: "var(--color-text-primary)" }}
+              >
                 {selectedCompany?.name}
               </p>
               <p className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
@@ -3386,11 +3431,17 @@ function FinancialDashboardTab({
                     <span className="inline-flex">
                       <button
                         onClick={handleValuationPPT}
-                        disabled={!valuationPptEnabled || !valuationPayload || valuationExportPending}
+                        disabled={
+                          !valuationPptEnabled || !valuationPayload || valuationExportPending
+                        }
                         className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         style={{
-                          borderColor: valuationPptEnabled ? "var(--color-brand)" : "var(--color-border-default)",
-                          color: valuationPptEnabled ? "var(--color-brand)" : "var(--color-text-muted)",
+                          borderColor: valuationPptEnabled
+                            ? "var(--color-brand)"
+                            : "var(--color-border-default)",
+                          color: valuationPptEnabled
+                            ? "var(--color-brand)"
+                            : "var(--color-text-muted)",
                           background: "var(--color-bg-card)",
                         }}
                       >
@@ -3401,7 +3452,8 @@ function FinancialDashboardTab({
                         )}
                         {createValuationExport.isPending || createDashboardValuationExport.isPending
                           ? "Generating…"
-                          : downloadValuationExport.isPending || downloadDashboardValuationExport.isPending
+                          : downloadValuationExport.isPending ||
+                              downloadDashboardValuationExport.isPending
                             ? "Downloading…"
                             : "Valuation Deck"}
                         {!valuationPptEnabled && <Info className="h-3 w-3 opacity-60" />}
@@ -3420,7 +3472,8 @@ function FinancialDashboardTab({
                   )}
                   {valuationPptEnabled && (
                     <TooltipContent side="bottom" className="text-[12px]">
-                      Generate an investment-banking quality valuation deck using dashboard intelligence, broker context, and approved model data when available.
+                      Generate an investment-banking quality valuation deck using dashboard
+                      intelligence, broker context, and approved model data when available.
                     </TooltipContent>
                   )}
                 </Tooltip>
@@ -3798,7 +3851,9 @@ function ModelGraphPack({
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-brand)]" />
             <div>
-              <div className="text-[14px] font-semibold">Approved model needs graph-ready values</div>
+              <div className="text-[14px] font-semibold">
+                Approved model needs graph-ready values
+              </div>
               <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
                 {graphPack.reason} Open the approved workbook or refresh extraction if you expect
                 revenue, margin, cash flow, and balance sheet metrics to appear here.

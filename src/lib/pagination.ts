@@ -16,7 +16,11 @@ export function paginateItems<T>(items: T[], page: number, pageSize = DEFAULT_PA
   return items.slice(start, start + pageSize);
 }
 
-export function visiblePageRange(page: number, totalItems: number, pageSize = DEFAULT_PAGE_SIZE): {
+export function visiblePageRange(
+  page: number,
+  totalItems: number,
+  pageSize = DEFAULT_PAGE_SIZE,
+): {
   from: number;
   to: number;
 } {

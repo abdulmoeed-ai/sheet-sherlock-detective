@@ -33,7 +33,8 @@ export function buildAskAiReasoningSummary(input: {
   const matchedEvidenceCount = latestSourceMessageCount(input.activity, "Matched project evidence");
   const citationCount = input.final?.sourcesUsed?.length ?? 0;
   const state = input.done ? "complete" : "streaming";
-  const activeLabel = state === "complete" ? "Answer ready with citations" : activeReasoningLabel(input.activity);
+  const activeLabel =
+    state === "complete" ? "Answer ready with citations" : activeReasoningLabel(input.activity);
   const chips = compactChips(input.activity).slice(-3);
   const compactLabel =
     state === "complete"
@@ -67,11 +68,15 @@ function completedCompactLabel(input: {
   citationCount: number;
 }): string {
   const parts = [];
-  if (input.pdfCount > 0) parts.push(`Reviewed ${input.pdfCount} PDF${input.pdfCount === 1 ? "" : "s"}`);
+  if (input.pdfCount > 0)
+    parts.push(`Reviewed ${input.pdfCount} PDF${input.pdfCount === 1 ? "" : "s"}`);
   if (input.matchedEvidenceCount > 0) {
-    parts.push(`Matched ${input.matchedEvidenceCount} evidence point${input.matchedEvidenceCount === 1 ? "" : "s"}`);
+    parts.push(
+      `Matched ${input.matchedEvidenceCount} evidence point${input.matchedEvidenceCount === 1 ? "" : "s"}`,
+    );
   }
-  if (input.citationCount > 0) parts.push(`${input.citationCount} citation${input.citationCount === 1 ? "" : "s"}`);
+  if (input.citationCount > 0)
+    parts.push(`${input.citationCount} citation${input.citationCount === 1 ? "" : "s"}`);
   return parts.length ? parts.join(" · ") : "Answer ready";
 }
 
@@ -88,7 +93,8 @@ function compactChips(activity: StreamActivityEvent[]): string[] {
 function sourceChipLabel(event: Extract<StreamActivityEvent, { type: "source" }>): string {
   if (event.kind === "uploaded_pdf") return event.count === 1 ? "PDF found" : `${event.count} PDFs`;
   if (event.message === "Using current screen context") return "Screen context";
-  if (event.message === "Matched project evidence") return `${event.count} evidence match${event.count === 1 ? "" : "es"}`;
+  if (event.message === "Matched project evidence")
+    return `${event.count} evidence match${event.count === 1 ? "" : "es"}`;
   if (event.kind === "model") return `${event.count} model field${event.count === 1 ? "" : "s"}`;
   if (event.kind === "source_registry") return "Source registry";
   if (event.kind === "web") return `${event.count} web source${event.count === 1 ? "" : "s"}`;
@@ -97,7 +103,10 @@ function sourceChipLabel(event: Extract<StreamActivityEvent, { type: "source" }>
 
 function reasoningGroups(activity: StreamActivityEvent[], approaches: string[]): ReasoningGroup[] {
   const context = activity
-    .filter((event) => event.type === "source" && ["uploaded_pdf", "uploaded_sheet", "model"].includes(event.kind))
+    .filter(
+      (event) =>
+        event.type === "source" && ["uploaded_pdf", "uploaded_sheet", "model"].includes(event.kind),
+    )
     .map(describeSourceEvent)
     .filter(Boolean);
   const retrieval = activity
@@ -120,24 +129,42 @@ function reasoningGroups(activity: StreamActivityEvent[], approaches: string[]):
 
 function describeSourceEvent(event: StreamActivityEvent): string {
   if (event.type !== "source") return "";
-  if (event.kind === "uploaded_pdf") return event.count > 0 ? `${event.count} uploaded PDF${event.count === 1 ? "" : "s"} available` : "";
+  if (event.kind === "uploaded_pdf")
+    return event.count > 0
+      ? `${event.count} uploaded PDF${event.count === 1 ? "" : "s"} available`
+      : "";
   if (event.message === "Using current screen context") return "Current screen context included";
   if (event.message === "Matched project evidence") {
-    return event.count > 0 ? `${event.count} project evidence match${event.count === 1 ? "" : "es"}` : "";
+    return event.count > 0
+      ? `${event.count} project evidence match${event.count === 1 ? "" : "es"}`
+      : "";
   }
-  if (event.kind === "model") return event.count > 0 ? `${event.count} accepted model field${event.count === 1 ? "" : "s"}` : "";
-  if (event.kind === "source_registry") return event.count > 0 ? `${event.count} source-registry field${event.count === 1 ? "" : "s"}` : "";
-  if (event.kind === "web") return event.count > 0 ? `${event.count} approved web source${event.count === 1 ? "" : "s"}` : "";
+  if (event.kind === "model")
+    return event.count > 0
+      ? `${event.count} accepted model field${event.count === 1 ? "" : "s"}`
+      : "";
+  if (event.kind === "source_registry")
+    return event.count > 0
+      ? `${event.count} source-registry field${event.count === 1 ? "" : "s"}`
+      : "";
+  if (event.kind === "web")
+    return event.count > 0
+      ? `${event.count} approved web source${event.count === 1 ? "" : "s"}`
+      : "";
   return event.count > 0 ? humanizeEventMessage(event.message) : "";
 }
 
 function latestSourceCount(activity: StreamActivityEvent[], kind: string): number {
-  const event = [...activity].reverse().find((item) => item.type === "source" && item.kind === kind);
+  const event = [...activity]
+    .reverse()
+    .find((item) => item.type === "source" && item.kind === kind);
   return event?.type === "source" ? event.count : 0;
 }
 
 function latestSourceMessageCount(activity: StreamActivityEvent[], message: string): number {
-  const event = [...activity].reverse().find((item) => item.type === "source" && item.message === message);
+  const event = [...activity]
+    .reverse()
+    .find((item) => item.type === "source" && item.message === message);
   return event?.type === "source" ? event.count : 0;
 }
 

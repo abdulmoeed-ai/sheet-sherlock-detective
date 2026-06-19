@@ -12,4 +12,9 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    test: {
+      setupFiles: ["./src/test/setup.ts"],
+    },
+  },
 });

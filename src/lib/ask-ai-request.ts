@@ -19,9 +19,7 @@ export function buildAskAiRequestPayload(input: {
   const period = input.project?.projectLabel || input.project?.fiscalYear || null;
   const company = input.project?.companyName || null;
   const forecastRoute = normalizeRoutePath(input.routePath) === "/forecast";
-  const documentIds = forecastRoute
-    ? []
-    : (input.documents?.map((document) => document.id) ?? []);
+  const documentIds = forecastRoute ? [] : (input.documents?.map((document) => document.id) ?? []);
   const filters = forecastRoute
     ? {}
     : {

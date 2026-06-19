@@ -44,13 +44,26 @@ function CitationCard({ c }: { c: Citation }) {
         style={{ borderColor: "var(--color-border-default)" }}
       >
         <div className="flex items-center justify-between gap-1">
-          <span className="truncate text-[11px] font-bold" style={{ color: "var(--color-text-primary)" }}>{c.name}</span>
-          <ExternalLink className="h-3 w-3 flex-shrink-0" style={{ color: "var(--color-text-muted)" }} />
+          <span
+            className="truncate text-[11px] font-bold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
+            {c.name}
+          </span>
+          <ExternalLink
+            className="h-3 w-3 flex-shrink-0"
+            style={{ color: "var(--color-text-muted)" }}
+          />
         </div>
-        <div className="line-clamp-2 text-[10px] leading-snug" style={{ color: "var(--color-text-muted)" }}>
+        <div
+          className="line-clamp-2 text-[10px] leading-snug"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           {c.excerpt}
         </div>
-        <div className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>{c.date}</div>
+        <div className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>
+          {c.date}
+        </div>
       </a>
     );
   }
@@ -63,8 +76,15 @@ function CitationCard({ c }: { c: Citation }) {
         <div className="text-[11px] font-bold" style={{ color: "var(--color-brand)" }}>
           {c.sheet}!{c.cell}
         </div>
-        <div className="truncate text-[11px] font-semibold tnum" style={{ color: "var(--color-text-primary)" }}>{c.value}</div>
-        <div className="truncate text-[9px]" style={{ color: "var(--color-text-muted)" }}>last: {c.lastWrittenBy}</div>
+        <div
+          className="truncate text-[11px] font-semibold tnum"
+          style={{ color: "var(--color-text-primary)" }}
+        >
+          {c.value}
+        </div>
+        <div className="truncate text-[9px]" style={{ color: "var(--color-text-muted)" }}>
+          last: {c.lastWrittenBy}
+        </div>
       </div>
     );
   }
@@ -73,9 +93,18 @@ function CitationCard({ c }: { c: Citation }) {
       className="flex h-[64px] w-[220px] flex-shrink-0 flex-col justify-between rounded-md border bg-white px-2.5 py-1.5"
       style={{ borderColor: "var(--color-border-default)" }}
     >
-      <div className="truncate text-[11px] font-bold" style={{ color: "var(--color-text-primary)" }}>{c.doc}</div>
-      <div className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>Page {c.page}</div>
-      <div className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>ingested {c.timestamp}</div>
+      <div
+        className="truncate text-[11px] font-bold"
+        style={{ color: "var(--color-text-primary)" }}
+      >
+        {c.doc}
+      </div>
+      <div className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
+        Page {c.page}
+      </div>
+      <div className="text-[9px]" style={{ color: "var(--color-text-muted)" }}>
+        ingested {c.timestamp}
+      </div>
     </div>
   );
 }
@@ -90,8 +119,17 @@ function MessageBubble({ m }: { m: Message }) {
           className="rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed"
           style={
             m.role === "user"
-              ? { background: "var(--color-brand)", color: "#fff", borderRadius: "12px 12px 2px 12px" }
-              : { background: "#fff", color: "var(--color-text-primary)", border: "1px solid var(--color-border-default)", borderRadius: "12px 12px 12px 2px" }
+              ? {
+                  background: "var(--color-brand)",
+                  color: "#fff",
+                  borderRadius: "12px 12px 2px 12px",
+                }
+              : {
+                  background: "#fff",
+                  color: "var(--color-text-primary)",
+                  border: "1px solid var(--color-border-default)",
+                  borderRadius: "12px 12px 12px 2px",
+                }
           }
         >
           {typeof m.content === "string" ? <MarkdownContent markdown={m.content} /> : m.content}
@@ -144,7 +182,10 @@ function LiveEventTrail({
           ) : (
             <Radio className="h-3.5 w-3.5 animate-pulse text-[var(--color-brand)]" />
           )}
-          <span className="text-[12px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
+          <span
+            className="text-[12px] font-semibold"
+            style={{ color: "var(--color-text-primary)" }}
+          >
             Live backend events
           </span>
         </div>
@@ -165,8 +206,17 @@ function LiveEventTrail({
   );
 }
 
-function LiveEventRow({ event }: { event: AskAiStatusEvent | AskAiSourceEvent | { summary: string } }) {
-  const label = "stage" in event ? event.stage : "kind" in event ? `${event.kind} · ${event.count}` : "approach";
+function LiveEventRow({
+  event,
+}: {
+  event: AskAiStatusEvent | AskAiSourceEvent | { summary: string };
+}) {
+  const label =
+    "stage" in event
+      ? event.stage
+      : "kind" in event
+        ? `${event.kind} · ${event.count}`
+        : "approach";
   const message = "summary" in event ? event.summary : event.message;
 
   return (
@@ -196,12 +246,21 @@ export function AskAiPanel({
   return (
     <aside
       className="flex h-full w-[380px] flex-col rounded-xl border bg-white"
-      style={{ borderColor: "var(--color-border-default)", borderTop: "3px solid var(--color-accent-green)" }}
+      style={{
+        borderColor: "var(--color-border-default)",
+        borderTop: "3px solid var(--color-accent-green)",
+      }}
     >
-      <div className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: "var(--color-border-default)" }}>
+      <div
+        className="flex items-center justify-between border-b px-5 py-3"
+        style={{ borderColor: "var(--color-border-default)" }}
+      >
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" style={{ color: "var(--color-accent-sparkle)" }} />
-          <span className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-accent-sparkle)" }}>
+          <span
+            className="text-[12px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--color-accent-sparkle)" }}
+          >
             Sherlock AI
           </span>
         </div>
@@ -235,12 +294,18 @@ export function AskAiPanel({
       </div>
 
       <div className="border-t p-3" style={{ borderColor: "var(--color-border-default)" }}>
-        <div className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: "var(--color-border-strong)" }}>
+        <div
+          className="flex items-center gap-2 rounded-lg border px-3 py-2"
+          style={{ borderColor: "var(--color-border-strong)" }}
+        >
           <input
             placeholder="Ask about any cell, source or assumption…"
             className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--color-text-muted)]"
           />
-          <button className="flex h-7 w-7 items-center justify-center rounded-md text-white" style={{ background: "var(--color-brand)" }}>
+          <button
+            className="flex h-7 w-7 items-center justify-center rounded-md text-white"
+            style={{ background: "var(--color-brand)" }}
+          >
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>

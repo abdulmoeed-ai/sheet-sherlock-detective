@@ -16,12 +16,20 @@ export function Button({ variant = "primary", children, className = "", ...rest 
   };
   const styles: Record<string, React.CSSProperties> = {
     primary: { background: "var(--color-brand)" },
-    secondary: { background: "#fff", color: "var(--color-brand)", border: "1px solid var(--color-border-strong)" },
+    secondary: {
+      background: "#fff",
+      color: "var(--color-brand)",
+      border: "1px solid var(--color-border-strong)",
+    },
     ghost: { background: "transparent", color: "var(--color-text-secondary)" },
     danger: { background: "var(--color-danger)" },
   };
   return (
-    <button {...rest} className={`${base} ${variants[variant]} ${className}`} style={styles[variant]}>
+    <button
+      {...rest}
+      className={`${base} ${variants[variant]} ${className}`}
+      style={styles[variant]}
+    >
       {children}
     </button>
   );

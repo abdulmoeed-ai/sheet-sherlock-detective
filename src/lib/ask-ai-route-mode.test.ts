@@ -12,7 +12,8 @@ describe("askAiRouteModeForPath", () => {
       showClose: false,
       showCollapse: false,
       showAttachment: false,
-      placeholder: "Ask for a forecast, normalized CAGR, outlier treatment, analyst view, or scenario assumptions...",
+      placeholder:
+        "Ask for a forecast, normalized CAGR, outlier treatment, analyst view, or scenario assumptions...",
       emptyStateDescription:
         "Ask about forecasts, normalized growth, outliers, analyst views, sector drivers, scenarios, and assumptions using approved workbook and source context.",
     });

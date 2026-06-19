@@ -31,24 +31,46 @@ describe("diagnosis cell helpers", () => {
   });
 
   it("marks low-confidence, edited, and formula cells distinctly", () => {
-    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 65 })).toBe("low-confidence");
+    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 65 })).toBe(
+      "low-confidence",
+    );
     expect(diagnosisCellTone({ formula: false, status: "edited", confidence: 95 })).toBe("edited");
     expect(diagnosisCellTone({ formula: true, status: "pending", confidence: 95 })).toBe("formula");
   });
 
   it("derives workbook tone from backend confidence level before local score heuristics", () => {
-    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "medium" })).toBe(
-      "medium-confidence",
-    );
-    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "blocked" })).toBe(
-      "blocked-confidence",
-    );
-    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "low" })).toBe(
-      "low-confidence",
-    );
-    expect(diagnosisCellTone({ formula: false, status: "pending", confidence: 98, confidenceLevel: "high" })).toBe(
-      "high-confidence",
-    );
+    expect(
+      diagnosisCellTone({
+        formula: false,
+        status: "pending",
+        confidence: 98,
+        confidenceLevel: "medium",
+      }),
+    ).toBe("medium-confidence");
+    expect(
+      diagnosisCellTone({
+        formula: false,
+        status: "pending",
+        confidence: 98,
+        confidenceLevel: "blocked",
+      }),
+    ).toBe("blocked-confidence");
+    expect(
+      diagnosisCellTone({
+        formula: false,
+        status: "pending",
+        confidence: 98,
+        confidenceLevel: "low",
+      }),
+    ).toBe("low-confidence");
+    expect(
+      diagnosisCellTone({
+        formula: false,
+        status: "pending",
+        confidence: 98,
+        confidenceLevel: "high",
+      }),
+    ).toBe("high-confidence");
   });
 
   it("builds export warning summaries from unresolved backend confidence states", () => {
@@ -75,7 +97,9 @@ describe("diagnosis cell helpers", () => {
 
   it("only allows persisted review history revisions to be reverted", () => {
     expect(canRevertReviewHistoryEntry({ id: "revision-1", action: "edit" })).toBe(true);
-    expect(canRevertReviewHistoryEntry({ id: "field-1-optimistic-1780693774190", action: "edit" })).toBe(false);
+    expect(
+      canRevertReviewHistoryEntry({ id: "field-1-optimistic-1780693774190", action: "edit" }),
+    ).toBe(false);
     expect(canRevertReviewHistoryEntry({ id: "field-1-source", action: "source" })).toBe(false);
     expect(canRevertReviewHistoryEntry({ id: "revision-2", action: "revert" })).toBe(false);
     expect(canRevertReviewHistoryEntry({ action: "edit" })).toBe(false);
@@ -109,7 +133,9 @@ describe("diagnosis cell helpers", () => {
   });
 
   it("formats source, edit, and revert history entries for analysts", () => {
-    expect(formatHistoryEntry({ action: "source", value: "(85)" }).title).toBe("Source extraction: -85");
+    expect(formatHistoryEntry({ action: "source", value: "(85)" }).title).toBe(
+      "Source extraction: -85",
+    );
 
     const editEntry = formatHistoryEntry({
       action: "edit",
@@ -171,11 +197,41 @@ describe("diagnosis cell helpers", () => {
   });
 
   it("commits an edited cell draft on Enter only when there is a value to save", () => {
-    expect(shouldCommitCellDraftOnKey({ key: "Enter", draftValue: "-86", editable: true, pending: false })).toBe(true);
-    expect(shouldCommitCellDraftOnKey({ key: "Tab", draftValue: "-86", editable: true, pending: false })).toBe(false);
-    expect(shouldCommitCellDraftOnKey({ key: "Enter", draftValue: "   ", editable: true, pending: false })).toBe(false);
-    expect(shouldCommitCellDraftOnKey({ key: "Enter", draftValue: "-86", editable: false, pending: false })).toBe(false);
-    expect(shouldCommitCellDraftOnKey({ key: "Enter", draftValue: "-86", editable: true, pending: true })).toBe(false);
+    expect(
+      shouldCommitCellDraftOnKey({
+        key: "Enter",
+        draftValue: "-86",
+        editable: true,
+        pending: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCommitCellDraftOnKey({ key: "Tab", draftValue: "-86", editable: true, pending: false }),
+    ).toBe(false);
+    expect(
+      shouldCommitCellDraftOnKey({
+        key: "Enter",
+        draftValue: "   ",
+        editable: true,
+        pending: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCommitCellDraftOnKey({
+        key: "Enter",
+        draftValue: "-86",
+        editable: false,
+        pending: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCommitCellDraftOnKey({
+        key: "Enter",
+        draftValue: "-86",
+        editable: true,
+        pending: true,
+      }),
+    ).toBe(false);
   });
 
   it("orders history with the most recent analyst activity first and source extraction last", () => {
@@ -185,13 +241,18 @@ describe("diagnosis cell helpers", () => {
       { id: "edit-2", action: "edit", createdAt: "2026-06-02T05:10:00Z" },
     ];
 
-    expect(orderedHistoryEntries(history).map((entry) => entry.id)).toEqual(["edit-2", "edit-1", "field-source"]);
+    expect(orderedHistoryEntries(history).map((entry) => entry.id)).toEqual([
+      "edit-2",
+      "edit-1",
+      "field-source",
+    ]);
   });
 
   it("formats comparative-year warnings as informational provenance", () => {
     expect(warningDetails("comparative_year")).toEqual({
       label: "Comparative-year source column",
-      description: "This value was extracted from the prior-year/comparative column in the PDF table. It is informational, not an error.",
+      description:
+        "This value was extracted from the prior-year/comparative column in the PDF table. It is informational, not an error.",
       actionable: false,
     });
     expect(warningDetails("note_subtotal_reconciliation")).toEqual({
@@ -204,7 +265,8 @@ describe("diagnosis cell helpers", () => {
   it("formats AI warnings and review metadata", () => {
     expect(warningDetails("llm.accepted_after_validation")).toEqual({
       label: "AI accepted after validation",
-      description: "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
+      description:
+        "AI reviewed this ambiguous row and deterministic checks accepted the recommendation.",
       actionable: false,
     });
     expect(warningDetails("llm.rejected_wrong_section").actionable).toBe(true);
@@ -331,7 +393,8 @@ describe("diagnosis cell helpers", () => {
       title: "Rule metadata unavailable",
       category: "-",
       severity: "-",
-      description: "This rule code was attached to the cell, but the current mapping-rule manifest did not include details for it.",
+      description:
+        "This rule code was attached to the cell, but the current mapping-rule manifest did not include details for it.",
       missing: true,
     });
   });

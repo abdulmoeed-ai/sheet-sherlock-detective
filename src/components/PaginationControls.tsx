@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  clampPage,
-  DEFAULT_PAGE_SIZE,
-  pageCountFor,
-  visiblePageRange,
-} from "@/lib/pagination";
+import { clampPage, DEFAULT_PAGE_SIZE, pageCountFor, visiblePageRange } from "@/lib/pagination";
 
 interface PaginationControlsProps {
   totalItems: number;

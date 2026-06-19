@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   draftManagerReviewSuccessMessage,
   draftManagerReviewTarget,
@@ -24,9 +24,7 @@ describe("diagnosis draft manager review helpers", () => {
     });
 
     expect(target).toEqual({ projectId: "project-1", createdNewVersion: false });
-    expect(draftManagerReviewSuccessMessage(target!)).toBe(
-      "Draft submitted to Manager review.",
-    );
+    expect(draftManagerReviewSuccessMessage(target!)).toBe("Draft submitted to Manager review.");
   });
 
   it("returns null when no project is open", () => {
